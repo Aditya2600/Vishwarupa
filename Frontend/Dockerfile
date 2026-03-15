@@ -8,11 +8,14 @@ RUN npm ci
 
 COPY . .
 
+ARG VITE_API_BASE_URL=http://13.127.221.158:8000
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
+
 RUN npm run build
 
 FROM nginx:1.27-alpine
 
-ENV BACKEND_ORIGIN=http://host.docker.internal:8000
+ENV BACKEND_ORIGIN=http://13.127.221.158:8000
 
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
