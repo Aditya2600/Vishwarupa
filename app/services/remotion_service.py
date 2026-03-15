@@ -13,7 +13,7 @@ from jinja2 import Template
 from mutagen.mp3 import MP3
 
 from app.config import settings
-from app.models import DirectVideoRequest
+from app.models import DirectVideoRequest, RemotionVideoRequest
 
 VOICE_MAP = {
     'English': 'en-US-EmmaMultilingualNeural',
@@ -51,6 +51,8 @@ class RemotionService:
         r'(\d{2}:\d{2}:\d{2}[.,]\d{3}) --> (\d{2}:\d{2}:\d{2}[.,]\d{3})\n(.+?)(?=\n\n|\Z)',
         re.DOTALL,
     )
+    _allowed_logo_suffixes = {'.png', '.jpg', '.jpeg'}
+    _max_logo_bytes = 2 * 1024 * 1024
 
     def __init__(self, remotion_path: Path | None = None) -> None:
         self.remotion_path = remotion_path or settings.remotion_path
@@ -109,6 +111,36 @@ class RemotionService:
             raise RuntimeError(
                 f"Remotion dependencies are not installed in '{self.remotion_path}'. Run 'npm install' inside the Remotion directory first."
             )
+
+    @staticmethod
+    def _public_error_message(raw_error: str, stage: str = 'render') -> str:
+        normalized = ' '.join(raw_error.split())
+        lowered = normalized.lower()
+
+        if stage == 'audio':
+            return 'Audio generation failed for this text video. Please try again in a moment.'
+
+        if (
+            'got no response' in lowered
+            or 'econnrefused' in lowered
+            or 'connection refused' in lowered
+            or 'localhost:3000' in lowered
+            or '127.0.0.1' in lowered
+        ):
+            return 'Text video generation failed because the renderer did not respond. Please try again in a moment.'
+
+        if (
+            'browser' in lowered
+            or 'chrome' in lowered
+            or 'chromium' in lowered
+            or 'playwright' in lowered
+        ) and ('launch' in lowered or 'failed' in lowered or 'executable' in lowered):
+            return 'Text video generation failed because the render browser could not start. Please try again in a moment.'
+
+        if 'bundle' in lowered or 'webpack' in lowered or 'vite' in lowered:
+            return 'Text video generation failed while preparing the render. Please try again in a moment.'
+
+        return 'Text video generation failed. Please try again in a moment.'
 
     @classmethod
     def normalize_placeholder_syntax(cls, text: str) -> str:
@@ -404,9 +436,10 @@ class RemotionService:
 
     def build_render_payload(
         self,
-        request: DirectVideoRequest,
+        request: RemotionVideoRequest,
         job_id: str,
         script_text: str,
+        logo_public_path: str | None = None,
     ) -> dict[str, Any]:
         customer_name = self._normalize_text(request.customer_name, 'Customer')
         lan = self._normalize_text(request.lan, 'N/A')
@@ -415,6 +448,11 @@ class RemotionService:
         contact_details = self._normalize_text(request.contact_details, '1800-555-999')
         product_type = self._normalize_text(request.product_type, 'loan')
         urgency_level = self.determine_urgency_level(request.tos)
+        subtitle_enabled = bool(getattr(request, 'include_captions', False))
+        subtitle_color = self._normalize_text(getattr(request, 'subtitle_color', 'White'), 'White')
+        subtitle_position = self._normalize_text(getattr(request, 'subtitle_position', 'Bottom'), 'Bottom')
+        logo_position = self._normalize_text(getattr(request, 'logo_position', 'Top Right'), 'Top Right')
+        logo_opacity = int(getattr(request, 'logo_opacity', 80))
         display_amounts = {
             'primary': {
                 'label': 'Total Outstanding' if language == 'English' else 'कुल बकाया राशि',
@@ -448,6 +486,18 @@ class RemotionService:
             'headline_text': scene_payload['headline_text'],
             'cta_text': scene_payload['cta_text'],
             'urgency_level': urgency_level,
+            'branding': {
+                'subtitles': {
+                    'enabled': subtitle_enabled,
+                    'color': subtitle_color,
+                    'position': subtitle_position,
+                },
+                'logo': {
+                    'public_path': logo_public_path,
+                    'position': logo_position,
+                    'opacity': logo_opacity,
+                },
+            },
         }
 
     @staticmethod
@@ -477,6 +527,31 @@ class RemotionService:
 
     def _metadata_path(self) -> Path:
         return self.remotion_path / 'public' / 'metadata.json'
+
+    def _logo_public_dir(self) -> Path:
+        return self.remotion_path / 'public' / 'logos'
+
+    def _persist_logo_asset(
+        self,
+        job_id: str,
+        filename: str | None,
+        logo_bytes: bytes | None,
+    ) -> str | None:
+        if not logo_bytes:
+            return None
+
+        if len(logo_bytes) > self._max_logo_bytes:
+            raise ValueError('Logo file exceeds the 2MB upload limit.')
+
+        suffix = Path(filename or 'logo.png').suffix.lower() or '.png'
+        if suffix not in self._allowed_logo_suffixes:
+            raise ValueError('Unsupported logo format. Use a PNG or JPG image.')
+
+        logo_dir = self._logo_public_dir()
+        logo_dir.mkdir(parents=True, exist_ok=True)
+        logo_path = logo_dir / f'{job_id}{suffix}'
+        logo_path.write_bytes(logo_bytes)
+        return f'logos/{logo_path.name}'
 
     async def generate_tts(self, request: DirectVideoRequest) -> dict[str, Any]:
         self.ensure_project_available()
@@ -515,7 +590,9 @@ class RemotionService:
             )
             _stdout, stderr = await process.communicate()
             if process.returncode != 0:
-                raise RuntimeError(f'Edge TTS failed: {stderr.decode().strip()}')
+                error_detail = stderr.decode().strip()
+                print(f'ERROR: Edge TTS failed for {job_id}: {error_detail}')
+                raise RuntimeError(self._public_error_message(error_detail, stage='audio'))
 
             duration = MP3(str(audio_file)).info.length
             subtitles = self.parse_vtt(vtt_file)
@@ -542,12 +619,13 @@ class RemotionService:
             if temp_text_file.exists():
                 temp_text_file.unlink()
 
-    async def render_video(self, request: DirectVideoRequest, job_id: str, script_text: str) -> Path:
+    async def render_video(self, request: RemotionVideoRequest, job_id: str, script_text: str) -> Path:
         self.ensure_project_available()
         self.output_dir.mkdir(parents=True, exist_ok=True)
         command_prefix = self._resolve_remotion_command()
         browser_executable = self._resolve_browser_executable()
         renderer_port = self._resolve_renderer_port()
+        logo_public_path = self._persist_logo_asset(job_id, request.logo_filename, request.logo_bytes)
         leads_path = self.remotion_path / 'leads.json'
         leads: list[dict[str, Any]] = []
         if leads_path.exists():
@@ -559,7 +637,7 @@ class RemotionService:
                 leads = []
 
         leads = [lead for lead in leads if lead.get('id') != job_id]
-        leads.append(self.build_render_payload(request, job_id, script_text))
+        leads.append(self.build_render_payload(request, job_id, script_text, logo_public_path))
         leads_path.write_text(
             json.dumps(leads, ensure_ascii=False, indent=2),
             encoding='utf-8',
@@ -589,6 +667,7 @@ class RemotionService:
             json.dumps({'leadId': job_id}),
         ] + shared_flags
 
+        last_error = ''
         for command in (primary_command, fallback_command):
             process = await asyncio.create_subprocess_exec(
                 *command,
@@ -602,9 +681,10 @@ class RemotionService:
             error_parts = [part.strip() for part in (stderr.decode(), stdout.decode()) if part.strip()]
             last_error = '\n'.join(error_parts)
 
-        raise RuntimeError(f'Remotion render failed: {last_error}')
+        print(f'ERROR: Remotion render failed for {job_id}: {last_error}')
+        raise RuntimeError(self._public_error_message(last_error, stage='render'))
 
-    async def generate_video(self, request: DirectVideoRequest) -> dict[str, Any]:
+    async def generate_video(self, request: RemotionVideoRequest) -> dict[str, Any]:
         tts_result = await self.generate_tts(request)
         video_path = await self.render_video(request, tts_result['job_id'], tts_result['text'])
         return {

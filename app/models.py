@@ -110,6 +110,12 @@ class RemotionVideoRequest(DirectVideoRequest):
     contact_details: str
     product_type: str
     title_prefix: str = 'Loan Recall'
+    subtitle_color: Literal['White', 'Blue', 'Green', 'Red', 'Yellow', 'Teal'] = 'White'
+    subtitle_position: Literal['Top', 'Center', 'Bottom'] = 'Bottom'
+    logo_position: Literal['Top Left', 'Top Right', 'Bottom Left', 'Bottom Right'] = 'Top Right'
+    logo_opacity: int = 80
+    logo_filename: str | None = None
+    logo_bytes: bytes | None = Field(default=None, exclude=True)
 
     @field_validator('tos', 'loan_amount', 'contact_details', 'product_type')
     @classmethod
@@ -120,6 +126,21 @@ class RemotionVideoRequest(DirectVideoRequest):
                 raise ValueError(f'{info.field_name} is required')
             return cleaned
         return value
+
+    @field_validator('logo_opacity')
+    @classmethod
+    def validate_logo_opacity(cls, value: int) -> int:
+        if not 0 <= value <= 100:
+            raise ValueError('logo_opacity must be between 0 and 100')
+        return value
+
+    @field_validator('logo_filename')
+    @classmethod
+    def normalize_logo_filename(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
 
 
 class VideoJobResult(BaseModel):

@@ -22,6 +22,29 @@ class HeyGenClient:
     def _url(self, path: str) -> str:
         return f'{self.base_url}{path}'
 
+    @staticmethod
+    def summarize_provider_error(payload: dict[str, Any] | str) -> str:
+        if isinstance(payload, str):
+            normalized = payload.strip()
+            return normalized or 'Video generation failed. Please try again in a moment.'
+
+        data = payload.get('data') if isinstance(payload.get('data'), dict) else {}
+        error = data.get('error') if isinstance(data.get('error'), dict) else {}
+
+        code = str(error.get('code') or '').strip()
+        detail = str(error.get('detail') or '').strip()
+        message = str(error.get('message') or payload.get('message') or '').strip()
+
+        if code == 'MOVIO_PAYMENT_INSUFFICIENT_CREDIT' or 'insufficient credit' in detail.lower():
+            return "You don't have enough credits to generate this video."
+
+        if detail:
+            return detail
+        if message and message.lower() != 'success':
+            return message
+
+        return 'Video generation failed. Please try again in a moment.'
+
     def _raise_for_status(self, response: httpx.Response) -> None:
         try:
             response.raise_for_status()
@@ -88,7 +111,7 @@ class HeyGenClient:
             if state in {'completed', 'done', 'success'}:
                 return status
             if state in {'failed', 'error'}:
-                raise RuntimeError(f'Video generation failed: {status}')
+                raise RuntimeError(self.summarize_provider_error(status))
             time.sleep(interval)
         raise TimeoutError(f'Video {video_id} did not finish within {timeout} seconds')
 

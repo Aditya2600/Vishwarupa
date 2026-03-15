@@ -14,6 +14,7 @@ RUN apt-get update \
         chromium \
         ffmpeg \
         fonts-liberation \
+        fonts-noto-core \
         nodejs \
         npm \
     && rm -rf /var/lib/apt/lists/*

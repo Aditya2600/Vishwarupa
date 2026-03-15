@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Check, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { REMOTION_SUPPORTED_LANGUAGES } from "@/lib/templates";
 
 const LANGUAGES = [
   { name: "Hindi", native: "हिन्दी", flag: "🇮🇳" },
@@ -24,6 +25,7 @@ interface StepLanguageProps {
 
 export function StepLanguage({ selected, onSelect, videoType, onVideoTypeChange }: StepLanguageProps) {
   const [search, setSearch] = useState("");
+  const remotionLanguageSet = new Set(REMOTION_SUPPORTED_LANGUAGES);
   const filtered = LANGUAGES.filter(
     (l) =>
       l.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -71,7 +73,7 @@ export function StepLanguage({ selected, onSelect, videoType, onVideoTypeChange 
       <div className="grid grid-cols-3 xl:grid-cols-4 gap-3">
         {filtered.map((lang) => {
           const isSelected = selected === lang.name;
-          const isComingSoon = videoType === "remotion" && !["Hindi", "English"].includes(lang.name);
+          const isComingSoon = videoType === "remotion" && !remotionLanguageSet.has(lang.name);
           const isAvailable = !isComingSoon;
           return (
             <button

@@ -174,10 +174,18 @@ export function StepTranscript({ state, update }: StepTranscriptProps) {
 
   const handleTranscriptChange = (value: string) => {
     if (isRemotion) {
-      update({ remotionTranscript: value, ...RESET_GENERATION_STATE });
+      update({
+        remotionTranscript: value,
+        remotionTranscriptCustomized: true,
+        ...RESET_GENERATION_STATE,
+      });
       return;
     }
-    update({ transcript: value, ...RESET_GENERATION_STATE });
+    update({
+      transcript: value,
+      avatarTranscriptCustomized: true,
+      ...RESET_GENERATION_STATE,
+    });
   };
   const handlePaste = async () => {
     try {

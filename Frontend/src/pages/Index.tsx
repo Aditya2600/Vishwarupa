@@ -12,17 +12,22 @@ import { StepShare } from "@/components/steps/StepShare";
 import { StepSubtitle } from "@/components/steps/StepSubtitle";
 import { StepTranscript } from "@/components/steps/StepTranscript";
 import {
-  DEFAULT_AVATAR_SCRIPT,
-  REMOTION_TEMPLATES,
+  getDefaultAvatarScript,
+  getDefaultRemotionTranscript,
+  resolveNarratorGender,
 } from "@/lib/templates";
 import {
-  DirectVideoPayload,
+  type AvatarOption,
+  type DirectVideoPayload,
+  type RemotionVideoPayload,
   fetchAvatars,
   fetchVideoStatus,
+  fetchVoices,
   generateDirectVideo,
   generateRemotionVideo,
-  stylizeVideo,
   saveDraft,
+  stylizeVideo,
+  type VoiceOption,
 } from "@/lib/api";
 import { STEPS, useWizardStore } from "@/store/wizardStore";
 
@@ -35,7 +40,7 @@ const getStepMeta = (step: number, videoType: "avatar" | "remotion") => {
     },
     {
       title: "Choose Your Avatar",
-      subtitle: "Select an avatar for your video.",
+      subtitle: "Select an avatar and matching voice for your video.",
       next: "Next: Transcript →",
     },
     {
@@ -77,8 +82,45 @@ const RESET_GENERATION_STATE = {
   generationError: "",
 };
 
+const EMPTY_AVATAR_SELECTION = {
+  avatarId: "",
+  avatarName: "",
+  avatarGender: null as "male" | "female" | null,
+};
+
+const EMPTY_VOICE_SELECTION = {
+  voiceId: "",
+  voiceName: "",
+  voiceGender: null as "male" | "female" | null,
+};
+
 function isConnectivityError(error: unknown): boolean {
   return error instanceof Error && /could not reach the server|failed to fetch|networkerror|load failed/i.test(error.message);
+}
+
+function findAvatarById(avatars: AvatarOption[], avatarId: string): AvatarOption | null {
+  const trimmedId = avatarId.trim();
+  if (!trimmedId) {
+    return null;
+  }
+
+  return avatars.find((avatar) => avatar.id === trimmedId) ?? null;
+}
+
+function findVoiceById(voices: VoiceOption[], voiceId: string): VoiceOption | null {
+  if (!voiceId) {
+    return null;
+  }
+
+  return voices.find((voice) => voice.id === voiceId) ?? null;
+}
+
+function buildAvatarDefaultTranscript(
+  language: string,
+  avatarGender: "male" | "female" | null,
+  voiceGender: "male" | "female" | null,
+): string {
+  return getDefaultAvatarScript(language, resolveNarratorGender(voiceGender ?? avatarGender));
 }
 
 const Index = () => {
@@ -101,6 +143,17 @@ const Index = () => {
     queryFn: fetchAvatars,
     enabled: state.videoType === "avatar",
   });
+
+  const voicesQuery = useQuery({
+    queryKey: ["voices"],
+    queryFn: fetchVoices,
+    enabled: state.videoType === "avatar",
+  });
+
+  const avatars = avatarsQuery.data ?? [];
+  const voices = voicesQuery.data ?? [];
+  const selectedAvatar = findAvatarById(avatars, state.avatarId);
+  const selectedVoice = findVoiceById(voices, state.voiceId);
 
   const statusQuery = useQuery({
     queryKey: ["video-status", state.generatedVideo?.video_id],
@@ -147,7 +200,7 @@ const Index = () => {
   });
 
   const generateRemotionMutation = useMutation({
-    mutationFn: (payload: DirectVideoPayload) => generateRemotionVideo(payload),
+    mutationFn: (payload: RemotionVideoPayload) => generateRemotionVideo(payload),
     onMutate: () => {
       stylingRequestedRef.current = false;
       statusPollingWarningShownRef.current = false;
@@ -228,7 +281,7 @@ const Index = () => {
   });
 
   const saveDraftMutation = useMutation({
-    mutationFn: (draft: any) => saveDraft(draft),
+    mutationFn: (draft: unknown) => saveDraft(draft),
     onSuccess: () => {
       draftSyncWarningShownRef.current = false;
     },
@@ -242,7 +295,77 @@ const Index = () => {
     },
   });
 
-  // Auto-save draft whenever state changes significantly
+  useEffect(() => {
+    if (selectedAvatar && (state.avatarName !== selectedAvatar.name || state.avatarGender !== selectedAvatar.gender)) {
+      update({
+        avatarName: selectedAvatar.name,
+        avatarGender: selectedAvatar.gender,
+      });
+    }
+  }, [selectedAvatar, state.avatarGender, state.avatarName, update]);
+
+  useEffect(() => {
+    if (selectedVoice && (state.voiceName !== selectedVoice.name || state.voiceGender !== selectedVoice.gender)) {
+      update({
+        voiceName: selectedVoice.name,
+        voiceGender: selectedVoice.gender,
+      });
+    }
+  }, [selectedVoice, state.voiceGender, state.voiceName, update]);
+
+  useEffect(() => {
+    if (
+      state.videoType !== "avatar" ||
+      !selectedVoice ||
+      !selectedAvatar?.gender ||
+      selectedVoice.gender === selectedAvatar.gender
+    ) {
+      return;
+    }
+
+    update({
+      ...EMPTY_VOICE_SELECTION,
+      ...(!state.avatarTranscriptCustomized
+        ? {
+            transcript: buildAvatarDefaultTranscript(state.language, selectedAvatar.gender, null),
+            avatarTranscriptCustomized: false,
+          }
+        : {}),
+      ...RESET_GENERATION_STATE,
+    });
+  }, [
+    selectedAvatar?.gender,
+    selectedVoice,
+    state.avatarTranscriptCustomized,
+    state.language,
+    state.videoType,
+    update,
+  ]);
+
+  useEffect(() => {
+    if (state.videoType !== "avatar" || !selectedVoice || selectedVoice.language === state.language) {
+      return;
+    }
+
+    update({
+      ...EMPTY_VOICE_SELECTION,
+      ...(!state.avatarTranscriptCustomized
+        ? {
+            transcript: buildAvatarDefaultTranscript(state.language, state.avatarGender, null),
+            avatarTranscriptCustomized: false,
+          }
+        : {}),
+      ...RESET_GENERATION_STATE,
+    });
+  }, [
+    selectedVoice,
+    state.avatarGender,
+    state.avatarTranscriptCustomized,
+    state.language,
+    state.videoType,
+    update,
+  ]);
+
   useEffect(() => {
     if (step < 4) {
       const timer = setTimeout(() => {
@@ -250,7 +373,7 @@ const Index = () => {
       }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [state, step]);
+  }, [saveDraftMutation, state, step]);
 
   useEffect(() => {
     if (!statusQuery.data || state.generationStatus !== "submitting") {
@@ -330,28 +453,65 @@ const Index = () => {
     }
 
     const language = requestedFreshDraft ? "Hindi" : state.language;
+    const preservedAvatar =
+      requestedFreshDraft || requestedMode === "remotion"
+        ? EMPTY_AVATAR_SELECTION
+        : {
+            avatarId: state.avatarId,
+            avatarName: state.avatarName,
+            avatarGender: state.avatarGender,
+          };
+    const preservedVoice =
+      requestedFreshDraft || requestedMode === "remotion"
+        ? EMPTY_VOICE_SELECTION
+        : {
+            voiceId: state.voiceId,
+            voiceName: state.voiceName,
+            voiceGender: state.voiceGender,
+          };
+
     update({
       currentStep: 0,
       language,
       outputLanguage: language,
       videoType: requestedMode,
-      avatarId: requestedFreshDraft || requestedMode === "remotion" ? "" : state.avatarId,
-      transcript: DEFAULT_AVATAR_SCRIPT,
-      remotionTranscript: REMOTION_TEMPLATES[language] ?? REMOTION_TEMPLATES.Hindi,
+      ...preservedAvatar,
+      ...preservedVoice,
+      transcript: requestedFreshDraft
+        ? getDefaultAvatarScript(language, "female")
+        : state.avatarTranscriptCustomized
+          ? state.transcript
+          : buildAvatarDefaultTranscript(language, preservedAvatar.avatarGender, preservedVoice.voiceGender),
+      remotionTranscript: requestedFreshDraft
+        ? getDefaultRemotionTranscript(language)
+        : state.remotionTranscriptCustomized
+          ? state.remotionTranscript
+          : getDefaultRemotionTranscript(language),
+      avatarTranscriptCustomized: requestedFreshDraft ? false : state.avatarTranscriptCustomized,
+      remotionTranscriptCustomized: requestedFreshDraft ? false : state.remotionTranscriptCustomized,
       ...RESET_GENERATION_STATE,
     });
 
     setSearchParams({}, { replace: true });
   }, [
+    generateRemotionMutation,
+    generateVideoMutation,
     requestedFreshDraft,
     requestedMode,
     reset,
     setSearchParams,
+    state.avatarGender,
     state.avatarId,
+    state.avatarName,
+    state.avatarTranscriptCustomized,
     state.language,
+    state.remotionTranscript,
+    state.remotionTranscriptCustomized,
+    state.transcript,
+    state.voiceGender,
+    state.voiceId,
+    state.voiceName,
     stylizeVideoMutation,
-    generateRemotionMutation,
-    generateVideoMutation,
     update,
   ]);
 
@@ -377,9 +537,135 @@ const Index = () => {
     toast.info("Generation interrupted.");
   };
 
+  const handleLanguageSelect = (language: string) => {
+    const shouldClearVoice = Boolean(selectedVoice && selectedVoice.language !== language);
+    const nextVoiceGender = shouldClearVoice ? null : selectedVoice?.gender ?? state.voiceGender;
+
+    update({
+      language,
+      outputLanguage: language,
+      ...(shouldClearVoice ? EMPTY_VOICE_SELECTION : {}),
+      ...(!state.avatarTranscriptCustomized
+        ? {
+            transcript: buildAvatarDefaultTranscript(language, state.avatarGender, nextVoiceGender),
+            avatarTranscriptCustomized: false,
+          }
+        : {}),
+      ...(!state.remotionTranscriptCustomized
+        ? {
+            remotionTranscript: getDefaultRemotionTranscript(language),
+            remotionTranscriptCustomized: false,
+          }
+        : {}),
+      ...RESET_GENERATION_STATE,
+    });
+
+    if (shouldClearVoice) {
+      toast.info(`The previous voice is not available in ${language}, so we cleared it for you.`);
+    }
+  };
+
+  const handleVideoTypeChange = (videoType: "avatar" | "remotion") => {
+    update({
+      videoType,
+      ...(!state.avatarTranscriptCustomized
+        ? {
+            transcript: buildAvatarDefaultTranscript(state.language, state.avatarGender, state.voiceGender),
+            avatarTranscriptCustomized: false,
+          }
+        : {}),
+      ...(!state.remotionTranscriptCustomized
+        ? {
+            remotionTranscript: getDefaultRemotionTranscript(state.language),
+            remotionTranscriptCustomized: false,
+          }
+        : {}),
+      ...RESET_GENERATION_STATE,
+    });
+  };
+
+  const handleAvatarSelect = (
+    avatarId: string,
+    avatarName: string,
+    avatarGender: "male" | "female" | null,
+  ) => {
+    const trimmedId = avatarId.trim();
+    let nextVoiceGender = state.voiceGender;
+    let didClearVoice = false;
+
+    const partial = {
+      avatarId: trimmedId,
+      avatarName: trimmedId ? avatarName || trimmedId : "",
+      avatarGender,
+      ...RESET_GENERATION_STATE,
+    };
+
+    if (trimmedId && avatarGender && state.voiceId && state.voiceGender && state.voiceGender !== avatarGender) {
+      Object.assign(partial, EMPTY_VOICE_SELECTION);
+      nextVoiceGender = null;
+      didClearVoice = true;
+    }
+
+    if (!state.avatarTranscriptCustomized) {
+      Object.assign(partial, {
+        transcript: buildAvatarDefaultTranscript(state.language, avatarGender, nextVoiceGender),
+        avatarTranscriptCustomized: false,
+      });
+    }
+
+    update(partial);
+
+    if (didClearVoice) {
+      toast.info(`We cleared the incompatible ${state.voiceGender} voice because ${avatarName || "that avatar"} is ${avatarGender}.`);
+    }
+  };
+
+  const handleVoiceSelect = (voiceId: string) => {
+    const voice = findVoiceById(voices, voiceId);
+    let nextAvatarGender = state.avatarGender;
+    let didClearAvatar = false;
+
+    const partial = {
+      voiceId: voice?.id ?? "",
+      voiceName: voice?.name ?? "",
+      voiceGender: voice?.gender ?? null,
+      ...RESET_GENERATION_STATE,
+    };
+
+    if (voice && state.avatarId && state.avatarGender && state.avatarGender !== voice.gender) {
+      Object.assign(partial, EMPTY_AVATAR_SELECTION);
+      nextAvatarGender = null;
+      didClearAvatar = true;
+    }
+
+    if (!state.avatarTranscriptCustomized) {
+      Object.assign(partial, {
+        transcript: buildAvatarDefaultTranscript(state.language, nextAvatarGender, voice?.gender ?? null),
+        avatarTranscriptCustomized: false,
+      });
+    }
+
+    update(partial);
+
+    if (didClearAvatar) {
+      toast.info(`We cleared the incompatible ${state.avatarGender} avatar because ${voice.name} is a ${voice.gender} voice.`);
+    }
+  };
+
   const handleGenerate = () => {
     if (state.videoType === "avatar" && !state.avatarId.trim()) {
       toast.error("Select an avatar before generating the video.");
+      goToStep(1);
+      return;
+    }
+
+    if (
+      state.videoType === "avatar" &&
+      selectedAvatar?.gender &&
+      state.voiceGender &&
+      selectedAvatar.gender !== state.voiceGender
+    ) {
+      toast.error("The selected avatar and voice do not match. Pick a matching pair before generating.");
       goToStep(1);
       return;
     }
@@ -412,6 +698,7 @@ const Index = () => {
       contact_details: state.contactDetails.trim() || undefined,
       product_type: state.productType.trim() || undefined,
       avatar_id: state.videoType === "avatar" ? state.avatarId.trim() || undefined : undefined,
+      voice_id: state.videoType === "avatar" ? state.voiceId || undefined : undefined,
       template_name: state.videoType === "avatar" ? state.templateName : undefined,
       language: state.language,
       script_text: activeTranscript.trim() || undefined,
@@ -423,7 +710,14 @@ const Index = () => {
     };
 
     if (state.videoType === "remotion") {
-      generateRemotionMutation.mutate(payload);
+      generateRemotionMutation.mutate({
+        ...payload,
+        subtitleColor: state.subtitleColor,
+        subtitlePosition: state.subtitlePosition,
+        logoPosition: state.logoPosition,
+        logoOpacity: state.logoOpacity,
+        logoFile,
+      });
     } else {
       generateVideoMutation.mutate(payload);
     }
@@ -459,45 +753,28 @@ const Index = () => {
         return (
           <StepLanguage
             selected={state.language}
-            onSelect={(lang) => {
-              const partial = {
-                language: lang,
-                outputLanguage: lang,
-                ...(state.videoType === "remotion" && REMOTION_TEMPLATES[lang]
-                  ? { remotionTranscript: REMOTION_TEMPLATES[lang] }
-                  : {}),
-                ...(state.videoType === "avatar"
-                  ? { transcript: DEFAULT_AVATAR_SCRIPT }
-                  : {}),
-                ...RESET_GENERATION_STATE,
-              };
-              update(partial);
-            }}
+            onSelect={handleLanguageSelect}
             videoType={state.videoType}
-            onVideoTypeChange={(type) => {
-              const partial = {
-                videoType: type,
-                ...(type === "remotion" && REMOTION_TEMPLATES[state.language]
-                  ? { remotionTranscript: REMOTION_TEMPLATES[state.language] }
-                  : {}),
-                ...(type === "avatar"
-                  ? { transcript: DEFAULT_AVATAR_SCRIPT }
-                  : {}),
-                ...RESET_GENERATION_STATE,
-              };
-              update(partial);
-            }}
+            onVideoTypeChange={handleVideoTypeChange}
           />
         );
       case 1:
         return (
           <StepAvatar
-            avatars={avatarsQuery.data ?? []}
+            avatars={avatars}
+            voices={voices}
+            language={state.language}
             isLoading={avatarsQuery.isLoading}
+            voicesLoading={voicesQuery.isLoading}
             errorMessage={avatarsQuery.error instanceof Error ? avatarsQuery.error.message : null}
+            voiceErrorMessage={voicesQuery.error instanceof Error ? voicesQuery.error.message : null}
             selectedId={state.avatarId}
+            selectedVoiceId={state.voiceId}
+            selectedVoiceGender={state.voiceGender}
+            selectedAvatarGender={state.avatarGender}
             filter={state.avatarFilter}
-            onSelect={(id, name) => update({ avatarId: id, avatarName: name || id, ...RESET_GENERATION_STATE })}
+            onSelect={handleAvatarSelect}
+            onVoiceSelect={handleVoiceSelect}
             onFilterChange={(filter) => update({ avatarFilter: filter })}
           />
         );

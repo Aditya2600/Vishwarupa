@@ -138,6 +138,13 @@ export function StepPreview({ state, update }: StepPreviewProps) {
           )}
         </div>
 
+        {state.generationStatus === "failed" && state.generationError ? (
+          <div className="rounded-xl border border-destructive/25 bg-destructive/5 px-5 py-4">
+            <p className="text-sm font-semibold text-foreground">Generation failed</p>
+            <p className="mt-1 text-sm text-muted-foreground">{state.generationError}</p>
+          </div>
+        ) : null}
+
         {isProcessing ? (
           <div className="rounded-xl border border-border bg-card/70 px-5 py-4">
             <div className="flex items-center justify-between gap-3 text-xs uppercase tracking-[0.22em] text-muted-foreground">
@@ -164,6 +171,7 @@ export function StepPreview({ state, update }: StepPreviewProps) {
           <SummaryRow label="Style" value={state.videoType === "remotion" ? "Text to Video" : "Avatar"} />
           <SummaryRow label="Language" value={state.language} />
           {state.videoType === "avatar" ? <SummaryRow label="Avatar" value={avatarName} /> : null}
+          {state.videoType === "avatar" && state.voiceName ? <SummaryRow label="Voice" value={state.voiceName} /> : null}
           <SummaryRow label="Duration" value={duration} />
           <SummaryRow
             label="Subtitles"

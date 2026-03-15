@@ -5,7 +5,14 @@ FastAPI backend plus a Vite/React frontend for creating personalized videos thro
 - Avatar video generation through HeyGen
 - Text-to-video rendering through the local `Remotion/` project
 
-The app also includes email/password auth, autosaved drafts, a "My Videos" library, and subtitle/logo post-processing for avatar renders.
+The app also includes email/password auth, autosaved drafts, a "My Videos" library, direct video download/share actions, and subtitle/logo post-processing for avatar renders.
+
+## Highlights
+
+- Two generation modes: HeyGen avatar videos and local Remotion text-to-video renders.
+- Subtitle controls for color and placement, plus logo position and opacity for styled outputs.
+- Share step actions for copy link, WhatsApp sharing, and direct video download.
+- Docker images for both backend and frontend, plus a root `docker-compose.yml` for local containerized runs.
 
 ## Repo Layout
 
@@ -93,6 +100,31 @@ The frontend always calls the backend through `/api`, and Vite proxies that to t
 
 ## Docker
 
+### Docker Compose
+
+Use the root `docker-compose.yml` to start both services together:
+
+```bash
+docker compose up --build -d
+```
+
+Useful commands:
+
+```bash
+docker compose ps
+docker compose logs -f
+docker compose logs -f backend
+docker compose logs -f frontend
+docker compose down
+```
+
+The compose stack starts these containers:
+
+- `personalized-video-backend`
+- `personalized-video-frontend`
+
+The backend mounts `./input` and `./output` so generated and styled artifacts persist on the host.
+
 ### Backend image
 
 The backend image now includes:
@@ -101,6 +133,7 @@ The backend image now includes:
 - `ffmpeg`
 - Node + npm for Remotion
 - Chromium for Remotion rendering
+- Noto fonts for Hindi and other Indic scripts in Remotion renders
 - The local `Remotion/` project and its npm dependencies
 
 Build:
@@ -211,6 +244,8 @@ The CD workflow uses the built-in `GITHUB_TOKEN` to push packages to GHCR from A
 
 - Avatar drafts default to `app/templates/legal_notice_raw_hi.txt`.
 - Text-to-video uses the local `Remotion/` project plus `edge-tts`.
+- The Share step downloads the final video directly when the file is served by this app, and falls back to the video URL for external assets.
+- Subtitle overlays are rendered with configurable placement and a lighter background to reduce overlap with on-screen content.
 - Generated Remotion runtime files under `Remotion/public/audio/` and `Remotion/public/metadata.json` should not be committed.
 - If local Remotion renders fail to launch a browser, set `REMOTION_BROWSER_EXECUTABLE` explicitly.
 - The active frontend docs live in `Frontend/README.md`.

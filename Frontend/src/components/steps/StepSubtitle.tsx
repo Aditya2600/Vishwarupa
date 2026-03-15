@@ -34,11 +34,11 @@ interface StepSubtitleProps {
 function getPreviewPosition(position: string): string {
   switch (position) {
     case "Top":
-      return "items-start pt-6";
+      return "items-start pt-8";
     case "Center":
       return "items-center";
     default:
-      return "items-end pb-6";
+      return "items-end pb-10";
   }
 }
 
@@ -82,16 +82,16 @@ export function StepSubtitle({ state, update, onLogoSelected }: StepSubtitleProp
 
   const subtitlePreviewClass =
     state.subtitleColor === "Blue"
-      ? "text-blue-400 bg-background/70"
+      ? "text-blue-400 bg-background/45"
       : state.subtitleColor === "Green"
-        ? "text-emerald-400 bg-background/70"
+        ? "text-emerald-400 bg-background/45"
         : state.subtitleColor === "Red"
-          ? "text-red-400 bg-background/70"
+          ? "text-red-400 bg-background/45"
           : state.subtitleColor === "Yellow"
-            ? "text-yellow-300 bg-background/70"
+            ? "text-yellow-300 bg-background/45"
             : state.subtitleColor === "Teal"
-              ? "text-teal-400 bg-background/70"
-              : "text-foreground bg-background/70";
+              ? "text-teal-400 bg-background/45"
+              : "text-foreground bg-background/45";
 
   return (
     <div className="grid grid-cols-2 gap-8 max-w-5xl">
@@ -133,7 +133,7 @@ export function StepSubtitle({ state, update, onLogoSelected }: StepSubtitleProp
 
         <div>
           <label className="block text-sm font-medium text-foreground mb-2">Subtitle Color</label>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {COLORS.map((c) => (
               <button
                 key={c.name}
@@ -153,7 +153,7 @@ export function StepSubtitle({ state, update, onLogoSelected }: StepSubtitleProp
 
         <div>
           <label className="block text-sm font-medium text-foreground mb-2">Subtitle Position</label>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {POSITIONS.map((p) => (
               <button
                 key={p}

@@ -51,7 +51,7 @@ export default function TemplateLibrary() {
               <p className="text-sm text-muted-foreground">Something went wrong while fetching templates. Please try again.</p>
               <button
                 onClick={() => templatesQuery.refetch()}
-                className="mt-4 px-4 py-2 rounded-lg text-sm font-medium border border-border bg-secondary text-foreground hover:bg-surface-hover transition-colors"
+                className="mt-4 px-4 py-2 rounded-lg text-sm font-medium border border-border bg-secondary text-foreground hover:bg-primary hover:text-white transition-colors"
               >
                 Retry
               </button>
@@ -88,11 +88,16 @@ export default function TemplateLibrary() {
                       {template.updatedAt ? `Updated ${template.updatedAt}` : "Update date unavailable"}
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={() => copyTemplateId(template.id)}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => copyTemplateId(template.id)}
+                        className="hover:text-white hover:bg-primary hover:border-primary"
+                      >
                         <Copy className="mr-2 h-4 w-4" />
                         Copy ID
                       </Button>
-                      <Button size="sm" onClick={() => navigate("/create?mode=remotion&fresh=1")}>
+                      <Button size="sm" onClick={() => navigate("/create?mode=remotion&fresh=1")} className="hover:text-white">
                         Open Text to Video
                       </Button>
                     </div>

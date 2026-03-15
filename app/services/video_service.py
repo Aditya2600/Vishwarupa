@@ -115,7 +115,7 @@ class VideoService:
         status = str(status_response.get('status') or status_response.get('data', {}).get('status') or 'submitted')
         state = status.lower()
         if state in {'failed', 'error'}:
-            raise RuntimeError(f'Video generation failed: {status_response}')
+            raise RuntimeError(self.client.summarize_provider_error(status_response))
 
         video_url, thumbnail_url, title = self._extract_video_url(status_response)
         return VideoJobResult(

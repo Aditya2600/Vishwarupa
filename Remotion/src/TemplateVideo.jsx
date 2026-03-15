@@ -20,11 +20,9 @@ import {
   getTrackMeta,
   safeString,
 } from './videoData';
-import legalGavelImage from '../../Frontend/public/image.png';
-import debtNoticeImage from '../../Frontend/public/image copy.png';
 
 const FONT_FAMILY =
-  'Avenir Next, SF Pro Display, Noto Sans Devanagari, Noto Sans, Arial, sans-serif';
+  'Noto Sans Devanagari, Noto Sans Bengali, Noto Sans Gujarati, Noto Sans Gurmukhi, Noto Sans Kannada, Noto Sans Malayalam, Noto Sans Tamil, Noto Sans Telugu, Noto Sans, Avenir Next, SF Pro Display, Arial, sans-serif';
 
 const URGENCY_COLORS = {
   critical: '#f97316',
@@ -32,7 +30,59 @@ const URGENCY_COLORS = {
   elevated: '#38bdf8',
 };
 
+const SUBTITLE_COLORS = {
+  White: '#f8fafc',
+  Blue: '#60a5fa',
+  Green: '#34d399',
+  Red: '#f87171',
+  Yellow: '#facc15',
+  Teal: '#2dd4bf',
+};
+
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+const legalGavelImage = staticFile('image.png');
+const debtNoticeImage = staticFile('image copy.png');
+
+const getSubtitleColor = (colorName) => SUBTITLE_COLORS[colorName] || SUBTITLE_COLORS.White;
+
+const getSubtitlePanelPlacement = (position) => {
+  switch (position) {
+    case 'Top':
+      return {
+        top: 136,
+        left: 220,
+        right: 220,
+      };
+    case 'Center':
+      return {
+        top: '50%',
+        left: 132,
+        right: 132,
+        transform: 'translateY(-50%)',
+      };
+    default:
+      return {
+        bottom: 212,
+        left: 74,
+        right: 74,
+      };
+  }
+};
+
+const getLogoPlacement = (position) => {
+  switch (position) {
+    case 'Top Left':
+      return {top: 120, left: 34};
+    case 'Bottom Left':
+      return {bottom: 214, left: 34};
+    case 'Bottom Right':
+      return {bottom: 214, right: 34};
+    default:
+      return {top: 120, right: 34};
+  }
+};
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
 const getSceneVisualState = (frame, scene) => {
   const localFrame = frame - scene.start;
@@ -41,21 +91,18 @@ const getSceneVisualState = (frame, scene) => {
     localFrame,
     [0, TRANSITION_FRAMES, duration - TRANSITION_FRAMES, duration],
     [0, 1, 1, 0],
-    {
-      extrapolateLeft: 'clamp',
-      extrapolateRight: 'clamp',
-    }
+    {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'}
   );
   const translateY =
-    interpolate(localFrame, [0, TRANSITION_FRAMES], [36, 0], {
+    interpolate(localFrame, [0, TRANSITION_FRAMES], [28, 0], {
       extrapolateLeft: 'clamp',
       extrapolateRight: 'clamp',
     }) +
-    interpolate(localFrame, [duration - TRANSITION_FRAMES, duration], [0, -18], {
+    interpolate(localFrame, [duration - TRANSITION_FRAMES, duration], [0, -14], {
       extrapolateLeft: 'clamp',
       extrapolateRight: 'clamp',
     });
-  const scale = interpolate(localFrame, [0, TRANSITION_FRAMES], [0.975, 1], {
+  const scale = interpolate(localFrame, [0, TRANSITION_FRAMES], [0.982, 1], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
   });
@@ -71,26 +118,58 @@ const getSceneVisualState = (frame, scene) => {
 
 const getAnimatedAmount = (rawValue, fallbackValue, localFrame, duration) => {
   const numericValue = extractNumericAmount(rawValue);
-  if (numericValue === null) {
-    return fallbackValue;
-  }
-
+  if (numericValue === null) return fallbackValue;
   const animatedValue = Math.round(
     interpolate(localFrame, [0, Math.max(16, duration * 0.68)], [0, numericValue], {
       extrapolateLeft: 'clamp',
       extrapolateRight: 'clamp',
     })
   );
-
   return formatAmountDisplay(animatedValue);
 };
 
+// ─── Floating Orbs Background ───────────────────────────────────────────────
+
+const FloatingOrbs = ({frame, accentColor}) => {
+  const orbs = [
+    {cx: 12, cy: 22, r: 340, sin_a: 0.018, sin_b: 0.011, cos_a: 0.013, cos_b: 0.009, opacity: 0.13},
+    {cx: 78, cy: 68, r: 280, sin_a: 0.022, sin_b: 0.007, cos_a: 0.016, cos_b: 0.012, opacity: 0.10},
+    {cx: 55, cy: 12, r: 200, sin_a: 0.014, sin_b: 0.019, cos_a: 0.010, cos_b: 0.015, opacity: 0.08},
+    {cx: 90, cy: 40, r: 180, sin_a: 0.011, sin_b: 0.024, cos_a: 0.017, cos_b: 0.008, opacity: 0.07},
+  ];
+
+  return (
+    <AbsoluteFill style={{overflow: 'hidden', pointerEvents: 'none'}}>
+      {orbs.map((orb, i) => {
+        const dx = Math.sin(frame * orb.sin_a + i * 1.2) * 28;
+        const dy = Math.cos(frame * orb.cos_a + i * 0.9) * 20;
+        const pulse = 1 + Math.sin(frame * orb.sin_b + i * 2.1) * 0.06;
+        return (
+          <div
+            key={i}
+            style={{
+              position: 'absolute',
+              left: `${orb.cx}%`,
+              top: `${orb.cy}%`,
+              width: orb.r,
+              height: orb.r,
+              borderRadius: '50%',
+              transform: `translate(-50%, -50%) translate(${dx}px, ${dy}px) scale(${pulse})`,
+              background: `radial-gradient(circle, ${accentColor}${Math.round(orb.opacity * 255).toString(16).padStart(2, '0')}, transparent 70%)`,
+              filter: 'blur(40px)',
+            }}
+          />
+        );
+      })}
+    </AbsoluteFill>
+  );
+};
+
+// ─── Scene Shell ────────────────────────────────────────────────────────────
+
 const SceneShell = ({scene, frame, children, align = 'center'}) => {
   const visual = getSceneVisualState(frame, scene);
-
-  if (visual.opacity <= 0.01) {
-    return null;
-  }
+  if (visual.opacity <= 0.01) return null;
 
   return (
     <AbsoluteFill
@@ -106,178 +185,281 @@ const SceneShell = ({scene, frame, children, align = 'center'}) => {
   );
 };
 
-const BrandHud = ({lead, accentColor, activeSceneLabel}) => (
-  <div
-    style={{
-      position: 'absolute',
-      top: 32,
-      left: 34,
-      right: 34,
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      zIndex: 20,
-    }}
-  >
-    <div
-      style={{
-        padding: '12px 16px',
-        borderRadius: 18,
-        border: '1px solid rgba(255,255,255,0.12)',
-        background: 'rgba(5, 16, 35, 0.52)',
-        backdropFilter: 'blur(16px)',
-      }}
-    >
-      <div style={{fontSize: 11, letterSpacing: 2.8, textTransform: 'uppercase', color: '#94a3b8'}}>
-        {safeString(lead.title_prefix, 'Account Notice')}
-      </div>
-      <div style={{fontSize: 20, fontWeight: 700, marginTop: 6, color: '#f8fafc'}}>
-        {safeString(lead.client_name)}
-      </div>
-    </div>
+// ─── Brand HUD ──────────────────────────────────────────────────────────────
 
+const BrandHud = ({lead, accentColor, activeSceneLabel, frame}) => {
+  // Breathing dot: oscillates scale gently
+  const dotPulse = 1 + Math.sin(frame * 0.14) * 0.22;
+  const dotGlow = 0.55 + Math.sin(frame * 0.14) * 0.45;
+
+  return (
     <div
       style={{
+        position: 'absolute',
+        top: 32,
+        left: 34,
+        right: 34,
         display: 'flex',
+        justifyContent: 'space-between',
         alignItems: 'center',
-        gap: 10,
-        padding: '12px 16px',
-        borderRadius: 18,
-        border: '1px solid rgba(255,255,255,0.12)',
-        background: 'rgba(5, 16, 35, 0.52)',
-        backdropFilter: 'blur(16px)',
+        zIndex: 20,
       }}
     >
-      <span
-        style={{
-          width: 10,
-          height: 10,
-          borderRadius: 999,
-          background: accentColor,
-          boxShadow: `0 0 24px ${accentColor}`,
-        }}
-      />
-      <div style={{fontSize: 12, letterSpacing: 1.8, textTransform: 'uppercase', color: '#cbd5e1'}}>
-        {activeSceneLabel}
-      </div>
-    </div>
-  </div>
-);
-
-const ProgressTrack = ({timeline, frame, accentColor}) => (
-  <div
-    style={{
-      position: 'absolute',
-      left: 74,
-      right: 74,
-      bottom: 144,
-      display: 'grid',
-      gridTemplateColumns: `repeat(${timeline.length}, minmax(0, 1fr))`,
-      gap: 14,
-      zIndex: 20,
-    }}
-  >
-    {timeline.map((scene) => {
-      const isActive = frame >= scene.start && frame < scene.end;
-      const progress = clamp((frame - scene.start) / scene.duration, 0, 1);
-      return (
-        <div key={scene.key} style={{display: 'grid', gap: 8}}>
-          <div
-            style={{
-              height: 5,
-              borderRadius: 999,
-              overflow: 'hidden',
-              background: 'rgba(255,255,255,0.1)',
-            }}
-          >
-            <div
-              style={{
-                width: `${isActive ? progress * 100 : frame >= scene.end ? 100 : 0}%`,
-                height: '100%',
-                borderRadius: 999,
-                background: isActive ? accentColor : 'rgba(255,255,255,0.38)',
-                boxShadow: isActive ? `0 0 18px ${accentColor}` : 'none',
-              }}
-            />
-          </div>
-          <div
-            style={{
-              fontSize: 12,
-              letterSpacing: 1.6,
-              textTransform: 'uppercase',
-              color: isActive ? '#f8fafc' : '#94a3b8',
-              fontWeight: isActive ? 700 : 500,
-            }}
-          >
-            {scene.label}
-          </div>
-        </div>
-      );
-    })}
-  </div>
-);
-
-const SubtitlePanel = ({subtitle, subtitleProgress, accentColor, fallbackText}) => (
-  <div
-    style={{
-      position: 'absolute',
-      left: 74,
-      right: 74,
-      bottom: 36,
-      zIndex: 25,
-      borderRadius: 26,
-      border: `1px solid ${subtitle ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.08)'}`,
-      background: subtitle ? 'rgba(5, 16, 35, 0.84)' : 'rgba(5, 16, 35, 0.64)',
-      backdropFilter: 'blur(16px)',
-      padding: '18px 24px 20px',
-      boxShadow: subtitle ? `0 0 32px ${accentColor}20` : 'none',
-    }}
-  >
-    <div style={{display: 'flex', alignItems: 'center', gap: 14}}>
       <div
         style={{
-          width: 44,
-          height: 44,
-          borderRadius: 999,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: subtitle ? `${accentColor}22` : 'rgba(255,255,255,0.06)',
-          color: subtitle ? accentColor : '#94a3b8',
-          fontSize: 12,
-          fontWeight: 700,
-          letterSpacing: 1.6,
+          padding: '12px 16px',
+          borderRadius: 18,
+          border: '1px solid rgba(255,255,255,0.12)',
+          background: 'rgba(5, 16, 35, 0.52)',
+          backdropFilter: 'blur(16px)',
         }}
       >
-        LIVE
-      </div>
-      <div style={{flex: 1}}>
-        <div style={{fontSize: 28, lineHeight: 1.35, fontWeight: subtitle ? 700 : 500, color: '#f8fafc'}}>
-          {subtitle?.text || fallbackText}
+        <div
+          style={{fontSize: 11, letterSpacing: 2.8, textTransform: 'uppercase', color: '#94a3b8'}}
+        >
+          {safeString(lead.title_prefix, 'Account Notice')}
         </div>
+        <div style={{fontSize: 20, fontWeight: 700, marginTop: 6, color: '#f8fafc'}}>
+          {safeString(lead.client_name)}
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          padding: '12px 16px',
+          borderRadius: 18,
+          border: '1px solid rgba(255,255,255,0.12)',
+          background: 'rgba(5, 16, 35, 0.52)',
+          backdropFilter: 'blur(16px)',
+        }}
+      >
+        {/* Breathing pulse dot */}
+        <span
+          style={{
+            width: 10,
+            height: 10,
+            borderRadius: 999,
+            background: accentColor,
+            boxShadow: `0 0 ${Math.round(12 + dotGlow * 18)}px ${accentColor}`,
+            transform: `scale(${dotPulse})`,
+            display: 'inline-block',
+          }}
+        />
         <div
           style={{
-            marginTop: 12,
-            height: 4,
-            borderRadius: 999,
-            overflow: 'hidden',
-            background: 'rgba(255,255,255,0.1)',
+            fontSize: 12,
+            letterSpacing: 1.8,
+            textTransform: 'uppercase',
+            color: '#cbd5e1',
           }}
         >
-          <div
-            style={{
-              width: `${subtitle ? subtitleProgress * 100 : 18}%`,
-              height: '100%',
-              borderRadius: 999,
-              background: accentColor,
-              boxShadow: `0 0 18px ${accentColor}`,
-            }}
-          />
+          {activeSceneLabel}
         </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
+
+// ─── Progress Track ──────────────────────────────────────────────────────────
+
+const ProgressTrack = ({timeline, frame, accentColor}) => {
+  // Pulse glow for active segment
+  const glowPulse = 0.7 + Math.sin(frame * 0.18) * 0.30;
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        left: 74,
+        right: 74,
+        bottom: 144,
+        display: 'grid',
+        gridTemplateColumns: `repeat(${timeline.length}, minmax(0, 1fr))`,
+        gap: 14,
+        zIndex: 20,
+      }}
+    >
+      {timeline.map((scene) => {
+        const isActive = frame >= scene.start && frame < scene.end;
+        const progress = clamp((frame - scene.start) / scene.duration, 0, 1);
+        return (
+          <div key={scene.key} style={{display: 'grid', gap: 8}}>
+            <div
+              style={{
+                height: 5,
+                borderRadius: 999,
+                overflow: 'hidden',
+                background: 'rgba(255,255,255,0.1)',
+              }}
+            >
+              <div
+                style={{
+                  width: `${isActive ? progress * 100 : frame >= scene.end ? 100 : 0}%`,
+                  height: '100%',
+                  borderRadius: 999,
+                  background: isActive
+                    ? `linear-gradient(90deg, ${accentColor}, ${accentColor}cc)`
+                    : 'rgba(255,255,255,0.38)',
+                  boxShadow: isActive
+                    ? `0 0 ${Math.round(8 + glowPulse * 16)}px ${accentColor}`
+                    : 'none',
+                  transition: 'none',
+                }}
+              />
+            </div>
+            <div
+              style={{
+                fontSize: 12,
+                letterSpacing: 1.6,
+                textTransform: 'uppercase',
+                color: isActive ? '#f8fafc' : '#94a3b8',
+                fontWeight: isActive ? 700 : 500,
+                opacity: isActive ? 1 : 0.72,
+              }}
+            >
+              {scene.label}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+// ─── Subtitle Panel (word-by-word karaoke) ───────────────────────────────────
+
+const SubtitlePanel = ({subtitle, subtitleProgress, branding, fallbackText}) => {
+  const words = subtitle ? subtitle.text.split(' ') : [];
+  const subtitleColor = getSubtitleColor(branding?.color);
+  const placement = getSubtitlePanelPlacement(branding?.position);
+  const activeWordIndex = subtitle
+    ? Math.min(words.length - 1, Math.floor(subtitleProgress * words.length))
+    : -1;
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        zIndex: 25,
+        borderRadius: 26,
+        border: `1px solid ${subtitle ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.08)'}`,
+        background: subtitle ? 'rgba(5, 16, 35, 0.62)' : 'rgba(5, 16, 35, 0.42)',
+        backdropFilter: 'blur(16px)',
+        padding: '18px 24px 20px',
+        boxShadow: subtitle ? `0 0 24px ${subtitleColor}18` : 'none',
+        ...placement,
+      }}
+    >
+      <div style={{display: 'flex', alignItems: 'center', gap: 14}}>
+        <div
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 999,
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: subtitle ? `${subtitleColor}22` : 'rgba(255,255,255,0.06)',
+            color: subtitle ? subtitleColor : '#94a3b8',
+            fontSize: 12,
+            fontWeight: 700,
+            letterSpacing: 1.6,
+            border: subtitle ? `1px solid ${subtitleColor}44` : '1px solid rgba(255,255,255,0.08)',
+          }}
+        >
+          LIVE
+        </div>
+
+        <div style={{flex: 1}}>
+          {subtitle ? (
+            <div
+              style={{
+                fontSize: 28,
+                lineHeight: 1.35,
+                fontWeight: 600,
+                color: '#94a3b8',
+                flexWrap: 'wrap',
+                display: 'flex',
+                gap: '0 8px',
+              }}
+            >
+              {words.map((word, i) => {
+                const isPast = i < activeWordIndex;
+                const isCurrent = i === activeWordIndex;
+                return (
+                  <span
+                    key={i}
+                    style={{
+                      color: isPast
+                        ? '#cbd5e1'
+                        : isCurrent
+                        ? subtitleColor
+                        : '#64748b',
+                      fontWeight: isCurrent ? 800 : isPast ? 600 : 500,
+                      textShadow: isCurrent ? `0 0 18px ${subtitleColor}` : 'none',
+                      transition: 'none',
+                      display: 'inline-block',
+                    }}
+                  >
+                    {word}
+                  </span>
+                );
+              })}
+            </div>
+          ) : (
+            <div style={{fontSize: 28, lineHeight: 1.35, fontWeight: 500, color: '#64748b'}}>
+              {fallbackText}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const LogoOverlay = ({logo}) => {
+  if (!logo?.public_path) {
+    return null;
+  }
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        zIndex: 24,
+        ...getLogoPlacement(logo.position),
+      }}
+    >
+      <div
+        style={{
+          padding: '12px 16px',
+          borderRadius: 20,
+          border: '1px solid rgba(255,255,255,0.12)',
+          background: 'rgba(5, 16, 35, 0.52)',
+          backdropFilter: 'blur(16px)',
+          boxShadow: '0 24px 40px rgba(2, 6, 23, 0.22)',
+        }}
+      >
+        <Img
+          src={staticFile(logo.public_path)}
+          style={{
+            display: 'block',
+            maxWidth: 180,
+            maxHeight: 64,
+            objectFit: 'contain',
+            opacity: clamp((logo.opacity ?? 80) / 100, 0, 1),
+          }}
+        />
+      </div>
+    </div>
+  );
+};
+
+// ─── Opening Scene ───────────────────────────────────────────────────────────
 
 const OpeningScene = ({scene, frame, fps, lead, accentColor}) => (
   <SceneShell scene={scene} frame={frame} align="space-between">
@@ -292,6 +474,10 @@ const OpeningScene = ({scene, frame, fps, lead, accentColor}) => (
         frame: localFrame - 10,
         config: {damping: 20, stiffness: 90},
       });
+      // Stagger for each identity row
+      const row0 = spring({fps, frame: localFrame - 14, config: {damping: 18, stiffness: 92}});
+      const row1 = spring({fps, frame: localFrame - 22, config: {damping: 18, stiffness: 92}});
+      const row2 = spring({fps, frame: localFrame - 30, config: {damping: 18, stiffness: 92}});
 
       return (
         <>
@@ -345,6 +531,7 @@ const OpeningScene = ({scene, frame, fps, lead, accentColor}) => (
             </div>
           </div>
 
+          {/* Card with staggered identity rows */}
           <div
             style={{
               width: 460,
@@ -371,21 +558,36 @@ const OpeningScene = ({scene, frame, fps, lead, accentColor}) => (
             >
               <Img
                 src={legalGavelImage}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                  transform: 'scale(1.06)',
-                }}
+                style={{width: '100%', height: '100%', objectFit: 'cover', transform: 'scale(1.06)'}}
               />
             </div>
-            <div style={{fontSize: 14, letterSpacing: 1.8, textTransform: 'uppercase', color: '#94a3b8'}}>
+            <div
+              style={{
+                fontSize: 14,
+                letterSpacing: 1.8,
+                textTransform: 'uppercase',
+                color: '#94a3b8',
+                marginBottom: 18,
+              }}
+            >
               Lead Identity
             </div>
-            <div style={{display: 'grid', gap: 18, marginTop: 18}}>
-              <IdentityRow label="Customer" value={safeString(lead.customer_name)} />
-              <IdentityRow label="Client" value={safeString(lead.client_name)} />
-              <IdentityRow label="Product" value={safeString(lead.product_type, 'loan')} />
+            <div style={{display: 'grid', gap: 18}}>
+              <StaggeredIdentityRow
+                label="Customer"
+                value={safeString(lead.customer_name)}
+                reveal={row0}
+              />
+              <StaggeredIdentityRow
+                label="Client"
+                value={safeString(lead.client_name)}
+                reveal={row1}
+              />
+              <StaggeredIdentityRow
+                label="Product"
+                value={safeString(lead.product_type, 'loan')}
+                reveal={row2}
+              />
             </div>
           </div>
         </>
@@ -394,16 +596,27 @@ const OpeningScene = ({scene, frame, fps, lead, accentColor}) => (
   </SceneShell>
 );
 
+// ─── Account Scene ───────────────────────────────────────────────────────────
+
 const AccountScene = ({scene, frame, fps, lead, accentColor}) => (
   <SceneShell scene={scene} frame={frame} align="space-between">
-    {({localFrame}) => {
+    {({localFrame, progress}) => {
       const heroReveal = spring({fps, frame: localFrame, config: {damping: 16, stiffness: 92}});
       const sideReveal = spring({fps, frame: localFrame - 10, config: {damping: 18, stiffness: 88}});
+      // Kinetic pulse on the white card during count-up
+      const countPulse = 1 + Math.sin(progress * Math.PI * 3) * 0.012 * (1 - progress);
 
       return (
         <>
           <div style={{maxWidth: 760}}>
-            <div style={{fontSize: 14, letterSpacing: 2.4, textTransform: 'uppercase', color: '#94a3b8'}}>
+            <div
+              style={{
+                fontSize: 14,
+                letterSpacing: 2.4,
+                textTransform: 'uppercase',
+                color: '#94a3b8',
+              }}
+            >
               {safeString(lead.scene_payload.account.eyebrow, 'Account Status')}
             </div>
             <div
@@ -463,11 +676,18 @@ const AccountScene = ({scene, frame, fps, lead, accentColor}) => (
               background: 'rgba(250, 250, 252, 0.94)',
               color: '#0f172a',
               boxShadow: '0 30px 80px rgba(2, 8, 23, 0.28)',
-              transform: `translateY(${(1 - sideReveal) * 34}px)`,
+              transform: `translateY(${(1 - sideReveal) * 34}px) scale(${countPulse})`,
               opacity: sideReveal,
             }}
           >
-            <div style={{fontSize: 12, letterSpacing: 2.2, textTransform: 'uppercase', color: '#64748b'}}>
+            <div
+              style={{
+                fontSize: 12,
+                letterSpacing: 2.2,
+                textTransform: 'uppercase',
+                color: '#64748b',
+              }}
+            >
               Outstanding
             </div>
             <div style={{fontSize: 52, fontWeight: 900, lineHeight: 1.02, marginTop: 18}}>
@@ -482,6 +702,8 @@ const AccountScene = ({scene, frame, fps, lead, accentColor}) => (
     }}
   </SceneShell>
 );
+
+// ─── Context Scene ───────────────────────────────────────────────────────────
 
 const ContextScene = ({scene, frame, fps, lead}) => (
   <SceneShell scene={scene} frame={frame}>
@@ -519,7 +741,14 @@ const ContextScene = ({scene, frame, fps, lead}) => (
               opacity: reveal,
             }}
           >
-            <div style={{fontSize: 12, letterSpacing: 2.2, textTransform: 'uppercase', color: '#64748b'}}>
+            <div
+              style={{
+                fontSize: 12,
+                letterSpacing: 2.2,
+                textTransform: 'uppercase',
+                color: '#64748b',
+              }}
+            >
               {safeString(lead.scene_payload.context.eyebrow, 'Status Summary')}
             </div>
             <div style={{fontSize: 46, fontWeight: 800, lineHeight: 1.08, marginTop: 16}}>
@@ -552,21 +781,27 @@ const ContextScene = ({scene, frame, fps, lead}) => (
             >
               <Img
                 src={debtNoticeImage}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                }}
+                style={{width: '100%', height: '100%', objectFit: 'cover'}}
               />
             </div>
-            <div style={{fontSize: 12, letterSpacing: 2.2, textTransform: 'uppercase', color: '#94a3b8'}}>
+            <div
+              style={{
+                fontSize: 12,
+                letterSpacing: 2.2,
+                textTransform: 'uppercase',
+                color: '#94a3b8',
+              }}
+            >
               Review Markers
             </div>
             <div style={{display: 'grid', gap: 14, marginTop: 18}}>
               <ContextMarker title="Lead" text={safeString(lead.customer_name)} />
               <ContextMarker title="Account" text={safeString(lead.lan)} />
               <ContextMarker title="Client" text={safeString(lead.client_name)} />
-              <ContextMarker title="Current Due" text={safeString(lead.display_amounts.primary.value)} />
+              <ContextMarker
+                title="Current Due"
+                text={safeString(lead.display_amounts.primary.value)}
+              />
             </div>
           </div>
         </div>
@@ -574,6 +809,8 @@ const ContextScene = ({scene, frame, fps, lead}) => (
     }}
   </SceneShell>
 );
+
+// ─── Amounts Scene ───────────────────────────────────────────────────────────
 
 const AmountsScene = ({scene, frame, fps, lead, accentColor}) => (
   <SceneShell scene={scene} frame={frame}>
@@ -599,10 +836,25 @@ const AmountsScene = ({scene, frame, fps, lead, accentColor}) => (
       return (
         <div style={{display: 'grid', gap: 24}}>
           <div style={{maxWidth: 780, opacity: headerReveal}}>
-            <div style={{fontSize: 14, letterSpacing: 2.4, textTransform: 'uppercase', color: '#94a3b8'}}>
+            <div
+              style={{
+                fontSize: 14,
+                letterSpacing: 2.4,
+                textTransform: 'uppercase',
+                color: '#94a3b8',
+              }}
+            >
               {safeString(lead.scene_payload.amounts.eyebrow, 'Financial Highlights')}
             </div>
-            <div style={{fontSize: 60, fontWeight: 800, lineHeight: 1.08, marginTop: 14, color: '#f8fafc'}}>
+            <div
+              style={{
+                fontSize: 60,
+                fontWeight: 800,
+                lineHeight: 1.08,
+                marginTop: 14,
+                color: '#f8fafc',
+              }}
+            >
               {safeString(lead.scene_payload.amounts.headline, 'राशि सारांश')}
             </div>
             <div style={{fontSize: 24, lineHeight: 1.45, marginTop: 16, color: '#cbd5e1'}}>
@@ -618,6 +870,7 @@ const AmountsScene = ({scene, frame, fps, lead, accentColor}) => (
               accentColor={accentColor}
               opacity={primaryReveal}
               background="linear-gradient(160deg, rgba(15, 23, 42, 0.94), rgba(15, 23, 42, 0.78))"
+              shimmerFrame={localFrame}
             />
             <AmountCard
               title={safeString(lead.display_amounts.secondary.label)}
@@ -626,6 +879,7 @@ const AmountsScene = ({scene, frame, fps, lead, accentColor}) => (
               accentColor="#94a3b8"
               opacity={secondaryReveal}
               background="linear-gradient(160deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.74))"
+              shimmerFrame={null}
             />
           </div>
         </div>
@@ -634,14 +888,25 @@ const AmountsScene = ({scene, frame, fps, lead, accentColor}) => (
   </SceneShell>
 );
 
+// ─── Action Scene ─────────────────────────────────────────────────────────────
+
 const ActionScene = ({scene, frame, fps, lead, accentColor}) => (
   <SceneShell scene={scene} frame={frame}>
     {({localFrame, progress}) => {
       const reveal = spring({fps, frame: localFrame, config: {damping: 16, stiffness: 92}});
+      // Bouncy spring for phone number
+      const phoneReveal = spring({
+        fps,
+        frame: localFrame - 20,
+        config: {damping: 10, stiffness: 120},
+      });
       const glowOpacity = interpolate(progress, [0, 1], [0.12, 0.28], {
         extrapolateLeft: 'clamp',
         extrapolateRight: 'clamp',
       });
+      // Pulsing CTA badge
+      const badgePulse = 1 + Math.sin(localFrame * 0.18) * 0.04;
+      const badgeGlow = 0.4 + Math.sin(localFrame * 0.18) * 0.3;
 
       return (
         <div
@@ -667,18 +932,80 @@ const ActionScene = ({scene, frame, fps, lead, accentColor}) => (
               background: `radial-gradient(circle at top right, ${accentColor}33, transparent 36%)`,
             }}
           />
-          <div style={{position: 'relative', display: 'grid', gridTemplateColumns: '1.15fr 0.85fr', gap: 28}}>
+          <div
+            style={{
+              position: 'relative',
+              display: 'grid',
+              gridTemplateColumns: '1.15fr 0.85fr',
+              gap: 28,
+            }}
+          >
             <div>
-              <div style={{fontSize: 14, letterSpacing: 2.4, textTransform: 'uppercase', color: '#94a3b8'}}>
+              <div
+                style={{
+                  fontSize: 14,
+                  letterSpacing: 2.4,
+                  textTransform: 'uppercase',
+                  color: '#94a3b8',
+                }}
+              >
                 {safeString(lead.scene_payload.action.eyebrow, 'Immediate Next Step')}
               </div>
-              <div style={{fontSize: 62, lineHeight: 1.02, fontWeight: 900, marginTop: 16, color: '#f8fafc'}}>
+              <div
+                style={{
+                  fontSize: 62,
+                  lineHeight: 1.02,
+                  fontWeight: 900,
+                  marginTop: 16,
+                  color: '#f8fafc',
+                }}
+              >
                 {safeString(lead.scene_payload.action.headline, 'आज ही संपर्क करें')}
               </div>
               <div style={{fontSize: 26, lineHeight: 1.52, marginTop: 18, color: '#dbe4f0'}}>
                 {safeString(lead.scene_payload.action.body, lead.cta_text)}
               </div>
+
+              {/* Pulsing urgency badge */}
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  marginTop: 22,
+                  padding: '10px 18px',
+                  borderRadius: 999,
+                  background: `${accentColor}${Math.round(0.18 * 255).toString(16).padStart(2, '0')}`,
+                  border: `1px solid ${accentColor}${Math.round(badgeGlow * 255).toString(16).padStart(2, '0')}`,
+                  transform: `scale(${badgePulse})`,
+                  boxShadow: `0 0 20px ${accentColor}${Math.round(badgeGlow * 0.5 * 255).toString(16).padStart(2, '0')}`,
+                }}
+              >
+                <span
+                  style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: 999,
+                    background: accentColor,
+                    display: 'inline-block',
+                    boxShadow: `0 0 10px ${accentColor}`,
+                  }}
+                />
+                <span
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 700,
+                    letterSpacing: 1.6,
+                    textTransform: 'uppercase',
+                    color: '#f8fafc',
+                  }}
+                >
+                  Urgent Action Required
+                </span>
+              </div>
             </div>
+
+            {/* CTA card with bouncy phone number */}
             <div
               style={{
                 alignSelf: 'center',
@@ -689,11 +1016,30 @@ const ActionScene = ({scene, frame, fps, lead, accentColor}) => (
                 boxShadow: '0 24px 60px rgba(2, 8, 23, 0.22)',
               }}
             >
-              <div style={{fontSize: 12, letterSpacing: 2.2, textTransform: 'uppercase', color: '#64748b'}}>
+              <div
+                style={{
+                  fontSize: 12,
+                  letterSpacing: 2.2,
+                  textTransform: 'uppercase',
+                  color: '#64748b',
+                }}
+              >
                 {safeString(lead.scene_payload.action.cta_label, 'संपर्क नंबर')}
               </div>
-              <div style={{fontSize: 44, fontWeight: 900, lineHeight: 1.05, marginTop: 18}}>
-                {safeString(lead.scene_payload.action.cta_value, safeString(lead.contact_details))}
+              <div
+                style={{
+                  fontSize: 44,
+                  fontWeight: 900,
+                  lineHeight: 1.05,
+                  marginTop: 18,
+                  transform: `scale(${0.88 + phoneReveal * 0.12}) translateY(${(1 - phoneReveal) * 12}px)`,
+                  opacity: phoneReveal,
+                }}
+              >
+                {safeString(
+                  lead.scene_payload.action.cta_value,
+                  safeString(lead.contact_details)
+                )}
               </div>
               <div style={{fontSize: 17, lineHeight: 1.55, marginTop: 18, color: '#475569'}}>
                 भुगतान समाधान या पुनर्भुगतान विकल्प के लिए त्वरित कॉल अपेक्षित है।
@@ -706,10 +1052,17 @@ const ActionScene = ({scene, frame, fps, lead, accentColor}) => (
   </SceneShell>
 );
 
+// ─── Closing Scene ────────────────────────────────────────────────────────────
+
 const ClosingScene = ({scene, frame, fps, lead, accentColor}) => (
   <SceneShell scene={scene} frame={frame}>
     {({localFrame}) => {
       const reveal = spring({fps, frame: localFrame, config: {damping: 18, stiffness: 84}});
+      // Staggered summary rows
+      const row0 = spring({fps, frame: localFrame - 8, config: {damping: 18, stiffness: 88}});
+      const row1 = spring({fps, frame: localFrame - 18, config: {damping: 18, stiffness: 88}});
+      const row2 = spring({fps, frame: localFrame - 28, config: {damping: 18, stiffness: 88}});
+      const row3 = spring({fps, frame: localFrame - 38, config: {damping: 18, stiffness: 88}});
 
       return (
         <div
@@ -731,7 +1084,14 @@ const ClosingScene = ({scene, frame, fps, lead, accentColor}) => (
               opacity: reveal,
             }}
           >
-            <div style={{fontSize: 12, letterSpacing: 2.2, textTransform: 'uppercase', color: '#64748b'}}>
+            <div
+              style={{
+                fontSize: 12,
+                letterSpacing: 2.2,
+                textTransform: 'uppercase',
+                color: '#64748b',
+              }}
+            >
               {safeString(lead.scene_payload.closing.eyebrow, 'Resolution Still Possible')}
             </div>
             <div style={{fontSize: 52, lineHeight: 1.08, fontWeight: 900, marginTop: 16}}>
@@ -753,14 +1113,38 @@ const ClosingScene = ({scene, frame, fps, lead, accentColor}) => (
               opacity: reveal,
             }}
           >
-            <div style={{fontSize: 12, letterSpacing: 2.2, textTransform: 'uppercase', color: '#94a3b8'}}>
+            <div
+              style={{
+                fontSize: 12,
+                letterSpacing: 2.2,
+                textTransform: 'uppercase',
+                color: '#94a3b8',
+              }}
+            >
               Final Summary
             </div>
             <div style={{display: 'grid', gap: 18, marginTop: 20}}>
-              <SummaryRow label="Customer" value={safeString(lead.customer_name)} />
-              <SummaryRow label="Account" value={safeString(lead.lan)} />
-              <SummaryRow label="Outstanding" value={safeString(lead.display_amounts.primary.value)} />
-              <SummaryRow label="Contact" value={safeString(lead.contact_details)} accentColor={accentColor} />
+              <StaggeredSummaryRow
+                label="Customer"
+                value={safeString(lead.customer_name)}
+                reveal={row0}
+              />
+              <StaggeredSummaryRow
+                label="Account"
+                value={safeString(lead.lan)}
+                reveal={row1}
+              />
+              <StaggeredSummaryRow
+                label="Outstanding"
+                value={safeString(lead.display_amounts.primary.value)}
+                reveal={row2}
+              />
+              <StaggeredSummaryRow
+                label="Contact"
+                value={safeString(lead.contact_details)}
+                accentColor={accentColor}
+                reveal={row3}
+              />
             </div>
           </div>
         </div>
@@ -769,9 +1153,22 @@ const ClosingScene = ({scene, frame, fps, lead, accentColor}) => (
   </SceneShell>
 );
 
-const IdentityRow = ({label, value}) => (
-  <div style={{display: 'grid', gap: 4, paddingBottom: 12, borderBottom: '1px solid rgba(255,255,255,0.08)'}}>
-    <div style={{fontSize: 12, letterSpacing: 1.6, textTransform: 'uppercase', color: '#94a3b8'}}>{label}</div>
+// ─── Primitive Components ─────────────────────────────────────────────────────
+
+const StaggeredIdentityRow = ({label, value, reveal}) => (
+  <div
+    style={{
+      display: 'grid',
+      gap: 4,
+      paddingBottom: 12,
+      borderBottom: '1px solid rgba(255,255,255,0.08)',
+      transform: `translateX(${(1 - reveal) * -16}px)`,
+      opacity: reveal,
+    }}
+  >
+    <div style={{fontSize: 12, letterSpacing: 1.6, textTransform: 'uppercase', color: '#94a3b8'}}>
+      {label}
+    </div>
     <div style={{fontSize: 28, fontWeight: 700, lineHeight: 1.12, color: '#f8fafc'}}>{value}</div>
   </div>
 );
@@ -785,68 +1182,142 @@ const ContextMarker = ({title, text}) => (
       border: '1px solid rgba(255,255,255,0.06)',
     }}
   >
-    <div style={{fontSize: 11, letterSpacing: 1.8, textTransform: 'uppercase', color: '#94a3b8'}}>{title}</div>
-    <div style={{fontSize: 24, lineHeight: 1.2, fontWeight: 700, color: '#f8fafc', marginTop: 8}}>{text}</div>
+    <div style={{fontSize: 11, letterSpacing: 1.8, textTransform: 'uppercase', color: '#94a3b8'}}>
+      {title}
+    </div>
+    <div style={{fontSize: 24, lineHeight: 1.2, fontWeight: 700, color: '#f8fafc', marginTop: 8}}>
+      {text}
+    </div>
   </div>
 );
 
-const AmountCard = ({title, value, helper, accentColor, opacity, background}) => (
-  <div
-    style={{
-      padding: '30px 30px 32px',
-      borderRadius: 30,
-      background,
-      color: '#f8fafc',
-      border: '1px solid rgba(255,255,255,0.1)',
-      boxShadow: `0 18px 50px ${accentColor}18`,
-      transform: `translateY(${(1 - opacity) * 24}px) scale(${0.98 + opacity * 0.02})`,
-      opacity,
-    }}
-  >
-    <div style={{fontSize: 12, letterSpacing: 2, textTransform: 'uppercase', color: '#94a3b8'}}>{title}</div>
-    <div style={{fontSize: 54, fontWeight: 900, lineHeight: 1.02, marginTop: 20}}>{value}</div>
+const AmountCard = ({title, value, helper, accentColor, opacity, background, shimmerFrame}) => {
+  // Shimmer: a sliding gradient overlay on the progress bar
+  const shimmerPos =
+    shimmerFrame !== null
+      ? `${((shimmerFrame * 3.2) % 200) - 60}%`
+      : '-60%';
+
+  return (
     <div
       style={{
-        marginTop: 20,
-        height: 4,
-        borderRadius: 999,
-        background: 'rgba(255,255,255,0.1)',
-        overflow: 'hidden',
+        padding: '30px 30px 32px',
+        borderRadius: 30,
+        background,
+        color: '#f8fafc',
+        border: '1px solid rgba(255,255,255,0.1)',
+        boxShadow: `0 18px 50px ${accentColor}18`,
+        transform: `translateY(${(1 - opacity) * 24}px) scale(${0.98 + opacity * 0.02})`,
+        opacity,
       }}
     >
+      <div style={{fontSize: 12, letterSpacing: 2, textTransform: 'uppercase', color: '#94a3b8'}}>
+        {title}
+      </div>
+      <div style={{fontSize: 54, fontWeight: 900, lineHeight: 1.02, marginTop: 20}}>{value}</div>
+      {/* Shimmer progress bar */}
       <div
         style={{
-          width: `${55 + opacity * 45}%`,
-          height: '100%',
+          marginTop: 20,
+          height: 4,
           borderRadius: 999,
-          background: accentColor,
+          background: 'rgba(255,255,255,0.1)',
+          overflow: 'hidden',
+          position: 'relative',
         }}
-      />
+      >
+        <div
+          style={{
+            width: `${55 + opacity * 45}%`,
+            height: '100%',
+            borderRadius: 999,
+            background: accentColor,
+            position: 'relative',
+            overflow: 'hidden',
+          }}
+        >
+          {shimmerFrame !== null && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: shimmerPos,
+                width: '60%',
+                height: '100%',
+                background:
+                  'linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent)',
+              }}
+            />
+          )}
+        </div>
+      </div>
+      <div style={{fontSize: 18, lineHeight: 1.5, marginTop: 18, color: '#dbe4f0'}}>{helper}</div>
     </div>
-    <div style={{fontSize: 18, lineHeight: 1.5, marginTop: 18, color: '#dbe4f0'}}>{helper}</div>
-  </div>
-);
+  );
+};
 
-const SummaryRow = ({label, value, accentColor}) => (
-  <div style={{display: 'flex', justifyContent: 'space-between', gap: 12, paddingBottom: 12, borderBottom: '1px solid rgba(255,255,255,0.08)'}}>
-    <div style={{fontSize: 13, color: '#94a3b8', letterSpacing: 1.2, textTransform: 'uppercase'}}>{label}</div>
-    <div style={{fontSize: 24, lineHeight: 1.18, fontWeight: 700, color: accentColor || '#f8fafc', textAlign: 'right'}}>
+const StaggeredSummaryRow = ({label, value, accentColor, reveal}) => (
+  <div
+    style={{
+      display: 'flex',
+      justifyContent: 'space-between',
+      gap: 12,
+      paddingBottom: 12,
+      borderBottom: '1px solid rgba(255,255,255,0.08)',
+      transform: `translateX(${(1 - reveal) * 16}px)`,
+      opacity: reveal,
+    }}
+  >
+    <div
+      style={{
+        fontSize: 13,
+        color: '#94a3b8',
+        letterSpacing: 1.2,
+        textTransform: 'uppercase',
+      }}
+    >
+      {label}
+    </div>
+    <div
+      style={{
+        fontSize: 24,
+        lineHeight: 1.18,
+        fontWeight: 700,
+        color: accentColor || '#f8fafc',
+        textAlign: 'right',
+      }}
+    >
       {value}
     </div>
   </div>
 );
 
+// ─── Main Composition ─────────────────────────────────────────────────────────
+
 export const TemplateVideo = ({leadId}) => {
   const frame = useCurrentFrame();
   const {fps, durationInFrames} = useVideoConfig();
   const lead = getLeadById(leadId);
+  const subtitleBranding = lead.branding?.subtitles || {
+    enabled: true,
+    color: 'White',
+    position: 'Bottom',
+  };
+  const logoBranding = lead.branding?.logo || {
+    public_path: null,
+    position: 'Top Right',
+    opacity: 80,
+  };
   const track = getTrackMeta(lead.id);
   const timeline = getSceneTimeline(durationInFrames);
-  const activeScene = timeline.find((scene) => frame >= scene.start && frame < scene.end) || timeline[timeline.length - 1];
+  const activeScene =
+    timeline.find((scene) => frame >= scene.start && frame < scene.end) ||
+    timeline[timeline.length - 1];
   const currentTime = frame / fps;
   const currentSubtitle = getActiveSubtitle(track.subtitles, currentTime);
   const subtitleProgress = getSubtitleProgress(currentSubtitle, currentTime);
-  const audioSrc = lead.id && lead.id !== 'preview-sample' ? staticFile(`audio/${lead.id}.mp3`) : null;
+  const audioSrc =
+    lead.id && lead.id !== 'preview-sample' ? staticFile(`audio/${lead.id}.mp3`) : null;
   const accentColor = URGENCY_COLORS[lead.urgency_level] || URGENCY_COLORS.elevated;
   const backgroundShift = interpolate(frame, [0, durationInFrames], [0, 1], {
     extrapolateLeft: 'clamp',
@@ -872,6 +1343,7 @@ export const TemplateVideo = ({leadId}) => {
     >
       {audioSrc ? <Audio src={audioSrc} /> : null}
 
+      {/* Base dark gradient */}
       <AbsoluteFill
         style={{
           background:
@@ -879,14 +1351,18 @@ export const TemplateVideo = ({leadId}) => {
         }}
       />
 
+      {/* Static radial accent */}
       <AbsoluteFill
         style={{
           transform: `scale(${1.04 - backgroundShift * 0.04}) rotate(${backgroundShift * -2}deg)`,
-          background:
-            `radial-gradient(circle at 18% 18%, ${accentColor}30, transparent 28%), radial-gradient(circle at 82% 22%, rgba(59,130,246,0.18), transparent 24%), radial-gradient(circle at 58% 78%, rgba(255,255,255,0.08), transparent 22%)`,
+          background: `radial-gradient(circle at 18% 18%, ${accentColor}30, transparent 28%), radial-gradient(circle at 82% 22%, rgba(59,130,246,0.18), transparent 24%), radial-gradient(circle at 58% 78%, rgba(255,255,255,0.08), transparent 22%)`,
         }}
       />
 
+      {/* Animated floating orbs */}
+      <FloatingOrbs frame={frame} accentColor={accentColor} />
+
+      {/* Subtle grid texture */}
       <AbsoluteFill
         style={{
           backgroundImage:
@@ -897,6 +1373,7 @@ export const TemplateVideo = ({leadId}) => {
         }}
       />
 
+      {/* Action scene glow */}
       <AbsoluteFill
         style={{
           background: `radial-gradient(circle at bottom right, ${accentColor}${Math.round(actionGlow * 255)
@@ -909,7 +1386,9 @@ export const TemplateVideo = ({leadId}) => {
         lead={lead}
         accentColor={accentColor}
         activeSceneLabel={safeString(activeScene?.label, 'Notice')}
+        frame={frame}
       />
+      <LogoOverlay logo={logoBranding} />
 
       <OpeningScene scene={timeline[0]} frame={frame} fps={fps} lead={lead} accentColor={accentColor} />
       <AccountScene scene={timeline[1]} frame={frame} fps={fps} lead={lead} accentColor={accentColor} />
@@ -920,12 +1399,14 @@ export const TemplateVideo = ({leadId}) => {
 
       <ProgressTrack timeline={timeline} frame={frame} accentColor={accentColor} />
 
-      <SubtitlePanel
-        subtitle={currentSubtitle}
-        subtitleProgress={subtitleProgress}
-        accentColor={accentColor}
-        fallbackText={safeString(lead.cta_text, 'ऑडियो के साथ सक्रिय पंक्ति यहां दिखाई देगी।')}
-      />
+      {subtitleBranding.enabled ? (
+        <SubtitlePanel
+          subtitle={currentSubtitle}
+          subtitleProgress={subtitleProgress}
+          branding={subtitleBranding}
+          fallbackText={safeString(lead.cta_text, 'ऑडियो के साथ सक्रिय पंक्ति यहां दिखाई देगी।')}
+        />
+      ) : null}
     </AbsoluteFill>
   );
 };

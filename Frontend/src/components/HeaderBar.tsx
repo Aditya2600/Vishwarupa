@@ -51,7 +51,7 @@ export function HeaderBar({ onCreateVideo, primaryLabel = "Create Video" }: Head
         <img
           src="/credresolve_logo.png"
           alt="CredResolve"
-          className="hidden sm:block h-8 w-auto object-contain object-left"
+          className="hidden sm:block h-6 md:h-7 w-auto object-contain object-left"
           draggable={false}
         />
       </motion.div>
@@ -61,7 +61,7 @@ export function HeaderBar({ onCreateVideo, primaryLabel = "Create Video" }: Head
           variant="ghost"
           size="sm"
           onClick={() => navigate("/templates")}
-          className={isTemplatesPage ? "text-foreground bg-secondary" : "text-muted-foreground hover:text-foreground"}
+          className={isTemplatesPage ? "text-foreground bg-secondary" : "text-muted-foreground hover:bg-primary hover:text-white"}
         >
           <LayoutTemplate className="md:mr-2 h-4 w-4" />
           <span className="hidden md:inline">Template Library</span>

@@ -3,17 +3,17 @@ import metadataData from '../public/metadata.json';
 
 export const FPS = 30;
 export const DEFAULT_DURATION_SECONDS = 12;
-export const TRANSITION_FRAMES = 14;
+export const TRANSITION_FRAMES = 12;
 export const WIDTH = 1280;
 export const HEIGHT = 720;
 
 export const SCENE_DEFINITIONS = [
-  {key: 'opening', label: 'Notice', ratio: 0.16},
-  {key: 'account', label: 'Account', ratio: 0.16},
-  {key: 'context', label: 'Review', ratio: 0.19},
+  {key: 'opening', label: 'Notice', ratio: 0.15},
+  {key: 'account', label: 'Account', ratio: 0.15},
+  {key: 'context', label: 'Review', ratio: 0.17},
   {key: 'amounts', label: 'Amounts', ratio: 0.16},
-  {key: 'action', label: 'Action', ratio: 0.18},
-  {key: 'closing', label: 'Resolve', ratio: 0.15},
+  {key: 'action', label: 'Action', ratio: 0.21},
+  {key: 'closing', label: 'Resolve', ratio: 0.16},
 ];
 
 const fallbackLead = {
@@ -29,9 +29,19 @@ const fallbackLead = {
   title_prefix: 'Account Notice',
   script_text:
     'यह एक प्रीव्यू टेम्पलेट है। वास्तविक रेंडर के दौरान ग्राहक-विशिष्ट डेटा और ऑडियो अपने आप लोड हो जाएंगे।',
+  branding: {
+    subtitles: {
+      enabled: true,
+      color: 'White',
+      position: 'Bottom',
+    },
+    logo: {
+      public_path: null,
+      position: 'Top Right',
+      opacity: 80,
+    },
+  },
 };
-
-const metadata = typeof metadataData === 'object' && metadataData ? metadataData : {};
 
 export const safeString = (value, fallback = 'Not available') => {
   if (typeof value === 'string' && value.trim()) {
@@ -41,6 +51,64 @@ export const safeString = (value, fallback = 'Not available') => {
     return String(value);
   }
   return fallback;
+};
+
+const metadata = typeof metadataData === 'object' && metadataData ? metadataData : {};
+
+const BRANDING_DEFAULTS = fallbackLead.branding;
+
+const normalizeSubtitleColor = (value) => {
+  const cleaned = safeString(value, BRANDING_DEFAULTS.subtitles.color);
+  return ['White', 'Blue', 'Green', 'Red', 'Yellow', 'Teal'].includes(cleaned)
+    ? cleaned
+    : BRANDING_DEFAULTS.subtitles.color;
+};
+
+const normalizeSubtitlePosition = (value) => {
+  const cleaned = safeString(value, BRANDING_DEFAULTS.subtitles.position);
+  return ['Top', 'Center', 'Bottom'].includes(cleaned)
+    ? cleaned
+    : BRANDING_DEFAULTS.subtitles.position;
+};
+
+const normalizeLogoPosition = (value) => {
+  const cleaned = safeString(value, BRANDING_DEFAULTS.logo.position);
+  return ['Top Left', 'Top Right', 'Bottom Left', 'Bottom Right'].includes(cleaned)
+    ? cleaned
+    : BRANDING_DEFAULTS.logo.position;
+};
+
+const normalizeBranding = (branding) => {
+  const subtitleBranding =
+    branding && typeof branding.subtitles === 'object' && branding.subtitles
+      ? branding.subtitles
+      : {};
+  const logoBranding =
+    branding && typeof branding.logo === 'object' && branding.logo
+      ? branding.logo
+      : {};
+
+  return {
+    subtitles: {
+      enabled:
+        typeof subtitleBranding.enabled === 'boolean'
+          ? subtitleBranding.enabled
+          : BRANDING_DEFAULTS.subtitles.enabled,
+      color: normalizeSubtitleColor(subtitleBranding.color),
+      position: normalizeSubtitlePosition(subtitleBranding.position),
+    },
+    logo: {
+      public_path:
+        typeof logoBranding.public_path === 'string' && logoBranding.public_path.trim()
+          ? logoBranding.public_path.trim()
+          : null,
+      position: normalizeLogoPosition(logoBranding.position),
+      opacity:
+        typeof logoBranding.opacity === 'number' && Number.isFinite(logoBranding.opacity)
+          ? Math.max(0, Math.min(100, logoBranding.opacity))
+          : BRANDING_DEFAULTS.logo.opacity,
+    },
+  };
 };
 
 export const extractNumericAmount = (value) => {
@@ -206,6 +274,7 @@ const normalizeLead = (lead) => {
   const displayAmounts = lead?.display_amounts || buildDisplayAmounts(mergedLead);
   const urgencyLevel = safeString(lead?.urgency_level, determineUrgencyLevel(mergedLead.tos));
   const scenePayload = lead?.scene_payload || buildScenePayload(mergedLead, displayAmounts, urgencyLevel);
+  const branding = normalizeBranding(lead?.branding);
 
   return {
     ...mergedLead,
@@ -214,6 +283,7 @@ const normalizeLead = (lead) => {
     headline_text: safeString(lead?.headline_text, scenePayload.headline_text),
     cta_text: safeString(lead?.cta_text, scenePayload.cta_text),
     urgency_level: urgencyLevel,
+    branding,
   };
 };
 

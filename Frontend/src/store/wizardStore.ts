@@ -1,6 +1,10 @@
 import { useState, useCallback, useEffect } from "react";
 import type { VideoJobResult } from "@/lib/api";
-import { DEFAULT_AVATAR_SCRIPT, REMOTION_TEMPLATES } from "@/lib/templates";
+import {
+  getDefaultAvatarScript,
+  getDefaultRemotionTranscript,
+  resolveNarratorGender,
+} from "@/lib/templates";
 
 export const WIZARD_STORAGE_KEY = "avatar-wizard-storage";
 
@@ -14,9 +18,15 @@ export interface WizardState {
   systemPrompt: string;
   avatarId: string;
   avatarName: string;
+  avatarGender: "male" | "female" | null;
   avatarFilter: string;
+  voiceId: string;
+  voiceName: string;
+  voiceGender: "male" | "female" | null;
   transcript: string;
   remotionTranscript: string;
+  avatarTranscriptCustomized: boolean;
+  remotionTranscriptCustomized: boolean;
   subtitleColor: string;
   subtitlePosition: string;
   subtitleLanguage: string;
@@ -55,9 +65,15 @@ const defaultState: WizardState = {
   systemPrompt: "",
   avatarId: "",
   avatarName: "",
+  avatarGender: null,
   avatarFilter: "All",
-  transcript: DEFAULT_AVATAR_SCRIPT,
-  remotionTranscript: REMOTION_TEMPLATES.Hindi,
+  voiceId: "",
+  voiceName: "",
+  voiceGender: null,
+  transcript: getDefaultAvatarScript("Hindi", "female"),
+  remotionTranscript: getDefaultRemotionTranscript("Hindi"),
+  avatarTranscriptCustomized: false,
+  remotionTranscriptCustomized: false,
   subtitleColor: "White",
   subtitlePosition: "Bottom",
   subtitleLanguage: "Hindi",
@@ -87,9 +103,26 @@ const defaultState: WizardState = {
 };
 
 function restoreSavedState(savedState: Partial<WizardState>): WizardState {
+  const savedAvatarGender = savedState.avatarGender ?? null;
+  const savedVoiceGender = savedState.voiceGender ?? null;
+  const defaultAvatarTranscript = getDefaultAvatarScript(
+    savedState.language ?? defaultState.language,
+    resolveNarratorGender(savedVoiceGender ?? savedAvatarGender),
+  );
+  const defaultRemotionTranscript = getDefaultRemotionTranscript(savedState.language ?? defaultState.language);
   const restored = {
     ...defaultState,
     ...savedState,
+    avatarGender: savedAvatarGender,
+    voiceGender: savedVoiceGender,
+    avatarTranscriptCustomized:
+      typeof savedState.avatarTranscriptCustomized === "boolean"
+        ? savedState.avatarTranscriptCustomized
+        : Boolean(savedState.transcript && savedState.transcript !== defaultAvatarTranscript),
+    remotionTranscriptCustomized:
+      typeof savedState.remotionTranscriptCustomized === "boolean"
+        ? savedState.remotionTranscriptCustomized
+        : Boolean(savedState.remotionTranscript && savedState.remotionTranscript !== defaultRemotionTranscript),
     logoFileName: "",
   };
 

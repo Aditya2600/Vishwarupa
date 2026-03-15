@@ -149,7 +149,7 @@ export default function MyVideos() {
               <button
                 type="button"
                 onClick={() => openCreate("avatar")}
-                className="rounded-2xl border border-primary/25 bg-primary/10 p-4 text-left transition-all hover:border-primary/40 hover:bg-primary/15"
+                className="rounded-2xl border border-border bg-card p-4 text-left transition-all hover:border-primary/30 hover:bg-surface-hover"
               >
                 <p className="text-sm font-semibold text-foreground">Avatar Video</p>
                 <p className="mt-1 text-xs text-muted-foreground">Create a human-like avatar video in seconds.</p>

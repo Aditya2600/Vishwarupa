@@ -16,6 +16,38 @@ const DELIVERY = [
   { icon: MessageCircle, label: "Send to WhatsApp" },
 ];
 
+function sanitizeFilenamePart(value: string): string {
+  return value
+    .replace(/[<>:"/\\|?*\u0000-\u001f]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildDownloadFilename({
+  title,
+  customerName,
+  videoType,
+}: {
+  title: string | null | undefined;
+  customerName: string;
+  videoType: WizardState["videoType"];
+}): string {
+  const preferredName = sanitizeFilenamePart(title ?? "") || sanitizeFilenamePart(customerName);
+  const fallbackName = videoType === "remotion" ? "text-to-video" : "avatar-video";
+  return `${preferredName || fallbackName}.mp4`;
+}
+
+function triggerDownload(href: string, filename: string) {
+  const link = document.createElement("a");
+  link.href = href;
+  link.download = filename;
+  link.rel = "noopener noreferrer";
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
 interface StepShareProps {
   state: WizardState;
   update: (partial: Partial<WizardState>) => void;
@@ -53,13 +85,39 @@ export function StepShare({ state, update }: StepShareProps) {
     }
   };
 
-  const handleOpenVideo = () => {
+  const handleDownloadVideo = async () => {
     if (!videoUrl) {
       toast.error("Generate a video first.");
       return;
     }
 
-    window.location.assign(videoUrl);
+    const filename = buildDownloadFilename({
+      title: generatedVideo?.title,
+      customerName: state.customerName,
+      videoType: state.videoType,
+    });
+
+    try {
+      const resolvedUrl = new URL(videoUrl, window.location.href);
+      if (resolvedUrl.origin === window.location.origin) {
+        const response = await fetch(resolvedUrl.toString(), { credentials: "include" });
+        if (!response.ok) {
+          throw new Error(`Download request failed with status ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const objectUrl = window.URL.createObjectURL(blob);
+        triggerDownload(objectUrl, filename);
+        window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1_000);
+        toast.success("Download started.");
+        return;
+      }
+    } catch (error) {
+      console.error("Falling back to direct video download link.", error);
+    }
+
+    triggerDownload(videoUrl, filename);
+    toast.success("Download started.");
   };
 
   const handleShareOnWhatsApp = () => {
@@ -167,7 +225,7 @@ export function StepShare({ state, update }: StepShareProps) {
                     if (d.label === "Copy Share Link") {
                       void handleCopyShareLink();
                     } else if (d.label === "Download Video") {
-                      handleOpenVideo();
+                      void handleDownloadVideo();
                     } else if (d.label === "Send to WhatsApp") {
                       handleShareOnWhatsApp();
                     }

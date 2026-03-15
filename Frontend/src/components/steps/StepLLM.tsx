@@ -36,7 +36,6 @@ export function StepLLM({ state, update }: StepLLMProps) {
             <option>{state.language}</option>
             <option>English</option>
             <option>Hindi</option>
-            <option>Spanish</option>
           </select>
         </Field>
 

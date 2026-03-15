@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from app.config import settings
 from app.models import DirectVideoRequest, RemotionVideoRequest, StyledVideoResult, TemplateVideoRequest, VideoJobResult, UserCreate, Token, UserInDB, VideoRecord
@@ -98,6 +98,85 @@ async def _mark_video_failed(current_user: str, video_id: str, detail: str) -> N
             "job_data": {"detail": detail},
         }},
     )
+
+
+def _form_text(value: object) -> str | None:
+    if value is None:
+        return None
+    cleaned = str(value).strip()
+    return cleaned or None
+
+
+def _form_int(value: object) -> int | None:
+    cleaned = _form_text(value)
+    if cleaned is None:
+        return None
+    try:
+        return int(cleaned)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=f'Invalid integer value: {cleaned}') from exc
+
+
+def _form_bool(value: object, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+async def _parse_remotion_payload(request: Request) -> RemotionVideoRequest:
+    content_type = request.headers.get('content-type', '').lower()
+
+    if 'application/json' in content_type:
+        payload = await request.json()
+        if not isinstance(payload, dict):
+            raise HTTPException(status_code=422, detail='Invalid JSON body for remotion request.')
+        try:
+            return RemotionVideoRequest.model_validate(payload)
+        except ValidationError as exc:
+            raise HTTPException(status_code=422, detail=exc.errors()) from exc
+
+    form = await request.form()
+    logo_file = form.get('logo_file')
+    logo_bytes: bytes | None = None
+    logo_filename: str | None = None
+
+    if isinstance(logo_file, UploadFile) or (
+        logo_file is not None and hasattr(logo_file, 'read') and hasattr(logo_file, 'filename')
+    ):
+        logo_filename = logo_file.filename
+        logo_bytes = await logo_file.read()
+
+    logo_opacity = _form_int(form.get('logo_opacity'))
+
+    payload = {
+        'customer_name': _form_text(form.get('customer_name')),
+        'lan': _form_text(form.get('lan')),
+        'client_name': _form_text(form.get('client_name')),
+        'tos': _form_text(form.get('tos')),
+        'loan_amount': _form_text(form.get('loan_amount')),
+        'contact_details': _form_text(form.get('contact_details')),
+        'product_type': _form_text(form.get('product_type')),
+        'language': _form_text(form.get('language')),
+        'script_text': _form_text(form.get('script_text')),
+        'background_color': _form_text(form.get('background_color')),
+        'include_captions': _form_bool(form.get('include_captions')),
+        'title_prefix': _form_text(form.get('title_prefix')) or 'Loan Recall',
+        'video_width': _form_int(form.get('video_width')),
+        'video_height': _form_int(form.get('video_height')),
+        'subtitle_color': _form_text(form.get('subtitle_color')) or 'White',
+        'subtitle_position': _form_text(form.get('subtitle_position')) or 'Bottom',
+        'logo_position': _form_text(form.get('logo_position')) or 'Top Right',
+        'logo_opacity': 80 if logo_opacity is None else logo_opacity,
+        'logo_filename': logo_filename,
+        'logo_bytes': logo_bytes,
+    }
+
+    try:
+        return RemotionVideoRequest.model_validate(payload)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
 
 @app.exception_handler(RuntimeError)
@@ -302,8 +381,14 @@ async def generate_template(request: TemplateVideoRequest, wait: bool = True, cu
 
 
 @app.post('/generate/remotion', response_model=VideoJobResult)
-async def generate_remotion(payload: RemotionVideoRequest, request: Request, current_user: str = Depends(get_current_user)):
-    result = await remotion_service.generate_video(payload)
+async def generate_remotion(request: Request, current_user: str = Depends(get_current_user)):
+    payload = await _parse_remotion_payload(request)
+
+    try:
+        result = await remotion_service.generate_video(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     relative_video_path = result['video_path'].relative_to(settings.output_dir).as_posix()
     
     job_result = VideoJobResult(
@@ -354,10 +439,9 @@ async def get_my_videos(current_user: str = Depends(get_current_user)):
             )
         except RuntimeError as exc:
             detail = str(exc)
-            if "Video generation failed:" in detail:
-                await _mark_video_failed(current_user, str(video["video_id"]), detail)
-                video["status"] = "failed"
-                video["job_data"] = {"detail": detail}
+            await _mark_video_failed(current_user, str(video["video_id"]), detail)
+            video["status"] = "failed"
+            video["job_data"] = {"detail": detail}
             continue
 
         await _persist_video_job_result(current_user, refreshed)

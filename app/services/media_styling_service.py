@@ -404,6 +404,7 @@ class MediaStylingService:
         font = ImageFont.truetype(font_path, font_size)
         stroke_width = max(1, font_size // 14)
         overlays: list[SubtitleOverlay] = []
+        vertical_margin = max(48, int(height * 0.08))
 
         for index, cue in enumerate(cues):
             lines = self._wrap_subtitle_text(cue.text, font=font, max_width=int(width * 0.78))
@@ -425,16 +426,16 @@ class MediaStylingService:
             box_height = text_block_height + padding_y * 2
             x = (width - box_width) // 2
             if position == 'top':
-                y = 32
+                y = vertical_margin
             elif position == 'center':
                 y = (height - box_height) // 2
             else:
-                y = height - box_height - 32
+                y = height - box_height - vertical_margin
 
             draw.rounded_rectangle(
                 (x, y, x + box_width, y + box_height),
                 radius=max(18, font_size // 2),
-                fill=(12, 10, 24, 170),
+                fill=(12, 10, 24, 132),
             )
 
             current_y = y + padding_y
