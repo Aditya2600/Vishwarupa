@@ -70,7 +70,11 @@ export function HeaderBar({ onCreateVideo, primaryLabel = "Create Video" }: Head
           variant="ghost"
           size="sm"
           onClick={() => navigate("/")}
-          className={isVideosPage ? "text-foreground bg-secondary" : "text-muted-foreground hover:text-foreground"}
+          className={
+            isVideosPage
+              ? "text-foreground bg-secondary hover:bg-primary hover:text-white"
+              : "text-muted-foreground hover:bg-primary hover:text-white"
+          }
         >
           <Video className="md:mr-2 h-4 w-4" />
           <span className="hidden md:inline">My Videos</span>
@@ -90,18 +94,30 @@ export function HeaderBar({ onCreateVideo, primaryLabel = "Create Video" }: Head
           <DropdownMenuContent align="end" className="w-64">
             <DropdownMenuLabel>Choose Creation Flow</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => launchCreate("avatar")} className="items-start gap-3 py-3">
-              <Clapperboard className="mt-0.5 h-4 w-4 text-primary" />
+            <DropdownMenuItem onClick={() => launchCreate("avatar")} className="group items-start gap-3 py-3">
+              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-white/15 group-hover:text-white group-data-[highlighted]:bg-white/15 group-data-[highlighted]:text-white">
+                <Clapperboard className="h-4 w-4" />
+              </div>
               <div>
-                <p className="font-medium text-foreground">Avatar Video</p>
-                <p className="text-xs text-muted-foreground">Use the talking-avatar pipeline to generate personalized videos.</p>
+                <p className="font-medium text-primary group-hover:text-white group-data-[highlighted]:text-white">
+                  Avatar Video
+                </p>
+                <p className="text-xs text-muted-foreground group-hover:text-white group-data-[highlighted]:text-white">
+                  Use the talking-avatar pipeline to generate personalized videos.
+                </p>
               </div>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => launchCreate("remotion")} className="items-start gap-3 py-3">
-              <LayoutTemplate className="mt-0.5 h-4 w-4 text-primary" />
+            <DropdownMenuItem onClick={() => launchCreate("remotion")} className="group items-start gap-3 py-3">
+              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-sky-500/12 text-sky-700 transition-colors group-hover:bg-white/15 group-hover:text-white group-data-[highlighted]:bg-white/15 group-data-[highlighted]:text-white">
+                <LayoutTemplate className="h-4 w-4" />
+              </div>
               <div>
-                <p className="font-medium text-foreground">Text to Video</p>
-                <p className="text-xs text-muted-foreground">Create cinematic videos from scripts using our Text to Video engine.</p>
+                <p className="font-medium text-sky-700 group-hover:text-white group-data-[highlighted]:text-white">
+                  Text to Video
+                </p>
+                <p className="text-xs text-muted-foreground group-hover:text-white group-data-[highlighted]:text-white">
+                  Create cinematic videos from scripts using our Text to Video engine.
+                </p>
               </div>
             </DropdownMenuItem>
           </DropdownMenuContent>

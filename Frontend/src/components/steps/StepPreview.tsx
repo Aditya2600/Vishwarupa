@@ -21,8 +21,10 @@ interface StepPreviewProps {
 
 export function StepPreview({ state, update }: StepPreviewProps) {
   const activeTranscript = state.videoType === "remotion" ? state.remotionTranscript : state.transcript;
+  const isRemotion = state.videoType === "remotion";
+  const statusLabel = getGenerationStatusLabel(state.generationStatus, isRemotion);
   const avatarName =
-    state.videoType === "remotion"
+    isRemotion
       ? "Text to Video"
       : state.avatarName || state.avatarId || "None";
   const wordCount = activeTranscript.trim() ? activeTranscript.trim().split(/\s+/).length : 0;
@@ -30,7 +32,7 @@ export function StepPreview({ state, update }: StepPreviewProps) {
   const generatedVideo = state.generatedVideo;
   const previewUrl = state.styledVideoUrl || generatedVideo?.video_url || "";
   const isProcessing = state.generationStatus === "submitting" || state.generationStatus === "styling";
-  const estimatedMinutes = Math.max(2, Math.round(wordCount / 130) * 2);
+  const estimatedMinutes = isRemotion ? 5 : Math.max(2, Math.round(wordCount / 130) * 2);
   const estimatedSeconds =
     state.generationStatus === "styling"
       ? 15
@@ -62,14 +64,23 @@ export function StepPreview({ state, update }: StepPreviewProps) {
       }
 
       const targetDurationMs = estimatedMinutes * 60 * 1000;
-      const submittingProgress = Math.min(88, (elapsedMs / targetDurationMs) * 88);
+      const progressCap = isRemotion ? 96 : 88;
+      const settleWindowMs = isRemotion ? 2 * 60 * 1000 : 0;
+      const initialCap = isRemotion ? 90 : progressCap;
+      const initialProgress = Math.min(initialCap, (elapsedMs / targetDurationMs) * initialCap);
+      const overflowMs = Math.max(0, elapsedMs - targetDurationMs);
+      const overflowProgress =
+        isRemotion && settleWindowMs > 0
+          ? Math.min(progressCap - initialCap, (overflowMs / settleWindowMs) * (progressCap - initialCap))
+          : 0;
+      const submittingProgress = Math.min(progressCap, initialProgress + overflowProgress);
       setPhaseProgress(submittingProgress);
     };
 
     tick();
     const intervalId = window.setInterval(tick, 500);
     return () => window.clearInterval(intervalId);
-  }, [estimatedMinutes, isProcessing, phaseStartedAt, state.generationStatus]);
+  }, [estimatedMinutes, isProcessing, isRemotion, phaseStartedAt, state.generationStatus]);
 
   return (
     <div className="flex gap-8 max-w-5xl">
@@ -125,12 +136,12 @@ export function StepPreview({ state, update }: StepPreviewProps) {
           ) : (
             <div className="text-center">
               <div className="w-20 h-20 rounded-[2rem] bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto mb-4">
-                {state.videoType === "remotion"
+                {isRemotion
                   ? <Film className="h-9 w-9 text-primary opacity-70" />
                   : <Clapperboard className="h-9 w-9 text-primary opacity-70" />}
               </div>
               <p className="text-sm text-muted-foreground">
-                {state.videoType === "remotion"
+                {isRemotion
                   ? "Generate the video below to preview the multi-scene output here."
                   : "Generate the video to preview it here."}
               </p>
@@ -148,7 +159,7 @@ export function StepPreview({ state, update }: StepPreviewProps) {
         {isProcessing ? (
           <div className="rounded-xl border border-border bg-card/70 px-5 py-4">
             <div className="flex items-center justify-between gap-3 text-xs uppercase tracking-[0.22em] text-muted-foreground">
-              <span>{state.videoType === "remotion" ? "Text to Video Progress" : "Generation Progress"}</span>
+              <span>{isRemotion ? "Text to Video Progress" : "Generation Progress"}</span>
               <span>{Math.max(1, Math.round(phaseProgress))}%</span>
             </div>
             <div className="mt-3 h-3 overflow-hidden rounded-full bg-secondary">
@@ -179,7 +190,7 @@ export function StepPreview({ state, update }: StepPreviewProps) {
           />
           <SummaryRow label="Logo" value={state.logoFileName || "None"} />
           <SummaryRow label="Aspect Ratio" value={state.aspectRatio} />
-          <SummaryRow label="Status" value={state.generationStatus} />
+          <SummaryRow label="Status" value={statusLabel} />
           {state.styledVideoUrl ? <SummaryRow label="Styled Output" value={state.subtitleSource} /> : null}
           {generatedVideo?.video_id ? <SummaryRow label="Video ID" value={generatedVideo.video_id} /> : null}
         </div>
@@ -195,4 +206,27 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
       <span className="text-foreground font-medium text-right break-all">{value}</span>
     </div>
   );
+}
+
+function getGenerationStatusLabel(
+  status: WizardState["generationStatus"],
+  isRemotion: boolean,
+): string {
+  if (status === "submitting") {
+    return isRemotion ? "Rendering" : "Processing";
+  }
+
+  if (status === "styling") {
+    return "Branding";
+  }
+
+  if (status === "completed") {
+    return "Completed";
+  }
+
+  if (status === "failed") {
+    return "Failed";
+  }
+
+  return "Idle";
 }

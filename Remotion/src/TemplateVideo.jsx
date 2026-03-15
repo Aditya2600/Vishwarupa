@@ -11,6 +11,7 @@ import {
 } from 'remotion';
 import {
   TRANSITION_FRAMES,
+  HEIGHT,
   extractNumericAmount,
   formatAmountDisplay,
   getActiveSubtitle,
@@ -19,6 +20,7 @@ import {
   getSubtitleProgress,
   getTrackMeta,
   safeString,
+  WIDTH,
 } from './videoData';
 
 const FONT_FAMILY =
@@ -40,31 +42,131 @@ const SUBTITLE_COLORS = {
 };
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+const BASE_FRAME_WIDTH = WIDTH;
+const BASE_FRAME_HEIGHT = HEIGHT;
 const legalGavelImage = staticFile('image.png');
 const debtNoticeImage = staticFile('image copy.png');
+const SAFE_TEXT_STYLE = {
+  overflowWrap: 'anywhere',
+  wordBreak: 'break-word',
+};
+
+const UI_COPY = {
+  English: {
+    titlePrefixFallback: 'Account Notice',
+    formalNotice: 'Formal Notice',
+    accountStatus: 'Account Status',
+    financialHighlights: 'Financial Highlights',
+    immediateNextStep: 'Immediate Next Step',
+    resolutionStillPossible: 'Resolution Still Possible',
+    sceneLabels: {
+      opening: 'Notice',
+      account: 'Account',
+      context: 'Review',
+      amounts: 'Amounts',
+      action: 'Action',
+      closing: 'Resolve',
+    },
+    openingIdentity: 'Lead Identity',
+    customerLabel: 'Customer',
+    clientLabel: 'Client',
+    productLabel: 'Product',
+    outstandingLabel: 'Outstanding',
+    reviewMarkers: 'Review Markers',
+    leadLabel: 'Lead',
+    accountLabel: 'Account',
+    currentDueLabel: 'Current Due',
+    amountsPrimaryHelper: 'This is the most important amount in the video',
+    urgentAction: 'Urgent Action Required',
+    actionCardHelper: 'Immediate contact is expected to discuss payment or repayment options.',
+    finalSummary: 'Final Summary',
+    contactLabel: 'Contact',
+  },
+  Hindi: {
+    titlePrefixFallback: 'खाता सूचना',
+    formalNotice: 'औपचारिक सूचना',
+    accountStatus: 'खाता स्थिति',
+    financialHighlights: 'वित्तीय मुख्य बिंदु',
+    immediateNextStep: 'तत्काल अगला कदम',
+    resolutionStillPossible: 'समाधान अभी भी संभव है',
+    sceneLabels: {
+      opening: 'सूचना',
+      account: 'खाता',
+      context: 'समीक्षा',
+      amounts: 'राशि',
+      action: 'कार्रवाई',
+      closing: 'समाधान',
+    },
+    openingIdentity: 'पहचान विवरण',
+    customerLabel: 'ग्राहक',
+    clientLabel: 'बैंक',
+    productLabel: 'उत्पाद',
+    outstandingLabel: 'कुल बकाया',
+    reviewMarkers: 'मुख्य संकेत',
+    leadLabel: 'ग्राहक',
+    accountLabel: 'खाता',
+    currentDueLabel: 'वर्तमान बकाया',
+    amountsPrimaryHelper: 'यह वीडियो की सबसे महत्वपूर्ण राशि है',
+    urgentAction: 'तुरंत कार्रवाई आवश्यक',
+    actionCardHelper: 'भुगतान समाधान या पुनर्भुगतान विकल्प के लिए त्वरित कॉल अपेक्षित है।',
+    finalSummary: 'अंतिम सारांश',
+    contactLabel: 'संपर्क',
+  },
+};
 
 const getSubtitleColor = (colorName) => SUBTITLE_COLORS[colorName] || SUBTITLE_COLORS.White;
+const getUiCopy = (language) => (language === 'English' ? UI_COPY.English : UI_COPY.Hindi);
+
+const fitTextSize = (text, baseSize, minSize, softLimit, hardLimit) => {
+  const content = safeString(text, '');
+  if (!content) {
+    return baseSize;
+  }
+  const length = content.length;
+  if (length <= softLimit) {
+    return baseSize;
+  }
+
+  const cappedLength = Math.min(length, hardLimit);
+  const progress = (cappedLength - softLimit) / Math.max(1, hardLimit - softLimit);
+  return Math.round(baseSize - (baseSize - minSize) * progress);
+};
+
+const getAdaptiveTextStyle = (text, baseSize, options = {}) => {
+  const {
+    minSize = Math.round(baseSize * 0.72),
+    softLimit = Math.max(14, Math.round(baseSize * 0.55)),
+    hardLimit = Math.max(softLimit + 8, Math.round(baseSize * 1.25)),
+  } = options;
+  return {
+    fontSize: fitTextSize(text, baseSize, minSize, softLimit, hardLimit),
+    ...SAFE_TEXT_STYLE,
+  };
+};
+
+const getStageScale = (width, height) =>
+  Math.min(width / BASE_FRAME_WIDTH, height / BASE_FRAME_HEIGHT);
 
 const getSubtitlePanelPlacement = (position) => {
   switch (position) {
     case 'Top':
       return {
-        top: 136,
-        left: 220,
-        right: 220,
+        top: 120,
+        left: 84,
+        right: 84,
       };
     case 'Center':
       return {
         top: '50%',
-        left: 132,
-        right: 132,
+        left: 84,
+        right: 84,
         transform: 'translateY(-50%)',
       };
     default:
       return {
-        bottom: 212,
-        left: 74,
-        right: 74,
+        bottom: 24,
+        left: 84,
+        right: 84,
       };
   }
 };
@@ -187,7 +289,7 @@ const SceneShell = ({scene, frame, children, align = 'center'}) => {
 
 // ─── Brand HUD ──────────────────────────────────────────────────────────────
 
-const BrandHud = ({lead, accentColor, activeSceneLabel, frame}) => {
+const BrandHud = ({lead, accentColor, activeSceneLabel, frame, uiCopy}) => {
   // Breathing dot: oscillates scale gently
   const dotPulse = 1 + Math.sin(frame * 0.14) * 0.22;
   const dotGlow = 0.55 + Math.sin(frame * 0.14) * 0.45;
@@ -207,19 +309,31 @@ const BrandHud = ({lead, accentColor, activeSceneLabel, frame}) => {
     >
       <div
         style={{
-          padding: '12px 16px',
-          borderRadius: 18,
-          border: '1px solid rgba(255,255,255,0.12)',
-          background: 'rgba(5, 16, 35, 0.52)',
-          backdropFilter: 'blur(16px)',
+          padding: '4px 0',
+          maxWidth: '48%',
         }}
       >
         <div
-          style={{fontSize: 11, letterSpacing: 2.8, textTransform: 'uppercase', color: '#94a3b8'}}
+          style={{
+            fontSize: 10,
+            letterSpacing: 2.4,
+            textTransform: 'uppercase',
+            color: '#94a3b8',
+            textShadow: '0 4px 16px rgba(2, 6, 23, 0.9)',
+            ...SAFE_TEXT_STYLE,
+          }}
         >
-          {safeString(lead.title_prefix, 'Account Notice')}
+          {safeString(lead.title_prefix, uiCopy.titlePrefixFallback)}
         </div>
-        <div style={{fontSize: 20, fontWeight: 700, marginTop: 6, color: '#f8fafc'}}>
+        <div
+          style={{
+            fontWeight: 700,
+            marginTop: 4,
+            color: '#f8fafc',
+            textShadow: '0 6px 20px rgba(2, 6, 23, 0.95)',
+            ...getAdaptiveTextStyle(lead.client_name, 18, {minSize: 14, softLimit: 18, hardLimit: 42}),
+          }}
+        >
           {safeString(lead.client_name)}
         </div>
       </div>
@@ -231,9 +345,9 @@ const BrandHud = ({lead, accentColor, activeSceneLabel, frame}) => {
           gap: 10,
           padding: '12px 16px',
           borderRadius: 18,
-          border: '1px solid rgba(255,255,255,0.12)',
-          background: 'rgba(5, 16, 35, 0.52)',
-          backdropFilter: 'blur(16px)',
+          border: 'none',
+          background: 'transparent',
+          backdropFilter: 'none',
         }}
       >
         {/* Breathing pulse dot */}
@@ -254,6 +368,7 @@ const BrandHud = ({lead, accentColor, activeSceneLabel, frame}) => {
             letterSpacing: 1.8,
             textTransform: 'uppercase',
             color: '#cbd5e1',
+            ...SAFE_TEXT_STYLE,
           }}
         >
           {activeSceneLabel}
@@ -265,7 +380,7 @@ const BrandHud = ({lead, accentColor, activeSceneLabel, frame}) => {
 
 // ─── Progress Track ──────────────────────────────────────────────────────────
 
-const ProgressTrack = ({timeline, frame, accentColor}) => {
+const ProgressTrack = ({timeline, frame, accentColor, sceneLabels}) => {
   // Pulse glow for active segment
   const glowPulse = 0.7 + Math.sin(frame * 0.18) * 0.30;
 
@@ -275,7 +390,7 @@ const ProgressTrack = ({timeline, frame, accentColor}) => {
         position: 'absolute',
         left: 74,
         right: 74,
-        bottom: 144,
+        bottom: 162,
         display: 'grid',
         gridTemplateColumns: `repeat(${timeline.length}, minmax(0, 1fr))`,
         gap: 14,
@@ -318,9 +433,10 @@ const ProgressTrack = ({timeline, frame, accentColor}) => {
                 color: isActive ? '#f8fafc' : '#94a3b8',
                 fontWeight: isActive ? 700 : 500,
                 opacity: isActive ? 1 : 0.72,
+                ...SAFE_TEXT_STYLE,
               }}
             >
-              {scene.label}
+              {sceneLabels?.[scene.key] || scene.label}
             </div>
           </div>
         );
@@ -344,78 +460,66 @@ const SubtitlePanel = ({subtitle, subtitleProgress, branding, fallbackText}) => 
       style={{
         position: 'absolute',
         zIndex: 25,
-        borderRadius: 26,
-        border: `1px solid ${subtitle ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.08)'}`,
-        background: subtitle ? 'rgba(5, 16, 35, 0.62)' : 'rgba(5, 16, 35, 0.42)',
-        backdropFilter: 'blur(16px)',
-        padding: '18px 24px 20px',
-        boxShadow: subtitle ? `0 0 24px ${subtitleColor}18` : 'none',
+        display: 'flex',
+        justifyContent: 'center',
+        padding: '0 18px',
         ...placement,
       }}
     >
-      <div style={{display: 'flex', alignItems: 'center', gap: 14}}>
-        <div
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 999,
-            flexShrink: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: subtitle ? `${subtitleColor}22` : 'rgba(255,255,255,0.06)',
-            color: subtitle ? subtitleColor : '#94a3b8',
-            fontSize: 12,
-            fontWeight: 700,
-            letterSpacing: 1.6,
-            border: subtitle ? `1px solid ${subtitleColor}44` : '1px solid rgba(255,255,255,0.08)',
-          }}
-        >
-          LIVE
-        </div>
-
-        <div style={{flex: 1}}>
-          {subtitle ? (
-            <div
-              style={{
-                fontSize: 28,
-                lineHeight: 1.35,
-                fontWeight: 600,
-                color: '#94a3b8',
-                flexWrap: 'wrap',
-                display: 'flex',
-                gap: '0 8px',
-              }}
-            >
-              {words.map((word, i) => {
-                const isPast = i < activeWordIndex;
-                const isCurrent = i === activeWordIndex;
-                return (
-                  <span
-                    key={i}
-                    style={{
-                      color: isPast
-                        ? '#cbd5e1'
-                        : isCurrent
-                        ? subtitleColor
-                        : '#64748b',
-                      fontWeight: isCurrent ? 800 : isPast ? 600 : 500,
-                      textShadow: isCurrent ? `0 0 18px ${subtitleColor}` : 'none',
-                      transition: 'none',
-                      display: 'inline-block',
-                    }}
-                  >
-                    {word}
-                  </span>
-                );
-              })}
-            </div>
-          ) : (
-            <div style={{fontSize: 28, lineHeight: 1.35, fontWeight: 500, color: '#64748b'}}>
-              {fallbackText}
-            </div>
-          )}
-        </div>
+      <div
+        style={{
+          width: '100%',
+          maxWidth: 1500,
+          textAlign: 'center',
+        }}
+      >
+        {subtitle ? (
+          <div
+            style={{
+              fontSize: 20,
+              lineHeight: 1.35,
+              fontWeight: 600,
+              color: '#94a3b8',
+              flexWrap: 'wrap',
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '0 6px',
+            }}
+          >
+            {words.map((word, i) => {
+              const isPast = i < activeWordIndex;
+              const isCurrent = i === activeWordIndex;
+              return (
+                <span
+                  key={i}
+                  style={{
+                    color: isPast ? '#e2e8f0' : isCurrent ? subtitleColor : 'rgba(226, 232, 240, 0.74)',
+                    fontWeight: isCurrent ? 800 : isPast ? 600 : 500,
+                    textShadow: isCurrent
+                      ? `0 0 18px ${subtitleColor}, 0 4px 16px rgba(2, 6, 23, 0.95)`
+                      : '0 4px 16px rgba(2, 6, 23, 0.95)',
+                    transition: 'none',
+                    display: 'inline-block',
+                  }}
+                >
+                  {word}
+                </span>
+              );
+            })}
+          </div>
+        ) : (
+          <div
+            style={{
+              fontSize: 20,
+              lineHeight: 1.35,
+              fontWeight: 500,
+              color: 'rgba(226, 232, 240, 0.76)',
+              textShadow: '0 4px 16px rgba(2, 6, 23, 0.95)',
+            }}
+          >
+            {fallbackText}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -434,34 +538,24 @@ const LogoOverlay = ({logo}) => {
         ...getLogoPlacement(logo.position),
       }}
     >
-      <div
+      <Img
+        src={staticFile(logo.public_path)}
         style={{
-          padding: '12px 16px',
-          borderRadius: 20,
-          border: '1px solid rgba(255,255,255,0.12)',
-          background: 'rgba(5, 16, 35, 0.52)',
-          backdropFilter: 'blur(16px)',
-          boxShadow: '0 24px 40px rgba(2, 6, 23, 0.22)',
+          display: 'block',
+          maxWidth: 170,
+          maxHeight: 56,
+          objectFit: 'contain',
+          opacity: clamp((logo.opacity ?? 80) / 100, 0, 1),
+          filter: 'drop-shadow(0 10px 22px rgba(2, 6, 23, 0.28))',
         }}
-      >
-        <Img
-          src={staticFile(logo.public_path)}
-          style={{
-            display: 'block',
-            maxWidth: 180,
-            maxHeight: 64,
-            objectFit: 'contain',
-            opacity: clamp((logo.opacity ?? 80) / 100, 0, 1),
-          }}
-        />
-      </div>
+      />
     </div>
   );
 };
 
 // ─── Opening Scene ───────────────────────────────────────────────────────────
 
-const OpeningScene = ({scene, frame, fps, lead, accentColor}) => (
+const OpeningScene = ({scene, frame, fps, lead, accentColor, uiCopy}) => (
   <SceneShell scene={scene} frame={frame} align="space-between">
     {({localFrame}) => {
       const headlineReveal = spring({
@@ -495,13 +589,13 @@ const OpeningScene = ({scene, frame, fps, lead, accentColor}) => (
                 textTransform: 'uppercase',
                 transform: `translateY(${(1 - headlineReveal) * 18}px)`,
                 opacity: headlineReveal,
+                ...SAFE_TEXT_STYLE,
               }}
             >
-              {safeString(lead.scene_payload.opening.eyebrow, 'Formal Notice')}
+              {safeString(lead.scene_payload.opening.eyebrow, uiCopy.formalNotice)}
             </div>
             <div
               style={{
-                fontSize: 70,
                 lineHeight: 1.04,
                 fontWeight: 800,
                 marginTop: 20,
@@ -509,19 +603,28 @@ const OpeningScene = ({scene, frame, fps, lead, accentColor}) => (
                 color: '#f8fafc',
                 transform: `translateY(${(1 - headlineReveal) * 26}px)`,
                 opacity: headlineReveal,
+                ...getAdaptiveTextStyle(lead.scene_payload.opening?.headline || lead.headline_text, 70, {
+                  minSize: 46,
+                  softLimit: 52,
+                  hardLimit: 116,
+                }),
               }}
             >
               {safeString(lead.scene_payload.opening.headline, lead.headline_text)}
             </div>
             <div
               style={{
-                fontSize: 24,
                 lineHeight: 1.5,
                 marginTop: 18,
                 maxWidth: 620,
                 color: '#cbd5e1',
                 transform: `translateY(${(1 - headlineReveal) * 30}px)`,
                 opacity: headlineReveal,
+                ...getAdaptiveTextStyle(
+                  lead.scene_payload.opening?.subheadline || `${safeString(lead.client_name)} | ${safeString(lead.lan)}`,
+                  24,
+                  {minSize: 18, softLimit: 28, hardLimit: 70}
+                ),
               }}
             >
               {safeString(
@@ -568,23 +671,24 @@ const OpeningScene = ({scene, frame, fps, lead, accentColor}) => (
                 textTransform: 'uppercase',
                 color: '#94a3b8',
                 marginBottom: 18,
+                ...SAFE_TEXT_STYLE,
               }}
             >
-              Lead Identity
+              {uiCopy.openingIdentity}
             </div>
             <div style={{display: 'grid', gap: 18}}>
               <StaggeredIdentityRow
-                label="Customer"
+                label={uiCopy.customerLabel}
                 value={safeString(lead.customer_name)}
                 reveal={row0}
               />
               <StaggeredIdentityRow
-                label="Client"
+                label={uiCopy.clientLabel}
                 value={safeString(lead.client_name)}
                 reveal={row1}
               />
               <StaggeredIdentityRow
-                label="Product"
+                label={uiCopy.productLabel}
                 value={safeString(lead.product_type, 'loan')}
                 reveal={row2}
               />
@@ -598,7 +702,7 @@ const OpeningScene = ({scene, frame, fps, lead, accentColor}) => (
 
 // ─── Account Scene ───────────────────────────────────────────────────────────
 
-const AccountScene = ({scene, frame, fps, lead, accentColor}) => (
+const AccountScene = ({scene, frame, fps, lead, accentColor, uiCopy}) => (
   <SceneShell scene={scene} frame={frame} align="space-between">
     {({localFrame, progress}) => {
       const heroReveal = spring({fps, frame: localFrame, config: {damping: 16, stiffness: 92}});
@@ -615,13 +719,13 @@ const AccountScene = ({scene, frame, fps, lead, accentColor}) => (
                 letterSpacing: 2.4,
                 textTransform: 'uppercase',
                 color: '#94a3b8',
+                ...SAFE_TEXT_STYLE,
               }}
             >
-              {safeString(lead.scene_payload.account.eyebrow, 'Account Status')}
+              {safeString(lead.scene_payload.account.eyebrow, uiCopy.accountStatus)}
             </div>
             <div
               style={{
-                fontSize: 88,
                 fontWeight: 900,
                 lineHeight: 0.95,
                 marginTop: 16,
@@ -629,6 +733,11 @@ const AccountScene = ({scene, frame, fps, lead, accentColor}) => (
                 color: '#f8fafc',
                 transform: `translateX(${(1 - heroReveal) * -28}px)`,
                 opacity: heroReveal,
+                ...getAdaptiveTextStyle(lead.scene_payload.account?.headline || safeString(lead.lan), 88, {
+                  minSize: 56,
+                  softLimit: 24,
+                  hardLimit: 56,
+                }),
               }}
             >
               {safeString(lead.scene_payload.account.headline, `खाता ${safeString(lead.lan)}`)}
@@ -646,19 +755,24 @@ const AccountScene = ({scene, frame, fps, lead, accentColor}) => (
                 marginTop: 24,
                 transform: `translateY(${(1 - heroReveal) * 18}px)`,
                 opacity: heroReveal,
+                ...SAFE_TEXT_STYLE,
               }}
             >
               {safeString(lead.scene_payload.account.badge, 'Priority attention required')}
             </div>
             <div
               style={{
-                fontSize: 28,
                 lineHeight: 1.42,
                 marginTop: 22,
                 color: '#cbd5e1',
                 maxWidth: 720,
                 transform: `translateY(${(1 - heroReveal) * 22}px)`,
                 opacity: heroReveal,
+                ...getAdaptiveTextStyle(lead.scene_payload.account?.supporting, 28, {
+                  minSize: 21,
+                  softLimit: 34,
+                  hardLimit: 92,
+                }),
               }}
             >
               {safeString(
@@ -680,16 +794,17 @@ const AccountScene = ({scene, frame, fps, lead, accentColor}) => (
               opacity: sideReveal,
             }}
           >
-            <div
-              style={{
-                fontSize: 12,
-                letterSpacing: 2.2,
-                textTransform: 'uppercase',
-                color: '#64748b',
-              }}
-            >
-              Outstanding
-            </div>
+              <div
+                style={{
+                  fontSize: 12,
+                  letterSpacing: 2.2,
+                  textTransform: 'uppercase',
+                  color: '#64748b',
+                  ...SAFE_TEXT_STYLE,
+                }}
+              >
+                {uiCopy.outstandingLabel}
+              </div>
             <div style={{fontSize: 52, fontWeight: 900, lineHeight: 1.02, marginTop: 18}}>
               {safeString(lead.display_amounts.primary.value)}
             </div>
@@ -705,7 +820,7 @@ const AccountScene = ({scene, frame, fps, lead, accentColor}) => (
 
 // ─── Context Scene ───────────────────────────────────────────────────────────
 
-const ContextScene = ({scene, frame, fps, lead}) => (
+const ContextScene = ({scene, frame, fps, lead, uiCopy}) => (
   <SceneShell scene={scene} frame={frame}>
     {({localFrame}) => {
       const reveal = spring({fps, frame: localFrame, config: {damping: 18, stiffness: 84}});
@@ -747,14 +862,33 @@ const ContextScene = ({scene, frame, fps, lead}) => (
                 letterSpacing: 2.2,
                 textTransform: 'uppercase',
                 color: '#64748b',
+                ...SAFE_TEXT_STYLE,
               }}
             >
-              {safeString(lead.scene_payload.context.eyebrow, 'Status Summary')}
+              {safeString(lead.scene_payload.context.eyebrow, lead.language === 'English' ? 'Status Summary' : 'स्थिति सारांश')}
             </div>
-            <div style={{fontSize: 46, fontWeight: 800, lineHeight: 1.08, marginTop: 16}}>
+            <div
+              style={{
+                fontWeight: 800,
+                lineHeight: 1.08,
+                marginTop: 16,
+                ...getAdaptiveTextStyle(lead.scene_payload.context?.headline, 46, {
+                  minSize: 32,
+                  softLimit: 34,
+                  hardLimit: 90,
+                }),
+              }}
+            >
               {safeString(lead.scene_payload.context.headline)}
             </div>
-            <div style={{fontSize: 27, lineHeight: 1.58, marginTop: 22, color: '#334155'}}>
+            <div
+              style={{
+                lineHeight: 1.58,
+                marginTop: 22,
+                color: '#334155',
+                ...getAdaptiveTextStyle(revealedBody, 27, {minSize: 20, softLimit: 88, hardLimit: 220}),
+              }}
+            >
               {revealedBody}
             </div>
           </div>
@@ -790,16 +924,17 @@ const ContextScene = ({scene, frame, fps, lead}) => (
                 letterSpacing: 2.2,
                 textTransform: 'uppercase',
                 color: '#94a3b8',
+                ...SAFE_TEXT_STYLE,
               }}
             >
-              Review Markers
+              {uiCopy.reviewMarkers}
             </div>
             <div style={{display: 'grid', gap: 14, marginTop: 18}}>
-              <ContextMarker title="Lead" text={safeString(lead.customer_name)} />
-              <ContextMarker title="Account" text={safeString(lead.lan)} />
-              <ContextMarker title="Client" text={safeString(lead.client_name)} />
+              <ContextMarker title={uiCopy.leadLabel} text={safeString(lead.customer_name)} />
+              <ContextMarker title={uiCopy.accountLabel} text={safeString(lead.lan)} />
+              <ContextMarker title={uiCopy.clientLabel} text={safeString(lead.client_name)} />
               <ContextMarker
-                title="Current Due"
+                title={uiCopy.currentDueLabel}
                 text={safeString(lead.display_amounts.primary.value)}
               />
             </div>
@@ -812,7 +947,7 @@ const ContextScene = ({scene, frame, fps, lead}) => (
 
 // ─── Amounts Scene ───────────────────────────────────────────────────────────
 
-const AmountsScene = ({scene, frame, fps, lead, accentColor}) => (
+const AmountsScene = ({scene, frame, fps, lead, accentColor, uiCopy}) => (
   <SceneShell scene={scene} frame={frame}>
     {({localFrame}) => {
       const headerReveal = spring({fps, frame: localFrame, config: {damping: 18, stiffness: 92}});
@@ -842,22 +977,38 @@ const AmountsScene = ({scene, frame, fps, lead, accentColor}) => (
                 letterSpacing: 2.4,
                 textTransform: 'uppercase',
                 color: '#94a3b8',
+                ...SAFE_TEXT_STYLE,
               }}
             >
-              {safeString(lead.scene_payload.amounts.eyebrow, 'Financial Highlights')}
+              {safeString(lead.scene_payload.amounts.eyebrow, uiCopy.financialHighlights)}
             </div>
             <div
               style={{
-                fontSize: 60,
                 fontWeight: 800,
                 lineHeight: 1.08,
                 marginTop: 14,
                 color: '#f8fafc',
+                ...getAdaptiveTextStyle(lead.scene_payload.amounts?.headline, 60, {
+                  minSize: 42,
+                  softLimit: 22,
+                  hardLimit: 64,
+                }),
               }}
             >
               {safeString(lead.scene_payload.amounts.headline, 'राशि सारांश')}
             </div>
-            <div style={{fontSize: 24, lineHeight: 1.45, marginTop: 16, color: '#cbd5e1'}}>
+            <div
+              style={{
+                lineHeight: 1.45,
+                marginTop: 16,
+                color: '#cbd5e1',
+                ...getAdaptiveTextStyle(lead.scene_payload.amounts?.body, 24, {
+                  minSize: 18,
+                  softLimit: 44,
+                  hardLimit: 120,
+                }),
+              }}
+            >
               {safeString(lead.scene_payload.amounts.body)}
             </div>
           </div>
@@ -866,7 +1017,7 @@ const AmountsScene = ({scene, frame, fps, lead, accentColor}) => (
             <AmountCard
               title={safeString(lead.display_amounts.primary.label)}
               value={primaryAmount}
-              helper="यह वीडियो में सबसे प्रमुख राशि है"
+              helper={uiCopy.amountsPrimaryHelper}
               accentColor={accentColor}
               opacity={primaryReveal}
               background="linear-gradient(160deg, rgba(15, 23, 42, 0.94), rgba(15, 23, 42, 0.78))"
@@ -890,7 +1041,7 @@ const AmountsScene = ({scene, frame, fps, lead, accentColor}) => (
 
 // ─── Action Scene ─────────────────────────────────────────────────────────────
 
-const ActionScene = ({scene, frame, fps, lead, accentColor}) => (
+const ActionScene = ({scene, frame, fps, lead, accentColor, uiCopy}) => (
   <SceneShell scene={scene} frame={frame}>
     {({localFrame, progress}) => {
       const reveal = spring({fps, frame: localFrame, config: {damping: 16, stiffness: 92}});
@@ -947,22 +1098,38 @@ const ActionScene = ({scene, frame, fps, lead, accentColor}) => (
                   letterSpacing: 2.4,
                   textTransform: 'uppercase',
                   color: '#94a3b8',
+                  ...SAFE_TEXT_STYLE,
                 }}
               >
-                {safeString(lead.scene_payload.action.eyebrow, 'Immediate Next Step')}
+                {safeString(lead.scene_payload.action.eyebrow, uiCopy.immediateNextStep)}
               </div>
               <div
-                style={{
-                  fontSize: 62,
+              style={{
                   lineHeight: 1.02,
                   fontWeight: 900,
                   marginTop: 16,
                   color: '#f8fafc',
+                  ...getAdaptiveTextStyle(lead.scene_payload.action?.headline, 62, {
+                    minSize: 42,
+                    softLimit: 24,
+                    hardLimit: 70,
+                  }),
                 }}
               >
                 {safeString(lead.scene_payload.action.headline, 'आज ही संपर्क करें')}
               </div>
-              <div style={{fontSize: 26, lineHeight: 1.52, marginTop: 18, color: '#dbe4f0'}}>
+              <div
+                style={{
+                  lineHeight: 1.52,
+                  marginTop: 18,
+                  color: '#dbe4f0',
+                  ...getAdaptiveTextStyle(lead.scene_payload.action?.body || lead.cta_text, 26, {
+                    minSize: 18,
+                    softLimit: 58,
+                    hardLimit: 160,
+                  }),
+                }}
+              >
                 {safeString(lead.scene_payload.action.body, lead.cta_text)}
               </div>
 
@@ -998,9 +1165,10 @@ const ActionScene = ({scene, frame, fps, lead, accentColor}) => (
                     letterSpacing: 1.6,
                     textTransform: 'uppercase',
                     color: '#f8fafc',
+                    ...SAFE_TEXT_STYLE,
                   }}
                 >
-                  Urgent Action Required
+                  {uiCopy.urgentAction}
                 </span>
               </div>
             </div>
@@ -1022,18 +1190,23 @@ const ActionScene = ({scene, frame, fps, lead, accentColor}) => (
                   letterSpacing: 2.2,
                   textTransform: 'uppercase',
                   color: '#64748b',
+                  ...SAFE_TEXT_STYLE,
                 }}
               >
                 {safeString(lead.scene_payload.action.cta_label, 'संपर्क नंबर')}
               </div>
               <div
                 style={{
-                  fontSize: 44,
                   fontWeight: 900,
                   lineHeight: 1.05,
                   marginTop: 18,
                   transform: `scale(${0.88 + phoneReveal * 0.12}) translateY(${(1 - phoneReveal) * 12}px)`,
                   opacity: phoneReveal,
+                  ...getAdaptiveTextStyle(lead.scene_payload.action?.cta_value || lead.contact_details, 44, {
+                    minSize: 30,
+                    softLimit: 16,
+                    hardLimit: 34,
+                  }),
                 }}
               >
                 {safeString(
@@ -1041,8 +1214,19 @@ const ActionScene = ({scene, frame, fps, lead, accentColor}) => (
                   safeString(lead.contact_details)
                 )}
               </div>
-              <div style={{fontSize: 17, lineHeight: 1.55, marginTop: 18, color: '#475569'}}>
-                भुगतान समाधान या पुनर्भुगतान विकल्प के लिए त्वरित कॉल अपेक्षित है।
+              <div
+                style={{
+                  lineHeight: 1.55,
+                  marginTop: 18,
+                  color: '#475569',
+                  ...getAdaptiveTextStyle(uiCopy.actionCardHelper, 17, {
+                    minSize: 14,
+                    softLimit: 42,
+                    hardLimit: 96,
+                  }),
+                }}
+              >
+                {uiCopy.actionCardHelper}
               </div>
             </div>
           </div>
@@ -1054,7 +1238,7 @@ const ActionScene = ({scene, frame, fps, lead, accentColor}) => (
 
 // ─── Closing Scene ────────────────────────────────────────────────────────────
 
-const ClosingScene = ({scene, frame, fps, lead, accentColor}) => (
+const ClosingScene = ({scene, frame, fps, lead, accentColor, uiCopy}) => (
   <SceneShell scene={scene} frame={frame}>
     {({localFrame}) => {
       const reveal = spring({fps, frame: localFrame, config: {damping: 18, stiffness: 84}});
@@ -1090,14 +1274,37 @@ const ClosingScene = ({scene, frame, fps, lead, accentColor}) => (
                 letterSpacing: 2.2,
                 textTransform: 'uppercase',
                 color: '#64748b',
+                ...SAFE_TEXT_STYLE,
               }}
             >
-              {safeString(lead.scene_payload.closing.eyebrow, 'Resolution Still Possible')}
+              {safeString(lead.scene_payload.closing.eyebrow, uiCopy.resolutionStillPossible)}
             </div>
-            <div style={{fontSize: 52, lineHeight: 1.08, fontWeight: 900, marginTop: 16}}>
+            <div
+              style={{
+                lineHeight: 1.08,
+                fontWeight: 900,
+                marginTop: 16,
+                ...getAdaptiveTextStyle(lead.scene_payload.closing?.headline, 52, {
+                  minSize: 36,
+                  softLimit: 34,
+                  hardLimit: 90,
+                }),
+              }}
+            >
               {safeString(lead.scene_payload.closing.headline)}
             </div>
-            <div style={{fontSize: 24, lineHeight: 1.52, marginTop: 18, color: '#334155'}}>
+            <div
+              style={{
+                lineHeight: 1.52,
+                marginTop: 18,
+                color: '#334155',
+                ...getAdaptiveTextStyle(lead.scene_payload.closing?.body, 24, {
+                  minSize: 18,
+                  softLimit: 44,
+                  hardLimit: 120,
+                }),
+              }}
+            >
               {safeString(lead.scene_payload.closing.body)}
             </div>
           </div>
@@ -1119,28 +1326,29 @@ const ClosingScene = ({scene, frame, fps, lead, accentColor}) => (
                 letterSpacing: 2.2,
                 textTransform: 'uppercase',
                 color: '#94a3b8',
+                ...SAFE_TEXT_STYLE,
               }}
             >
-              Final Summary
+              {uiCopy.finalSummary}
             </div>
             <div style={{display: 'grid', gap: 18, marginTop: 20}}>
               <StaggeredSummaryRow
-                label="Customer"
+                label={uiCopy.customerLabel}
                 value={safeString(lead.customer_name)}
                 reveal={row0}
               />
               <StaggeredSummaryRow
-                label="Account"
+                label={uiCopy.accountLabel}
                 value={safeString(lead.lan)}
                 reveal={row1}
               />
               <StaggeredSummaryRow
-                label="Outstanding"
+                label={uiCopy.outstandingLabel}
                 value={safeString(lead.display_amounts.primary.value)}
                 reveal={row2}
               />
               <StaggeredSummaryRow
-                label="Contact"
+                label={uiCopy.contactLabel}
                 value={safeString(lead.contact_details)}
                 accentColor={accentColor}
                 reveal={row3}
@@ -1166,10 +1374,27 @@ const StaggeredIdentityRow = ({label, value, reveal}) => (
       opacity: reveal,
     }}
   >
-    <div style={{fontSize: 12, letterSpacing: 1.6, textTransform: 'uppercase', color: '#94a3b8'}}>
+    <div
+      style={{
+        fontSize: 12,
+        letterSpacing: 1.6,
+        textTransform: 'uppercase',
+        color: '#94a3b8',
+        ...SAFE_TEXT_STYLE,
+      }}
+    >
       {label}
     </div>
-    <div style={{fontSize: 28, fontWeight: 700, lineHeight: 1.12, color: '#f8fafc'}}>{value}</div>
+    <div
+      style={{
+        fontWeight: 700,
+        lineHeight: 1.12,
+        color: '#f8fafc',
+        ...getAdaptiveTextStyle(value, 28, {minSize: 20, softLimit: 18, hardLimit: 42}),
+      }}
+    >
+      {value}
+    </div>
   </div>
 );
 
@@ -1182,10 +1407,26 @@ const ContextMarker = ({title, text}) => (
       border: '1px solid rgba(255,255,255,0.06)',
     }}
   >
-    <div style={{fontSize: 11, letterSpacing: 1.8, textTransform: 'uppercase', color: '#94a3b8'}}>
+    <div
+      style={{
+        fontSize: 11,
+        letterSpacing: 1.8,
+        textTransform: 'uppercase',
+        color: '#94a3b8',
+        ...SAFE_TEXT_STYLE,
+      }}
+    >
       {title}
     </div>
-    <div style={{fontSize: 24, lineHeight: 1.2, fontWeight: 700, color: '#f8fafc', marginTop: 8}}>
+    <div
+      style={{
+        lineHeight: 1.2,
+        fontWeight: 700,
+        color: '#f8fafc',
+        marginTop: 8,
+        ...getAdaptiveTextStyle(text, 24, {minSize: 18, softLimit: 16, hardLimit: 40}),
+      }}
+    >
       {text}
     </div>
   </div>
@@ -1211,10 +1452,27 @@ const AmountCard = ({title, value, helper, accentColor, opacity, background, shi
         opacity,
       }}
     >
-      <div style={{fontSize: 12, letterSpacing: 2, textTransform: 'uppercase', color: '#94a3b8'}}>
+      <div
+        style={{
+          fontSize: 12,
+          letterSpacing: 2,
+          textTransform: 'uppercase',
+          color: '#94a3b8',
+          ...SAFE_TEXT_STYLE,
+        }}
+      >
         {title}
       </div>
-      <div style={{fontSize: 54, fontWeight: 900, lineHeight: 1.02, marginTop: 20}}>{value}</div>
+      <div
+        style={{
+          fontWeight: 900,
+          lineHeight: 1.02,
+          marginTop: 20,
+          ...getAdaptiveTextStyle(value, 54, {minSize: 40, softLimit: 10, hardLimit: 24}),
+        }}
+      >
+        {value}
+      </div>
       {/* Shimmer progress bar */}
       <div
         style={{
@@ -1251,7 +1509,16 @@ const AmountCard = ({title, value, helper, accentColor, opacity, background, shi
           )}
         </div>
       </div>
-      <div style={{fontSize: 18, lineHeight: 1.5, marginTop: 18, color: '#dbe4f0'}}>{helper}</div>
+      <div
+        style={{
+          lineHeight: 1.5,
+          marginTop: 18,
+          color: '#dbe4f0',
+          ...getAdaptiveTextStyle(helper, 18, {minSize: 15, softLimit: 28, hardLimit: 72}),
+        }}
+      >
+        {helper}
+      </div>
     </div>
   );
 };
@@ -1274,17 +1541,18 @@ const StaggeredSummaryRow = ({label, value, accentColor, reveal}) => (
         color: '#94a3b8',
         letterSpacing: 1.2,
         textTransform: 'uppercase',
+        ...SAFE_TEXT_STYLE,
       }}
     >
       {label}
     </div>
     <div
       style={{
-        fontSize: 24,
         lineHeight: 1.18,
         fontWeight: 700,
         color: accentColor || '#f8fafc',
         textAlign: 'right',
+        ...getAdaptiveTextStyle(value, 24, {minSize: 18, softLimit: 16, hardLimit: 40}),
       }}
     >
       {value}
@@ -1296,8 +1564,9 @@ const StaggeredSummaryRow = ({label, value, accentColor, reveal}) => (
 
 export const TemplateVideo = ({leadId}) => {
   const frame = useCurrentFrame();
-  const {fps, durationInFrames} = useVideoConfig();
+  const {fps, durationInFrames, width, height} = useVideoConfig();
   const lead = getLeadById(leadId);
+  const uiCopy = getUiCopy(lead.language);
   const subtitleBranding = lead.branding?.subtitles || {
     enabled: true,
     color: 'White',
@@ -1309,16 +1578,18 @@ export const TemplateVideo = ({leadId}) => {
     opacity: 80,
   };
   const track = getTrackMeta(lead.id);
-  const timeline = getSceneTimeline(durationInFrames);
+  const timeline = getSceneTimeline(durationInFrames, lead);
   const activeScene =
     timeline.find((scene) => frame >= scene.start && frame < scene.end) ||
     timeline[timeline.length - 1];
+  const activeSceneLabel = uiCopy.sceneLabels[activeScene?.key] || uiCopy.sceneLabels.opening;
   const currentTime = frame / fps;
   const currentSubtitle = getActiveSubtitle(track.subtitles, currentTime);
   const subtitleProgress = getSubtitleProgress(currentSubtitle, currentTime);
   const audioSrc =
     lead.id && lead.id !== 'preview-sample' ? staticFile(`audio/${lead.id}.mp3`) : null;
   const accentColor = URGENCY_COLORS[lead.urgency_level] || URGENCY_COLORS.elevated;
+  const stageScale = getStageScale(width, height);
   const backgroundShift = interpolate(frame, [0, durationInFrames], [0, 1], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
@@ -1382,31 +1653,90 @@ export const TemplateVideo = ({leadId}) => {
         }}
       />
 
-      <BrandHud
-        lead={lead}
-        accentColor={accentColor}
-        activeSceneLabel={safeString(activeScene?.label, 'Notice')}
-        frame={frame}
-      />
-      <LogoOverlay logo={logoBranding} />
-
-      <OpeningScene scene={timeline[0]} frame={frame} fps={fps} lead={lead} accentColor={accentColor} />
-      <AccountScene scene={timeline[1]} frame={frame} fps={fps} lead={lead} accentColor={accentColor} />
-      <ContextScene scene={timeline[2]} frame={frame} fps={fps} lead={lead} />
-      <AmountsScene scene={timeline[3]} frame={frame} fps={fps} lead={lead} accentColor={accentColor} />
-      <ActionScene scene={timeline[4]} frame={frame} fps={fps} lead={lead} accentColor={accentColor} />
-      <ClosingScene scene={timeline[5]} frame={frame} fps={fps} lead={lead} accentColor={accentColor} />
-
-      <ProgressTrack timeline={timeline} frame={frame} accentColor={accentColor} />
-
-      {subtitleBranding.enabled ? (
-        <SubtitlePanel
-          subtitle={currentSubtitle}
-          subtitleProgress={subtitleProgress}
-          branding={subtitleBranding}
-          fallbackText={safeString(lead.cta_text, 'ऑडियो के साथ सक्रिय पंक्ति यहां दिखाई देगी।')}
+      <div
+        style={{
+          position: 'absolute',
+          left: '50%',
+          top: '50%',
+          width: BASE_FRAME_WIDTH,
+          height: BASE_FRAME_HEIGHT,
+          transform: `translate(-50%, -50%) scale(${stageScale})`,
+          transformOrigin: 'center center',
+          overflow: 'hidden',
+        }}
+      >
+        <BrandHud
+          lead={lead}
+          accentColor={accentColor}
+          activeSceneLabel={activeSceneLabel}
+          frame={frame}
+          uiCopy={uiCopy}
         />
-      ) : null}
+        <LogoOverlay logo={logoBranding} />
+
+        <OpeningScene
+          scene={timeline[0]}
+          frame={frame}
+          fps={fps}
+          lead={lead}
+          accentColor={accentColor}
+          uiCopy={uiCopy}
+        />
+        <AccountScene
+          scene={timeline[1]}
+          frame={frame}
+          fps={fps}
+          lead={lead}
+          accentColor={accentColor}
+          uiCopy={uiCopy}
+        />
+        <ContextScene scene={timeline[2]} frame={frame} fps={fps} lead={lead} uiCopy={uiCopy} />
+        <AmountsScene
+          scene={timeline[3]}
+          frame={frame}
+          fps={fps}
+          lead={lead}
+          accentColor={accentColor}
+          uiCopy={uiCopy}
+        />
+        <ActionScene
+          scene={timeline[4]}
+          frame={frame}
+          fps={fps}
+          lead={lead}
+          accentColor={accentColor}
+          uiCopy={uiCopy}
+        />
+        <ClosingScene
+          scene={timeline[5]}
+          frame={frame}
+          fps={fps}
+          lead={lead}
+          accentColor={accentColor}
+          uiCopy={uiCopy}
+        />
+
+        <ProgressTrack
+          timeline={timeline}
+          frame={frame}
+          accentColor={accentColor}
+          sceneLabels={uiCopy.sceneLabels}
+        />
+
+        {subtitleBranding.enabled ? (
+          <SubtitlePanel
+            subtitle={currentSubtitle}
+            subtitleProgress={subtitleProgress}
+            branding={subtitleBranding}
+            fallbackText={safeString(
+              lead.cta_text,
+              lead.language === 'English'
+                ? 'The active spoken line will appear here with the audio.'
+                : 'ऑडियो के साथ सक्रिय पंक्ति यहां दिखाई देगी।'
+            )}
+          />
+        ) : null}
+      </div>
     </AbsoluteFill>
   );
 };

@@ -1,31 +1,37 @@
 import {Composition} from 'remotion';
 import {TemplateVideo} from './TemplateVideo';
-import {FPS, HEIGHT, WIDTH, getDurationInFrames, leads} from './videoData';
+import {FPS, getDurationInFrames, getLeadDimensions, leads} from './videoData';
 
 export const RemotionRoot = () => {
+  const primaryLead = leads[0];
+  const defaultDimensions = getLeadDimensions(primaryLead);
+
   return (
     <>
       <Composition
         id="main"
         component={TemplateVideo}
-        durationInFrames={getDurationInFrames(leads[0].id)}
+        durationInFrames={getDurationInFrames(primaryLead.id)}
         fps={FPS}
-        width={WIDTH}
-        height={HEIGHT}
-        defaultProps={{leadId: leads[0].id}}
+        width={defaultDimensions.width}
+        height={defaultDimensions.height}
+        defaultProps={{leadId: primaryLead.id}}
       />
-      {leads.map((lead) => (
-        <Composition
-          key={lead.id}
-          id={String(lead.id).replace(/_/g, '-')}
-          component={TemplateVideo}
-          durationInFrames={getDurationInFrames(lead.id)}
-          fps={FPS}
-          width={WIDTH}
-          height={HEIGHT}
-          defaultProps={{leadId: lead.id}}
-        />
-      ))}
+      {leads.map((lead) => {
+        const dimensions = getLeadDimensions(lead);
+        return (
+          <Composition
+            key={lead.id}
+            id={String(lead.id).replace(/_/g, '-')}
+            component={TemplateVideo}
+            durationInFrames={getDurationInFrames(lead.id)}
+            fps={FPS}
+            width={dimensions.width}
+            height={dimensions.height}
+            defaultProps={{leadId: lead.id}}
+          />
+        );
+      })}
     </>
   );
 };

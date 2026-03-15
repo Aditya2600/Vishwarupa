@@ -34,11 +34,11 @@ interface StepSubtitleProps {
 function getPreviewPosition(position: string): string {
   switch (position) {
     case "Top":
-      return "items-start pt-8";
+      return "items-start pt-6";
     case "Center":
       return "items-center";
     default:
-      return "items-end pb-10";
+      return "items-end pb-8";
   }
 }
 
@@ -82,16 +82,16 @@ export function StepSubtitle({ state, update, onLogoSelected }: StepSubtitleProp
 
   const subtitlePreviewClass =
     state.subtitleColor === "Blue"
-      ? "text-blue-400 bg-background/45"
+      ? "text-blue-400"
       : state.subtitleColor === "Green"
-        ? "text-emerald-400 bg-background/45"
+        ? "text-emerald-400"
         : state.subtitleColor === "Red"
-          ? "text-red-400 bg-background/45"
+          ? "text-red-400"
           : state.subtitleColor === "Yellow"
-            ? "text-yellow-300 bg-background/45"
+            ? "text-yellow-300"
             : state.subtitleColor === "Teal"
-              ? "text-teal-400 bg-background/45"
-              : "text-foreground bg-background/45";
+              ? "text-teal-400"
+              : "text-foreground";
 
   return (
     <div className="grid grid-cols-2 gap-8 max-w-5xl">
@@ -101,15 +101,18 @@ export function StepSubtitle({ state, update, onLogoSelected }: StepSubtitleProp
           <div className="absolute inset-0 bg-gradient-to-b from-transparent to-background/60" />
           {state.logoFileName ? (
             <div
-              className={`absolute ${getLogoPreviewPosition(state.logoPosition)} rounded-lg border border-border/70 bg-background/85 px-3 py-2 text-[11px] font-semibold tracking-wide text-foreground`}
-              style={{ opacity: state.logoOpacity / 100 }}
+              className={`absolute ${getLogoPreviewPosition(state.logoPosition)} px-2 py-1 text-[10px] font-semibold tracking-[0.22em] text-foreground`}
+              style={{ opacity: state.logoOpacity / 100, textShadow: "0 4px 12px rgba(15, 23, 42, 0.95)" }}
             >
               LOGO
             </div>
           ) : null}
           {state.includeCaptions ? (
             <div className={`relative z-10 flex h-full w-full justify-center ${getPreviewPosition(state.subtitlePosition)}`}>
-              <p className={`text-sm font-semibold px-4 py-2 rounded-lg ${subtitlePreviewClass}`}>
+              <p
+                className={`max-w-[90%] text-center text-[11px] font-semibold leading-tight ${subtitlePreviewClass}`}
+                style={{ textShadow: "0 4px 12px rgba(15, 23, 42, 0.95)" }}
+              >
                 Your payment requires immediate attention.
               </p>
             </div>

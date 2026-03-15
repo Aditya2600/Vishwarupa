@@ -6,6 +6,10 @@ export const DEFAULT_DURATION_SECONDS = 12;
 export const TRANSITION_FRAMES = 12;
 export const WIDTH = 1280;
 export const HEIGHT = 720;
+const MIN_VIDEO_WIDTH = 540;
+const MIN_VIDEO_HEIGHT = 540;
+const MAX_VIDEO_WIDTH = 2160;
+const MAX_VIDEO_HEIGHT = 2160;
 
 export const SCENE_DEFINITIONS = [
   {key: 'opening', label: 'Notice', ratio: 0.15},
@@ -41,6 +45,8 @@ const fallbackLead = {
       opacity: 80,
     },
   },
+  video_width: WIDTH,
+  video_height: HEIGHT,
 };
 
 export const safeString = (value, fallback = 'Not available') => {
@@ -110,6 +116,19 @@ const normalizeBranding = (branding) => {
     },
   };
 };
+
+const normalizeVideoDimension = (value, fallback, min, max) => {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return Math.max(min, Math.min(max, Math.round(value)));
+  }
+  return fallback;
+};
+
+const normalizeVideoWidth = (value) =>
+  normalizeVideoDimension(value, WIDTH, MIN_VIDEO_WIDTH, MAX_VIDEO_WIDTH);
+
+const normalizeVideoHeight = (value) =>
+  normalizeVideoDimension(value, HEIGHT, MIN_VIDEO_HEIGHT, MAX_VIDEO_HEIGHT);
 
 export const extractNumericAmount = (value) => {
   if (value === null || value === undefined || value === '') {
@@ -284,6 +303,8 @@ const normalizeLead = (lead) => {
     cta_text: safeString(lead?.cta_text, scenePayload.cta_text),
     urgency_level: urgencyLevel,
     branding,
+    video_width: normalizeVideoWidth(lead?.video_width),
+    video_height: normalizeVideoHeight(lead?.video_height),
   };
 };
 
@@ -294,6 +315,11 @@ export const leads =
 
 export const getLeadById = (leadId) =>
   leads.find((lead) => lead.id === leadId) || leads[0] || normalizeLead(fallbackLead);
+
+export const getLeadDimensions = (lead) => ({
+  width: normalizeVideoWidth(lead?.video_width),
+  height: normalizeVideoHeight(lead?.video_height),
+});
 
 export const getTrackMeta = (leadId) => {
   const track = metadata[leadId];
@@ -338,12 +364,57 @@ export const getSubtitleProgress = (subtitle, currentTime) => {
   return Math.min(1, Math.max(0, (currentTime - subtitle.start) / duration));
 };
 
-export const getSceneTimeline = (durationInFrames) => {
+const getWordCount = (value) => {
+  if (typeof value !== 'string') {
+    return 0;
+  }
+  const words = value.trim().split(/\s+/).filter(Boolean);
+  return words.length;
+};
+
+const getDynamicSceneRatios = (lead) => {
+  const scenePayload = lead?.scene_payload || {};
+  const textByScene = {
+    opening: `${safeString(scenePayload.opening?.headline, '')} ${safeString(scenePayload.opening?.subheadline, '')}`,
+    account: `${safeString(scenePayload.account?.headline, '')} ${safeString(scenePayload.account?.supporting, '')} ${safeString(scenePayload.account?.badge, '')}`,
+    context: `${safeString(scenePayload.context?.headline, '')} ${safeString(scenePayload.context?.body, '')}`,
+    amounts: `${safeString(scenePayload.amounts?.headline, '')} ${safeString(scenePayload.amounts?.body, '')} ${safeString(scenePayload.amounts?.note, '')}`,
+    action: `${safeString(scenePayload.action?.headline, '')} ${safeString(scenePayload.action?.body, '')} ${safeString(scenePayload.action?.cta_value, '')}`,
+    closing: `${safeString(scenePayload.closing?.headline, '')} ${safeString(scenePayload.closing?.body, '')}`,
+  };
+  const thresholds = {
+    opening: 12,
+    account: 10,
+    context: 18,
+    amounts: 14,
+    action: 18,
+    closing: 12,
+  };
+  const gains = {
+    opening: 0.0028,
+    account: 0.0024,
+    context: 0.0044,
+    amounts: 0.0034,
+    action: 0.0048,
+    closing: 0.003,
+  };
+
+  const rawRatios = SCENE_DEFINITIONS.map((scene) => {
+    const wordCount = getWordCount(textByScene[scene.key]);
+    const overflow = Math.max(0, wordCount - thresholds[scene.key]);
+    return scene.ratio + overflow * gains[scene.key];
+  });
+  const total = rawRatios.reduce((sum, ratio) => sum + ratio, 0) || 1;
+
+  return rawRatios.map((ratio) => ratio / total);
+};
+
+export const getSceneTimeline = (durationInFrames, lead = null) => {
   const totalFrames = Math.max(durationInFrames, SCENE_DEFINITIONS.length * 40);
   const minFrames = 36;
-  const durations = SCENE_DEFINITIONS.map((scene) =>
-    Math.max(minFrames, Math.round(totalFrames * scene.ratio))
-  );
+  const normalizedLead = lead && typeof lead === 'object' ? normalizeLead(lead) : leads[0];
+  const ratios = getDynamicSceneRatios(normalizedLead);
+  const durations = ratios.map((ratio) => Math.max(minFrames, Math.round(totalFrames * ratio)));
 
   let allocated = durations.reduce((sum, value) => sum + value, 0);
 

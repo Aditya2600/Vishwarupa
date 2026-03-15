@@ -486,6 +486,8 @@ class RemotionService:
             'headline_text': scene_payload['headline_text'],
             'cta_text': scene_payload['cta_text'],
             'urgency_level': urgency_level,
+            'video_width': int(getattr(request, 'video_width', 1280) or 1280),
+            'video_height': int(getattr(request, 'video_height', 720) or 720),
             'branding': {
                 'subtitles': {
                     'enabled': subtitle_enabled,

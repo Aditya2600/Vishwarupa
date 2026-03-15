@@ -58,6 +58,8 @@ def test_build_render_payload_enriches_scene_data(tmp_path: Path) -> None:
     assert payload['headline_text'] == payload['scene_payload']['headline_text']
     assert payload['cta_text'] == payload['scene_payload']['cta_text']
     assert payload['urgency_level'] == 'elevated'
+    assert payload['video_width'] == 1280
+    assert payload['video_height'] == 720
     assert payload['branding']['subtitles'] == {
         'enabled': True,
         'color': 'Teal',
@@ -68,6 +70,18 @@ def test_build_render_payload_enriches_scene_data(tmp_path: Path) -> None:
         'position': 'Bottom Right',
         'opacity': 64,
     }
+
+
+def test_build_render_payload_preserves_requested_dimensions(tmp_path: Path) -> None:
+    service = RemotionService(remotion_path=tmp_path)
+    request = make_request()
+    request.video_width = 720
+    request.video_height = 1280
+
+    payload = service.build_render_payload(request, 'job-portrait', 'Rendered script')
+
+    assert payload['video_width'] == 720
+    assert payload['video_height'] == 1280
 
 
 def test_build_render_payload_handles_missing_loan_amount_and_product_variants(tmp_path: Path) -> None:
