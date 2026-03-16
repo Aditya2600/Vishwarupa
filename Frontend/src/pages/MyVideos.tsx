@@ -1,5 +1,6 @@
-import { Film, PlayCircle, Sparkles, Clock, CheckCircle, ExternalLink, AlertCircle, RotateCcw } from "lucide-react";
+import { Film, PlayCircle, Sparkles, Clock, CheckCircle, ExternalLink, AlertCircle, RotateCcw, Trash2, Download, Share2 } from "lucide-react";
 import { motion } from "framer-motion";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { HeaderBar } from "@/components/HeaderBar";
 import { Button } from "@/components/ui/button";
@@ -7,6 +8,9 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchMyVideos } from "@/lib/api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { WIZARD_STORAGE_KEY, type WizardState } from "@/store/wizardStore";
+import { toast } from "sonner";
+
+const SOFT_DELETED_DRAFT_STORAGE_KEY = `${WIZARD_STORAGE_KEY}-deleted`;
 
 const STATS = [
   { label: "Total Videos", key: "total", icon: Film },
@@ -22,6 +26,29 @@ interface VideoListItem {
   video_url: string | null;
   created_at: string;
   isLocalDraft?: boolean;
+}
+
+function sanitizeFilenamePart(value: string): string {
+  return value
+    .replace(/[<>:"/\\|?*\u0000-\u001f]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildDownloadFilename(video: VideoListItem): string {
+  const preferredName = sanitizeFilenamePart(video.title || "");
+  return `${preferredName || "video-draft"}.mp4`;
+}
+
+function triggerDownload(href: string, filename: string) {
+  const link = document.createElement("a");
+  link.href = href;
+  link.download = filename;
+  link.rel = "noopener noreferrer";
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 }
 
 function readLocalDraft(): WizardState | null {
@@ -86,9 +113,62 @@ function buildLocalDraftItem(): VideoListItem | null {
   };
 }
 
+function readSoftDeletedDraft(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return window.localStorage.getItem(SOFT_DELETED_DRAFT_STORAGE_KEY);
+}
+
+function softDeleteLocalDraft(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const saved = window.localStorage.getItem(WIZARD_STORAGE_KEY);
+  if (!saved) {
+    return false;
+  }
+
+  window.localStorage.setItem(
+    SOFT_DELETED_DRAFT_STORAGE_KEY,
+    JSON.stringify({ content: saved, deletedAt: new Date().toISOString() }),
+  );
+  window.localStorage.removeItem(WIZARD_STORAGE_KEY);
+  return true;
+}
+
+function restoreSoftDeletedDraft(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const saved = readSoftDeletedDraft();
+  if (!saved) {
+    return false;
+  }
+
+  try {
+    const parsed = JSON.parse(saved) as { content?: string } | WizardState;
+    const content =
+      typeof parsed === "object" && parsed !== null && "content" in parsed && typeof parsed.content === "string"
+        ? parsed.content
+        : JSON.stringify(parsed);
+
+    window.localStorage.setItem(WIZARD_STORAGE_KEY, content);
+    window.localStorage.removeItem(SOFT_DELETED_DRAFT_STORAGE_KEY);
+    return true;
+  } catch {
+    window.localStorage.removeItem(SOFT_DELETED_DRAFT_STORAGE_KEY);
+    return false;
+  }
+}
+
 export default function MyVideos() {
   const navigate = useNavigate();
-  const localDraft = buildLocalDraftItem();
+  const [localDraft, setLocalDraft] = useState<VideoListItem | null>(() => buildLocalDraftItem());
+  const [hasSoftDeletedDraft, setHasSoftDeletedDraft] = useState(() => Boolean(readSoftDeletedDraft()));
   const { data: videos, isLoading, error, refetch } = useQuery({
     queryKey: ["my-videos"],
     queryFn: fetchMyVideos,
@@ -97,6 +177,85 @@ export default function MyVideos() {
 
   const openCreate = (mode: "avatar" | "remotion") => {
     navigate(`/create?mode=${mode}&fresh=1`);
+  };
+
+  const handleDraftShare = async (video: VideoListItem) => {
+    if (!video.video_url) {
+      toast.error("This draft does not have a video yet.");
+      return;
+    }
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: video.title || "Draft video",
+          url: video.video_url,
+        });
+        return;
+      }
+
+      await navigator.clipboard.writeText(video.video_url);
+      toast.success("Draft video link copied.");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return;
+      }
+      toast.error("Unable to share this draft right now.");
+    }
+  };
+
+  const handleDraftDownload = async (video: VideoListItem) => {
+    if (!video.video_url) {
+      toast.error("This draft does not have a video yet.");
+      return;
+    }
+
+    const filename = buildDownloadFilename(video);
+
+    try {
+      const resolvedUrl = new URL(video.video_url, window.location.href);
+      if (resolvedUrl.origin === window.location.origin) {
+        const response = await fetch(resolvedUrl.toString(), { credentials: "include" });
+        if (!response.ok) {
+          throw new Error(`Download request failed with status ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const objectUrl = window.URL.createObjectURL(blob);
+        triggerDownload(objectUrl, filename);
+        window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1_000);
+        toast.success("Draft download started.");
+        return;
+      }
+    } catch (error) {
+      console.error("Falling back to direct draft download link.", error);
+    }
+
+    triggerDownload(video.video_url, filename);
+    toast.success("Draft download started.");
+  };
+
+  const handleSoftDeleteDraft = () => {
+    if (!softDeleteLocalDraft()) {
+      toast.error("No saved draft was found.");
+      return;
+    }
+
+    setLocalDraft(null);
+    setHasSoftDeletedDraft(true);
+    toast.success("Draft removed from view. You can restore it anytime.");
+  };
+
+  const handleRestoreDraft = () => {
+    if (!restoreSoftDeletedDraft()) {
+      toast.error("No deleted draft is available to restore.");
+      setHasSoftDeletedDraft(false);
+      return;
+    }
+
+    setLocalDraft(buildLocalDraftItem());
+    setHasSoftDeletedDraft(false);
+    toast.success("Draft restored.");
   };
 
   const mergedVideos: VideoListItem[] = [
@@ -145,23 +304,31 @@ export default function MyVideos() {
                 </p>
               </div>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:w-[28rem]">
-              <button
-                type="button"
-                onClick={() => openCreate("avatar")}
-                className="rounded-2xl border border-border bg-card p-4 text-left transition-all hover:border-primary/30 hover:bg-surface-hover"
-              >
-                <p className="text-sm font-semibold text-foreground">Avatar Video</p>
-                <p className="mt-1 text-xs text-muted-foreground">Create a human-like avatar video in seconds.</p>
-              </button>
-              <button
-                type="button"
-                onClick={() => openCreate("remotion")}
-                className="rounded-2xl border border-border bg-card p-4 text-left transition-all hover:border-primary/30 hover:bg-surface-hover"
-              >
-                <p className="text-sm font-semibold text-foreground">Text to Video</p>
-                <p className="mt-1 text-xs text-muted-foreground">Turn your text into engaging videos in seconds.</p>
-              </button>
+            <div className="space-y-3 lg:w-[28rem]">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => openCreate("avatar")}
+                  className="rounded-2xl border border-border bg-card p-4 text-left transition-all hover:border-primary/30 hover:bg-surface-hover"
+                >
+                  <p className="text-sm font-semibold text-foreground">Avatar Video</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Create a human-like avatar video in seconds.</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openCreate("remotion")}
+                  className="rounded-2xl border border-border bg-card p-4 text-left transition-all hover:border-primary/30 hover:bg-surface-hover"
+                >
+                  <p className="text-sm font-semibold text-foreground">Text to Video</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Turn your text into engaging videos in seconds.</p>
+                </button>
+              </div>
+              {hasSoftDeletedDraft ? (
+                <Button variant="outline" onClick={handleRestoreDraft} className="w-full border-border">
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Restore Deleted Draft
+                </Button>
+              ) : null}
             </div>
           </section>
 
@@ -293,14 +460,47 @@ export default function MyVideos() {
                       <span>{video.isLocalDraft ? "Saved in browser" : new Date(video.created_at).toLocaleDateString()}</span>
                     </div>
                     {video.isLocalDraft ? (
-                      <Button variant="outline" className="border-border text-xs" onClick={() => navigate("/create")}>
-                        Resume Draft
-                      </Button>
+                      <div className="flex flex-wrap gap-2">
+                        <Button variant="outline" className="flex-1 border-border text-xs" onClick={() => navigate("/create")}>
+                          Resume Draft
+                        </Button>
+                        {video.video_url ? (
+                          <>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="border-border text-xs"
+                              onClick={() => void handleDraftShare(video)}
+                            >
+                              <Share2 className="mr-1 h-3.5 w-3.5" />
+                              Share
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="border-border text-xs"
+                              onClick={() => void handleDraftDownload(video)}
+                            >
+                              <Download className="mr-1 h-3.5 w-3.5" />
+                              Download
+                            </Button>
+                          </>
+                        ) : null}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="px-3 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          onClick={handleSoftDeleteDraft}
+                        >
+                          <Trash2 className="mr-1 h-3.5 w-3.5" />
+                          Delete
+                        </Button>
+                      </div>
                     ) : null}
                     {video.video_url && (
                       <Button variant="link" className="p-0 h-auto text-primary text-xs" onClick={() => window.open(video.video_url, '_blank')}>
                         <ExternalLink className="mr-1 h-3 w-3" />
-                        Open Link
+                        Open Video
                       </Button>
                     )}
                   </div>

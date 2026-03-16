@@ -310,14 +310,15 @@ function HighlightedOutputLink({
             target="_blank"
             rel="noopener noreferrer"
             className="group flex items-center gap-3 rounded-xl border border-primary/30 bg-background/80 px-4 py-3 text-left transition-all duration-300 hover:border-primary/50 hover:bg-background hover:shadow-[0_0_24px_rgba(95,18,132,0.14)]"
-            title={href}
           >
             <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
               <Link className="h-4 w-4" />
             </span>
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-semibold text-primary">Open video</span>
-              <span className="block truncate text-xs text-muted-foreground">{href}</span>
+              <span className="block text-xs text-muted-foreground">
+                Open the finished video in a new tab or use the actions below.
+              </span>
             </span>
           </a>
           <div className="flex gap-2">

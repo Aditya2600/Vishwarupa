@@ -1,5 +1,5 @@
 import { ChangeEvent, useId, useRef } from "react";
-import { ImagePlus, Upload, X } from "lucide-react";
+import { AlertCircle, ImagePlus, Upload, X } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { WizardState } from "@/store/wizardStore";
@@ -58,6 +58,7 @@ function getLogoPreviewPosition(position: string): string {
 export function StepSubtitle({ state, update, onLogoSelected }: StepSubtitleProps) {
   const fileInputId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const showAvatarLogoAlert = state.videoType === "avatar" && !state.logoFileName;
 
   const handleLogoChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
@@ -176,6 +177,18 @@ export function StepSubtitle({ state, update, onLogoSelected }: StepSubtitleProp
 
       {/* Right – logo */}
       <div className="space-y-6">
+        {showAvatarLogoAlert ? (
+          <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <div>
+              <p className="text-sm font-semibold text-foreground">Logo missing</p>
+              <p className="text-xs text-muted-foreground">
+                Avatar videos usually look better branded. Upload a company logo before generating if you want it shown in the final export.
+              </p>
+            </div>
+          </div>
+        ) : null}
+
         <div>
           <label className="block text-sm font-medium text-foreground mb-2">Company Logo</label>
           <label

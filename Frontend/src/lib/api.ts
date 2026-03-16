@@ -12,6 +12,8 @@ export interface VoiceOption {
   id: string;
   name: string;
   language: string;
+  languages: string[];
+  previewUrl: string | null;
   gender: "male" | "female";
   raw: Record<string, unknown>;
 }
@@ -103,6 +105,9 @@ const LANGUAGE_CODE_TO_NAME: Record<string, string> = {
   pa: "Punjabi",
 };
 
+const MULTILINGUAL_LANGUAGE_NAME = "Multilingual";
+const MULTILINGUAL_LANGUAGE_PATTERNS = [/multi[\s-]?lingual/i, /multiple languages?/i, /all languages?/i];
+
 function clearStoredAuth(): void {
   localStorage.removeItem("token");
   localStorage.removeItem("user");
@@ -157,6 +162,10 @@ function normalizeLanguageName(value: unknown): string | null {
   }
 
   const cleaned = normalized.replace(/_/g, "-").trim();
+  if (MULTILINGUAL_LANGUAGE_PATTERNS.some((pattern) => pattern.test(cleaned))) {
+    return MULTILINGUAL_LANGUAGE_NAME;
+  }
+
   const code = cleaned.toLowerCase().slice(0, 2);
   if (LANGUAGE_CODE_TO_NAME[code]) {
     return LANGUAGE_CODE_TO_NAME[code];
@@ -170,6 +179,151 @@ function normalizeLanguageName(value: unknown): string | null {
   }
 
   return cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase();
+}
+
+function dedupeStrings(values: string[]): string[] {
+  const seen = new Set<string>();
+  const uniqueValues: string[] = [];
+
+  for (const value of values) {
+    if (!seen.has(value)) {
+      seen.add(value);
+      uniqueValues.push(value);
+    }
+  }
+
+  return uniqueValues;
+}
+
+function normalizeLanguageList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return dedupeStrings(value.flatMap((entry) => normalizeLanguageList(entry)));
+  }
+
+  const record = asRecord(value);
+  if (Object.keys(record).length > 0) {
+    return dedupeStrings([
+      ...normalizeLanguageList(record.language),
+      ...normalizeLanguageList(record.language_name),
+      ...normalizeLanguageList(record.locale),
+      ...normalizeLanguageList(record.lang),
+      ...normalizeLanguageList(record.language_code),
+      ...normalizeLanguageList(record.name),
+    ]);
+  }
+
+  const normalized = normalizeLanguageName(value);
+  return normalized ? [normalized] : [];
+}
+
+function normalizeVoiceLanguages(rawVoice: Record<string, unknown>): string[] {
+  const nestedVoice = asRecord(rawVoice.voice);
+
+  return dedupeStrings([
+    ...normalizeLanguageList(rawVoice.language),
+    ...normalizeLanguageList(rawVoice.language_name),
+    ...normalizeLanguageList(rawVoice.locale),
+    ...normalizeLanguageList(rawVoice.lang),
+    ...normalizeLanguageList(rawVoice.language_code),
+    ...normalizeLanguageList(rawVoice.languages),
+    ...normalizeLanguageList(rawVoice.language_list),
+    ...normalizeLanguageList(rawVoice.supported_languages),
+    ...normalizeLanguageList(rawVoice.supported_locales),
+    ...normalizeLanguageList(rawVoice.support_locale),
+    ...normalizeLanguageList(rawVoice.locales),
+    ...normalizeLanguageList(rawVoice.language_support),
+    ...normalizeLanguageList(nestedVoice.language),
+    ...normalizeLanguageList(nestedVoice.language_name),
+    ...normalizeLanguageList(nestedVoice.locale),
+    ...normalizeLanguageList(nestedVoice.lang),
+    ...normalizeLanguageList(nestedVoice.language_code),
+    ...normalizeLanguageList(nestedVoice.languages),
+    ...normalizeLanguageList(nestedVoice.language_list),
+    ...normalizeLanguageList(nestedVoice.supported_languages),
+    ...normalizeLanguageList(nestedVoice.supported_locales),
+    ...normalizeLanguageList(nestedVoice.support_locale),
+    ...normalizeLanguageList(nestedVoice.locales),
+    ...normalizeLanguageList(nestedVoice.language_support),
+  ]);
+}
+
+function extractVoicePreviewUrl(rawVoice: Record<string, unknown>): string | null {
+  const nestedVoice = asRecord(rawVoice.voice);
+
+  return (
+    asString(rawVoice.preview_audio_url) ??
+    asString(rawVoice.preview_url) ??
+    asString(rawVoice.audio_preview_url) ??
+    asString(rawVoice.sample_audio_url) ??
+    asString(rawVoice.sample_url) ??
+    asString(rawVoice.demo_audio_url) ??
+    asString(rawVoice.demo_url) ??
+    asString(rawVoice.voice_preview_url) ??
+    asString(rawVoice.audio_url) ??
+    asString(nestedVoice.preview_audio_url) ??
+    asString(nestedVoice.preview_url) ??
+    asString(nestedVoice.audio_preview_url) ??
+    asString(nestedVoice.sample_audio_url) ??
+    asString(nestedVoice.sample_url) ??
+    asString(nestedVoice.demo_audio_url) ??
+    asString(nestedVoice.demo_url) ??
+    asString(nestedVoice.voice_preview_url) ??
+    asString(nestedVoice.audio_url)
+  );
+}
+
+function isMultilingualLanguage(language: string): boolean {
+  return normalizeLanguageName(language) === MULTILINGUAL_LANGUAGE_NAME;
+}
+
+export function isVoiceCompatibleWithLanguage(
+  voice: Pick<VoiceOption, "language" | "languages">,
+  selectedLanguage: string,
+): boolean {
+  const normalizedSelectedLanguage = normalizeLanguageName(selectedLanguage);
+  if (!normalizedSelectedLanguage) {
+    return false;
+  }
+
+  const normalizedLanguages = dedupeStrings(
+    (voice.languages ?? [])
+      .map((language) => normalizeLanguageName(language))
+      .filter((language): language is string => Boolean(language)),
+  );
+
+  if (normalizedLanguages.includes(normalizedSelectedLanguage)) {
+    return true;
+  }
+
+  if (normalizedLanguages.some((language) => isMultilingualLanguage(language))) {
+    return true;
+  }
+
+  const normalizedPrimaryLanguage = normalizeLanguageName(voice.language);
+  return normalizedPrimaryLanguage === normalizedSelectedLanguage || isMultilingualLanguage(voice.language);
+}
+
+export function compareVoicesForLanguage(
+  left: Pick<VoiceOption, "language" | "languages" | "name">,
+  right: Pick<VoiceOption, "language" | "languages" | "name">,
+  selectedLanguage: string,
+): number {
+  const normalizedSelectedLanguage = normalizeLanguageName(selectedLanguage);
+  const leftPrimaryMatch = normalizeLanguageName(left.language) === normalizedSelectedLanguage;
+  const rightPrimaryMatch = normalizeLanguageName(right.language) === normalizedSelectedLanguage;
+
+  if (leftPrimaryMatch !== rightPrimaryMatch) {
+    return leftPrimaryMatch ? -1 : 1;
+  }
+
+  const leftCompatible = isVoiceCompatibleWithLanguage(left, selectedLanguage);
+  const rightCompatible = isVoiceCompatibleWithLanguage(right, selectedLanguage);
+
+  if (leftCompatible !== rightCompatible) {
+    return leftCompatible ? -1 : 1;
+  }
+
+  return left.name.localeCompare(right.name);
 }
 
 function extractErrorMessage(payload: unknown): string | null {
@@ -360,13 +514,19 @@ function normalizeVoice(rawVoice: Record<string, unknown>): VoiceOption | null {
     normalizeGender(rawVoice.speaker_gender) ??
     normalizeGender(asRecord(rawVoice.voice).gender);
 
+  const languages = normalizeVoiceLanguages(rawVoice);
   const language =
     normalizeLanguageName(rawVoice.language) ??
     normalizeLanguageName(rawVoice.language_name) ??
     normalizeLanguageName(rawVoice.locale) ??
     normalizeLanguageName(rawVoice.lang) ??
     normalizeLanguageName(rawVoice.language_code) ??
-    normalizeLanguageName(asRecord(rawVoice.voice).language);
+    normalizeLanguageName(asRecord(rawVoice.voice).language) ??
+    (languages.length === 1
+      ? languages[0]
+      : languages.length > 1
+        ? MULTILINGUAL_LANGUAGE_NAME
+        : null);
 
   if (!gender || !language) {
     return null;
@@ -380,6 +540,8 @@ function normalizeVoice(rawVoice: Record<string, unknown>): VoiceOption | null {
       asString(rawVoice.title) ??
       id,
     language,
+    languages,
+    previewUrl: extractVoicePreviewUrl(rawVoice),
     gender,
     raw: rawVoice,
   };

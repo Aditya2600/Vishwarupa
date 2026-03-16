@@ -4,16 +4,16 @@ import { Input } from "@/components/ui/input";
 import { REMOTION_SUPPORTED_LANGUAGES } from "@/lib/templates";
 
 const LANGUAGES = [
-  { name: "Hindi", native: "हिन्दी", flag: "🇮🇳" },
-  { name: "English", native: "English", flag: "🇺🇸" },
-  { name: "Marathi", native: "मराठी", flag: "🇮🇳" },
-  { name: "Tamil", native: "தமிழ்", flag: "🇮🇳" },
-  { name: "Telugu", native: "తెలుగు", flag: "🇮🇳" },
-  { name: "Kannada", native: "ಕನ್ನಡ", flag: "🇮🇳" },
-  { name: "Bengali", native: "বাংলা", flag: "🇧🇩" },
-  { name: "Gujarati", native: "ગુજરાતી", flag: "🇮🇳" },
-  { name: "Malayalam", native: "മലയാളം", flag: "🇮🇳" },
-  { name: "Punjabi", native: "ਪੰਜਾਬੀ", flag: "🇮🇳" },
+  { name: "Hindi", native: "हिन्दी" },
+  { name: "English", native: "English" },
+  { name: "Marathi", native: "मराठी" },
+  { name: "Tamil", native: "தமிழ்" },
+  { name: "Telugu", native: "తెలుగు" },
+  { name: "Kannada", native: "ಕನ್ನಡ" },
+  { name: "Bengali", native: "বাংলা" },
+  { name: "Gujarati", native: "ગુજરાતી" },
+  { name: "Malayalam", native: "മലയാളം" },
+  { name: "Punjabi", native: "ਪੰਜਾਬੀ" },
 ];
 
 interface StepLanguageProps {
@@ -80,12 +80,11 @@ export function StepLanguage({ selected, onSelect, videoType, onVideoTypeChange 
               key={lang.name}
               disabled={!isAvailable}
               onClick={() => onSelect(lang.name)}
-              className={`relative flex items-center gap-3 p-4 rounded-xl border transition-all duration-200 text-left ${isSelected
+              className={`relative flex items-center p-4 rounded-xl border transition-all duration-200 text-left ${isSelected
                   ? "glow-purple-border border-primary bg-primary/5"
                   : "border-border bg-card hover:bg-surface-hover hover:border-muted-foreground/30"
                 } ${!isAvailable ? "opacity-60 cursor-not-allowed grayscale-[0.5]" : ""}`}
             >
-              <span className="text-2xl">{lang.flag}</span>
               <div>
                 <p className="text-sm font-semibold text-foreground">
                   {lang.name}

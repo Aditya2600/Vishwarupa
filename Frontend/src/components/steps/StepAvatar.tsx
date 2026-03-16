@@ -1,4 +1,5 @@
-import { AlertCircle, Check, Crown, LoaderCircle, Mic2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { AlertCircle, Check, Crown, LoaderCircle, Mic2, Pause, Play } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -7,7 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { AvatarOption, VoiceOption } from "@/lib/api";
+import { compareVoicesForLanguage, isVoiceCompatibleWithLanguage, type AvatarOption, type VoiceOption } from "@/lib/api";
 
 interface StepAvatarProps {
   avatars: AvatarOption[];
@@ -44,14 +45,91 @@ export function StepAvatar({
   onVoiceSelect,
   onFilterChange,
 }: StepAvatarProps) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [playingVoiceId, setPlayingVoiceId] = useState("");
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const filters = ["All", ...new Set(avatars.map((avatar) => avatar.category).filter(Boolean))];
   const filteredByCategory = filter === "All" ? avatars : avatars.filter((avatar) => avatar.category === filter);
   const filteredAvatars = selectedVoiceGender
     ? filteredByCategory.filter((avatar) => avatar.gender === selectedVoiceGender)
     : filteredByCategory;
-  const filteredVoices = voices.filter(
-    (voice) => voice.language === language && (!selectedAvatarGender || voice.gender === selectedAvatarGender),
-  );
+  const filteredVoices = voices
+    .filter(
+      (voice) =>
+        isVoiceCompatibleWithLanguage(voice, language) &&
+        (!selectedAvatarGender || voice.gender === selectedAvatarGender),
+    )
+    .sort((left, right) => compareVoicesForLanguage(left, right, language));
+
+  const getVoiceLanguageHint = (voice: VoiceOption): string | null => {
+    if (voice.language === language) {
+      return null;
+    }
+
+    if (voice.languages.includes(language)) {
+      return `Supports ${language}`;
+    }
+
+    return voice.language;
+  };
+
+  const stopPreview = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current.onended = null;
+      audioRef.current.onerror = null;
+      audioRef.current = null;
+    }
+
+    setPlayingVoiceId("");
+  };
+
+  const handlePreviewVoice = (voice: VoiceOption) => {
+    if (!voice.previewUrl) {
+      return;
+    }
+
+    if (playingVoiceId === voice.id) {
+      stopPreview();
+      return;
+    }
+
+    stopPreview();
+    setPreviewError(null);
+
+    const audio = new Audio(voice.previewUrl);
+    audioRef.current = audio;
+    audio.onended = () => {
+      if (audioRef.current === audio) {
+        audioRef.current = null;
+      }
+      setPlayingVoiceId("");
+    };
+    audio.onerror = () => {
+      if (audioRef.current === audio) {
+        audioRef.current = null;
+      }
+      setPlayingVoiceId("");
+      setPreviewError(`Voice preview is unavailable for ${voice.name}.`);
+    };
+
+    setPlayingVoiceId(voice.id);
+    void audio.play().catch(() => {
+      if (audioRef.current === audio) {
+        audioRef.current = null;
+      }
+      setPlayingVoiceId("");
+      setPreviewError(`Voice preview is unavailable for ${voice.name}.`);
+    });
+  };
+
+  useEffect(() => stopPreview, []);
+  useEffect(() => {
+    if (playingVoiceId && !filteredVoices.some((voice) => voice.id === playingVoiceId)) {
+      stopPreview();
+    }
+  }, [filteredVoices, playingVoiceId]);
 
   const handleManualAvatarChange = (value: string) => {
     const matchingAvatar = avatars.find((avatar) => avatar.id === value.trim());
@@ -79,6 +157,12 @@ export function StepAvatar({
             <span>{voiceErrorMessage}</span>
           </div>
         ) : null}
+        {previewError ? (
+          <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>{previewError}</span>
+          </div>
+        ) : null}
 
         <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
           <div className="space-y-2">
@@ -90,8 +174,9 @@ export function StepAvatar({
               <SelectContent>
                 <SelectItem value="__none">No voice selected</SelectItem>
                 {filteredVoices.map((voice) => (
-                  <SelectItem key={voice.id} value={voice.id}>
+                <SelectItem key={voice.id} value={voice.id}>
                     {voice.name} · {voice.gender === "female" ? "Female" : "Male"}
+                    {getVoiceLanguageHint(voice) ? ` · ${getVoiceLanguageHint(voice)}` : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -107,9 +192,81 @@ export function StepAvatar({
           </div>
         </div>
 
+        {filteredVoices.length > 0 ? (
+          <div className="mt-4 rounded-xl border border-border bg-secondary/35 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Listen Before Selecting</p>
+                <p className="text-xs text-muted-foreground">Preview available voice samples, then lock in the one you want.</p>
+              </div>
+              {playingVoiceId ? (
+                <button
+                  type="button"
+                  onClick={stopPreview}
+                  className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  Stop Preview
+                </button>
+              ) : null}
+            </div>
+
+            <div className="mt-3 max-h-52 space-y-2 overflow-y-auto pr-1">
+              {filteredVoices.map((voice) => {
+                const voiceLanguageHint = getVoiceLanguageHint(voice);
+                const isPlaying = playingVoiceId === voice.id;
+                const isSelected = selectedVoiceId === voice.id;
+
+                return (
+                  <div
+                    key={`${voice.id}-preview`}
+                    className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 ${
+                      isSelected ? "border-primary bg-primary/5" : "border-border bg-background/80"
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground">{voice.name}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {voice.gender === "female" ? "Female" : "Male"}
+                        {voiceLanguageHint ? ` · ${voiceLanguageHint}` : ""}
+                      </p>
+                    </div>
+
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={!voice.previewUrl}
+                        onClick={() => handlePreviewVoice(voice)}
+                        className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                          voice.previewUrl
+                            ? "bg-secondary text-foreground hover:bg-secondary/80"
+                            : "bg-secondary/60 text-muted-foreground"
+                        }`}
+                      >
+                        {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                        {voice.previewUrl ? (isPlaying ? "Pause" : "Play") : "No Sample"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onVoiceSelect(voice.id)}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                          isSelected
+                            ? "bg-primary text-primary-foreground"
+                            : "border border-border bg-background text-foreground hover:bg-secondary"
+                        }`}
+                      >
+                        {isSelected ? "Selected" : "Select"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
         {!voicesLoading && filteredVoices.length === 0 ? (
           <div className="mt-3 rounded-lg border border-border bg-secondary/50 px-3 py-2 text-xs text-muted-foreground">
-            No compatible male/female voices were returned for {language} yet.
+            No compatible voices were returned for {language} yet, including multilingual fallbacks.
           </div>
         ) : null}
       </div>

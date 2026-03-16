@@ -18,6 +18,7 @@ import {
 } from "@/lib/templates";
 import {
   type AvatarOption,
+  compareVoicesForLanguage,
   type DirectVideoPayload,
   type RemotionVideoPayload,
   fetchAvatars,
@@ -25,6 +26,7 @@ import {
   fetchVoices,
   generateDirectVideo,
   generateRemotionVideo,
+  isVoiceCompatibleWithLanguage,
   saveDraft,
   stylizeVideo,
   type VoiceOption,
@@ -343,7 +345,7 @@ const Index = () => {
   ]);
 
   useEffect(() => {
-    if (state.videoType !== "avatar" || !selectedVoice || selectedVoice.language === state.language) {
+    if (state.videoType !== "avatar" || !selectedVoice || isVoiceCompatibleWithLanguage(selectedVoice, state.language)) {
       return;
     }
 
@@ -538,7 +540,7 @@ const Index = () => {
   };
 
   const handleLanguageSelect = (language: string) => {
-    const shouldClearVoice = Boolean(selectedVoice && selectedVoice.language !== language);
+    const shouldClearVoice = Boolean(selectedVoice && !isVoiceCompatibleWithLanguage(selectedVoice, language));
     const nextVoiceGender = shouldClearVoice ? null : selectedVoice?.gender ?? state.voiceGender;
 
     update({
@@ -621,7 +623,10 @@ const Index = () => {
   };
 
   const handleVoiceSelect = (voiceId: string) => {
-    const voice = findVoiceById(voices, voiceId);
+    const compatibleVoiceChoices = voices
+      .filter((candidate) => isVoiceCompatibleWithLanguage(candidate, state.language))
+      .sort((left, right) => compareVoicesForLanguage(left, right, state.language));
+    const voice = compatibleVoiceChoices.find((candidate) => candidate.id === voiceId) ?? findVoiceById(voices, voiceId);
     let nextAvatarGender = state.avatarGender;
     let didClearAvatar = false;
 
@@ -686,6 +691,10 @@ const Index = () => {
       toast.error("Complete the lead details and transcript before generating the video.");
       goToStep(2);
       return;
+    }
+
+    if (state.videoType === "avatar" && !logoFile) {
+      toast.info("No logo has been uploaded for this avatar video. Add one in Subtitle & Logo if you want branded output.");
     }
 
     const dimensions = ASPECT_RATIO_DIMENSIONS[state.aspectRatio] ?? ASPECT_RATIO_DIMENSIONS["16:9"];
