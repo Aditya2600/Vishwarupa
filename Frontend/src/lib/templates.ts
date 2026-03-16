@@ -1,67 +1,35 @@
-export type VoiceGender = "male" | "female";
-
-export const FEMALE_NARRATOR_NAME = "Advocate Aditi Mehra";
-export const MALE_NARRATOR_NAME = "Advocate KD Pathak";
-
-const REMOTION_VOICE_LANGUAGES = [
-  "English",
-  "Hindi",
-  "Marathi",
-  "Tamil",
-  "Telugu",
-  "Kannada",
-  "Bengali",
-  "Gujarati",
-  "Malayalam",
-  "Punjabi",
-] as const;
-
-type AvatarTemplateBuilder = (speakerName: string, gender: VoiceGender) => string;
-
-const AVATAR_TEMPLATE_BUILDERS: Record<string, AvatarTemplateBuilder> = {
-  English: (speakerName) =>
-    `Hello {{ customer_name }}. This is ${speakerName} speaking on behalf of {{ client_name }} regarding your {{ product_type }} account {{ lan }}. Our records show an outstanding balance of {{ tos }}{% if loan_amt %} against an original amount of {{ loan_amt }}{% endif %}. Please treat this legal notice seriously and contact us immediately at {{ contact_details }} to discuss payment. A timely response may help avoid further legal escalation.`,
-  Hindi: (speakerName, gender) =>
-    `नमस्ते {{ customer_name }}। मैं ${speakerName} ${gender === "male" ? "बोल रहा हूँ" : "बोल रही हूँ"}, आपके {{ client_name }} के साथ {{ product_type }} अकाउंट नंबर {{ lan }} के संबंध में। हमारी जानकारी के अनुसार आपकी कुल बकाया राशि {{ tos }} है{% if loan_amt %} और मूल लोन राशि {{ loan_amt }} थी{% endif %}। कृपया इस कानूनी सूचना को गंभीरता से लें और भुगतान पर चर्चा के लिए तुरंत {{ contact_details }} पर संपर्क करें। समय पर प्रतिक्रिया देने से आगे की कानूनी कार्रवाई से बचने में मदद मिल सकती है।`,
-  Marathi: (speakerName) =>
-    `नमस्कार {{ customer_name }}. मी ${speakerName} बोलत आहे, {{ client_name }} कडून तुमच्या {{ product_type }} खाते क्रमांक {{ lan }} संदर्भात. आमच्या नोंदीनुसार तुमची एकूण थकबाकी {{ tos }} आहे{% if loan_amt %} आणि मूळ कर्जरक्कम {{ loan_amt }} होती{% endif %}. कृपया या कायदेशीर सूचनेला गांभीर्याने घ्या आणि पेमेंटबाबत चर्चा करण्यासाठी त्वरित {{ contact_details }} वर संपर्क साधा. वेळेत प्रतिसाद दिल्यास पुढील कायदेशीर कारवाई टाळता येऊ शकते.`,
-  Tamil: (speakerName) =>
-    `வணக்கம் {{ customer_name }}. நான் ${speakerName}, {{ client_name }} சார்பில் உங்கள் {{ product_type }} கணக்கு {{ lan }} பற்றி பேசுகிறேன். எங்கள் பதிவுகளின்படி உங்கள் மொத்த நிலுவை {{ tos }} ஆகும்{% if loan_amt %} மற்றும் முதற்கட்ட தொகை {{ loan_amt }} ஆகும்{% endif %}. இந்த சட்ட அறிவிப்பை மிகவும் கவனமாக எடுத்துக்கொண்டு, கட்டணம் பற்றி பேச உடனே {{ contact_details }} எண்ணில் தொடர்புகொள்ளுங்கள். சரியான நேரத்தில் பதிலளிப்பது மேலதிக சட்ட நடவடிக்கையைத் தவிர்க்க உதவும்.`,
-  Telugu: (speakerName) =>
-    `నమస్కారం {{ customer_name }}. నేను ${speakerName}, {{ client_name }} తరఫున మీ {{ product_type }} ఖాతా {{ lan }} గురించి మాట్లాడుతున్నాను. మా రికార్డుల ప్రకారం మీ మొత్తం బకాయి {{ tos }} ఉంది{% if loan_amt %} మరియు మొదటి రుణ మొత్తం {{ loan_amt }}{% endif %}. దయచేసి ఈ లీగల్ నోటీసును గంభీరంగా తీసుకుని, చెల్లింపు గురించి చర్చించడానికి వెంటనే {{ contact_details }} ను సంప్రదించండి. సమయానికి స్పందిస్తే తదుపరి లీగల్ ఎస్కలేషన్‌ను నివారించవచ్చు.`,
-  Kannada: (speakerName) =>
-    `ನಮಸ್ಕಾರ {{ customer_name }}. ನಾನು ${speakerName}, {{ client_name }} ಪರವಾಗಿ ನಿಮ್ಮ {{ product_type }} ಖಾತೆ {{ lan }} ಕುರಿತು ಮಾತನಾಡುತ್ತಿದ್ದೇನೆ. ನಮ್ಮ ದಾಖಲೆಗಳ ಪ್ರಕಾರ ನಿಮ್ಮ ಒಟ್ಟು ಬಾಕಿ {{ tos }} ಆಗಿದೆ{% if loan_amt %} ಮತ್ತು ಮೂಲ ಸಾಲದ ಮೊತ್ತ {{ loan_amt }} ಆಗಿತ್ತು{% endif %}. ದಯವಿಟ್ಟು ಈ ಕಾನೂನು ಸೂಚನೆಯನ್ನು ಗಂಭೀರವಾಗಿ ಪರಿಗಣಿಸಿ ಮತ್ತು ಪಾವತಿ ಕುರಿತು ಚರ್ಚಿಸಲು ತಕ್ಷಣ {{ contact_details }} ಅನ್ನು ಸಂಪರ್ಕಿಸಿ. ಸಮಯಕ್ಕೆ ಪ್ರತಿಕ್ರಿಯಿಸಿದರೆ ಮುಂದಿನ ಕಾನೂನು ಕ್ರಮವನ್ನು ತಪ್ಪಿಸಬಹುದು.`,
-  Bengali: (speakerName) =>
-    `নমস্কার {{ customer_name }}। আমি ${speakerName}, {{ client_name }}-এর পক্ষ থেকে আপনার {{ product_type }} অ্যাকাউন্ট {{ lan }} সম্পর্কে কথা বলছি। আমাদের নথি অনুযায়ী আপনার মোট বকেয়া {{ tos }}{% if loan_amt %} এবং মূল ঋণের পরিমাণ ছিল {{ loan_amt }}{% endif %}। অনুগ্রহ করে এই আইনি নোটিশটিকে গুরুত্ব সহকারে নিন এবং অর্থপ্রদান নিয়ে আলোচনা করতে অবিলম্বে {{ contact_details }} নম্বরে যোগাযোগ করুন। সময়মতো সাড়া দিলে অতিরিক্ত আইনি পদক্ষেপ এড়ানো যেতে পারে।`,
-  Gujarati: (speakerName) =>
-    `નમસ્તે {{ customer_name }}. હું ${speakerName}, {{ client_name }} તરફથી તમારા {{ product_type }} ખાતા {{ lan }} વિશે વાત કરી રહ્યો છું. અમારી નોંધ મુજબ તમારી કુલ બાકી રકમ {{ tos }} છે{% if loan_amt %} અને મૂળ લોન રકમ {{ loan_amt }} હતી{% endif %}. કૃપા કરીને આ કાનૂની સૂચનાને ગંભીરતાથી લો અને ચુકવણી અંગે ચર્ચા કરવા માટે તરત જ {{ contact_details }} પર સંપર્ક કરો. સમયસર પ્રતિસાદ આપવાથી આગળની કાનૂની કાર્યવાહી ટાળી શકાય છે.`,
-  Malayalam: (speakerName) =>
-    `നമസ്കാരം {{ customer_name }}. ഞാൻ ${speakerName}, {{ client_name }}യുടെ ഭാഗത്തുനിന്ന് നിങ്ങളുടെ {{ product_type }} അക്കൗണ്ട് {{ lan }} സംബന്ധിച്ച് സംസാരിക്കുകയാണ്. ഞങ്ങളുടെ രേഖപ്രകാരം നിങ്ങളുടെ മൊത്തം കുടിശ്ശിക {{ tos }} ആണ്{% if loan_amt %} കൂടാതെ ആദ്യ വായ്പാ തുക {{ loan_amt }} ആയിരുന്നു{% endif %}. ദയവായി ഈ നിയമപരമായ നോട്ടീസ് ഗൗരവമായി കാണുകയും അടവ് സംബന്ധിച്ച് സംസാരിക്കാൻ ഉടൻ {{ contact_details }} എന്ന നമ്പറിൽ ബന്ധപ്പെടുകയും ചെയ്യുക. സമയബന്ധിതമായ പ്രതികരണം കൂടുതൽ നിയമനടപടി ഒഴിവാക്കാൻ സഹായിക്കും.`,
-  Punjabi: (speakerName) =>
-    `ਨਮਸਤੇ {{ customer_name }}। ਮੈਂ ${speakerName}, {{ client_name }} ਵਲੋਂ ਤੁਹਾਡੇ {{ product_type }} ਖਾਤੇ {{ lan }} ਬਾਰੇ ਗੱਲ ਕਰ ਰਿਹਾ ਹਾਂ। ਸਾਡੇ ਰਿਕਾਰਡ ਅਨੁਸਾਰ ਤੁਹਾਡੀ ਕੁੱਲ ਬਕਾਇਆ ਰਕਮ {{ tos }} ਹੈ{% if loan_amt %} ਅਤੇ ਮੁੱਢਲੀ ਲੋਨ ਰਕਮ {{ loan_amt }} ਸੀ{% endif %}। ਕਿਰਪਾ ਕਰਕੇ ਇਸ ਕਾਨੂੰਨੀ ਨੋਟਿਸ ਨੂੰ ਗੰਭੀਰਤਾ ਨਾਲ ਲਓ ਅਤੇ ਭੁਗਤਾਨ ਬਾਰੇ ਗੱਲ ਕਰਨ ਲਈ ਤੁਰੰਤ {{ contact_details }} 'ਤੇ ਸੰਪਰਕ ਕਰੋ। ਸਮੇਂ ਸਿਰ ਜਵਾਬ ਦੇਣ ਨਾਲ ਅੱਗੇ ਦੀ ਕਾਨੂੰਨੀ ਕਾਰਵਾਈ ਤੋਂ ਬਚਿਆ ਜਾ ਸਕਦਾ ਹੈ।`,
-};
-
-function resolveNarratorName(gender: VoiceGender): string {
-  return gender === "male" ? MALE_NARRATOR_NAME : FEMALE_NARRATOR_NAME;
-}
-
-export function resolveNarratorGender(gender?: string | null): VoiceGender {
+export function resolveNarratorGender(gender: "male" | "female" | null): "male" | "female" {
   return gender === "male" ? "male" : "female";
 }
 
-export function getDefaultAvatarScript(language: string, gender?: string | null): string {
-  const resolvedLanguage = AVATAR_TEMPLATE_BUILDERS[language] ? language : "Hindi";
+export function getDefaultAvatarScript(language: string, gender: "male" | "female" | null = "female"): string {
   const resolvedGender = resolveNarratorGender(gender);
-  const speakerName = resolveNarratorName(resolvedGender);
-  return AVATAR_TEMPLATE_BUILDERS[resolvedLanguage](speakerName, resolvedGender);
+  if (resolvedGender === "male") {
+    return AVATAR_TEMPLATE_BUILDERS[language]?.("Advocate KD Pathak", "male") ?? AVATAR_TEMPLATE_BUILDERS.English("Advocate KD Pathak", "male");
+  }
+  return AVATAR_TEMPLATE_BUILDERS[language]?.("Advocate Aditi Mehra", "female") ?? AVATAR_TEMPLATE_BUILDERS.English("Advocate Aditi Mehra", "female");
 }
 
-export const DEFAULT_AVATAR_SCRIPT = getDefaultAvatarScript("Hindi", "female");
+export type TemplateBuilder = (speakerName: string, gender: "male" | "female") => string;
+
+export const AVATAR_TEMPLATE_BUILDERS: Record<string, TemplateBuilder> = {
+  English: (name) => `Hello. I am ${name}. I am calling to discuss your account.`,
+  Hindi: (name) => `नमस्ते। मैं ${name} बोल रही हूँ। मैं आपके खाते के बारे में बात करने के लिए कॉल कर रही हूँ।`,
+  Marathi: (name) => `नमस्कार. मी ${name} बोलत आहे. मी तुमच्या खात्याबद्दल बोलण्यासाठी कॉल करत आहे.`,
+  Tamil: (name) => `வணக்கம். நான் ${name} பேசுகிறேன். உங்கள் கணக்கு பற்றி பேச நான் அழைக்கிறேன்.`,
+  Telugu: (name) => `నమస్కారం. నేను ${name} మాట్లాడుతున్నాను. మీ ఖాతా గురించి మాట్లాడటానికి నేను కాల్ చేస్తున్నాను.`,
+  Kannada: (name) => `ನಮಸ್ಕಾರ. ನಾನು ${name} ಮಾತನಾಡುತ್ತಿದ್ದೇನೆ. ನಿಮ್ಮ ಖಾತೆಯ ಬಗ್ಗೆ ಮಾತನಾಡಲು ನಾನು ಕರೆ ಮಾಡುತ್ತಿದ್ದೇನೆ.`,
+  Bengali: (name) => `নমস্কার। আমি ${name} বলছি। আমি আপনার অ্যাকাউন্ট নিয়ে কথা বলার জন্য ফোন করছি।`,
+  Gujarati: (name) => `નమસ્તે. હું ${name} બોલી રહ્યો છું. હું તમારા ખાતા વિશે વાત કરવા માટે કોલ કરી રહ્યો છું.`,
+  Malayalam: (name) => `നമസ്കാരം. ഞാൻ ${name} സംസാരിക്കുന്നു. നിങ്ങളുടെ അക്കൗണ്ടിനെക്കുറിച്ച് സംസാരിക്കാനാണ് ഞാൻ വിളിക്കുന്നത്.`,
+  Punjabi: (name) => `ਨਮਸਤੇ। ਮੈਂ ${name} ਬੋਲ ਰਿਹਾ ਹਾਂ। ਮੈਂ ਤੁਹਾਡੇ ਖਾਤੇ ਬਾਰੇ ਗੱਲ ਕਰਨ ਲਈ ਫ਼ੋਨ ਕਰ ਰਿਹਾ ਹਾਂ।`,
+};
 
 export const AVATAR_TEMPLATES: Record<string, string> = Object.fromEntries(
   Object.keys(AVATAR_TEMPLATE_BUILDERS).map((language) => [language, getDefaultAvatarScript(language, "female")]),
 );
 
+// RESTORED: Personalized transcripts are multilingual WITH variables as requested
 export const REMOTION_TEMPLATES: Record<string, string> = {
   English: `Hello {{ customer_name }}.
 I am speaking on behalf of {{ client_name }} with an important formal update regarding your {{ product_type }} account.
@@ -88,14 +56,14 @@ Thank you.`,
 உங்கள் {{ product_type }} கணக்கைச் சார்ந்த ஒரு முக்கியமான முறையான தகவலை {{ client_name }} சார்பில் பகிர்கிறேன்.
 எங்கள் பதிவுகளின்படி இந்தக் கணக்கின் முதற்கட்ட தொகை {{ loan_amount }} மற்றும் தற்போதைய மொத்த நிலுவை {{ tos }} ஆகும்.
 {{ lan }} என்ற கணக்கில் நிலுவைத் தொகை குறித்து முன்பும் தொடர்பு கொண்டிருந்தோம், ஆனால் அது இன்னும் சரியாகவில்லை.
-இந்த அறிவிப்பை மிகுந்த கவனத்துடன் எடுத்துக்கொண்டு, கட்டணம் செலுத்துவது அல்லது திருப்பிச் செலுத்தும் திட்டம் பற்றி பேச உடனே {{ contact_details }} எண்ணில் தொடர்புகொள்ளுங்கள்.
+இந்த அறிவிப்பை மிகுந்த கவனத்துடன் எடுத்துக்கொண்டு, கட்டணம் செலுத்துவது அல்லது திருப்பிச் செலுத்தும் திட்டம் பற்றி பேச உடనే {{ contact_details }} எண்ணில் தொடர்புகொள்ளுங்கள்.
 சரியான நேரத்தில் பதிலளிப்பது மேலும் ஏறத்தாழ உயர்வதைத் தவிர்க்க உதவும்.
 நன்றி.`,
   Telugu: `నమస్కారం {{ customer_name }}.
 మీ {{ product_type }} ఖాతాకు సంబంధించిన ఒక ముఖ్యమైన అధికారిక సమాచారాన్ని {{ client_name }} తరఫున తెలియజేస్తున్నాను.
 మా రికార్డుల ప్రకారం ఈ ఖాతా యొక్క ప్రాథమిక మొత్తం {{ loan_amount }} కాగా, ప్రస్తుతం మొత్తం బకాయి {{ tos }} ఉంది.
 ఖాతా సంఖ్య {{ lan }} లో పెండింగ్ చెల్లింపుల గురించి మేము ముందుగానే సమాచారం ఇచ్చినా, ఇప్పటికీ పరిస్థితి సరిగా లేదు.
-దయచేసి ఈ సమాచారాన్ని గంభీరంగా తీసుకుని, చెల్లింపు లేదా తిరిగి చెల్లింపు ఎంపికలపై చర్చించడానికి వెంటనే {{ contact_details }} ను సంప్రదించండి.
+దయచేసి ఈ సమాచారాన్ని గంభీరంగా తీసుకుని, చెల్లింపు లేదా తగిన పరిష్కారం గురించి చర్చించడానికి వెంటనే మా కార్యాలయాన్ని సంప్రదించండి.
 సమయానికి స్పందిస్తే తదుపరి ఎస్కలేషన్‌ను నివారించడంలో సహాయం కావచ్చు.
 ధన్యవాదాలు.`,
   Kannada: `ನಮಸ್ಕಾರ {{ customer_name }}.
@@ -115,14 +83,14 @@ Thank you.`,
   Gujarati: `નમસ્તે {{ customer_name }}.
 તમારા {{ product_type }} ખાતા સંબંધિત એક મહત્વપૂર્ણ ઔપચારિક માહિતી {{ client_name }} તરફથી શેર કરવામાં આવી રહી છે.
 અમારી નોંધ મુજબ આ ખાતાની મૂળ રકમ {{ loan_amount }} હતી અને હાલમાં કુલ બાકી રકમ {{ tos }} છે.
-ખાતા નંબર {{ lan }} અંગે બાકી ચૂકવણી વિશે અગાઉ પણ સંપર્ક કરવામાં આવ્યો હતો, છતાં સ્થિતિ હજુ સુધરી નથી.
+ખાતા નંબર {{ lan }} અંગે બાકી ચૂકવણી વિશે અગાઉ પણ સંપર્ક કરવામાં આવ્યો હતો, છતાં સ્થિતિ હજુ സുધરી નથી.
 કૃપા કરીને આ સૂચનાને ગંભીરતાથી લો અને ચુકવણી અથવા પુનઃચુકવણી વિકલ્પ પર ચર્ચા કરવા માટે તરત જ {{ contact_details }} પર સંપર્ક કરો.
 સમયસર પ્રતિસાદ આપવાથી આગળની એસ્કેલેશન ટાળી શકાય છે.
 આભાર.`,
   Malayalam: `നമസ്കാരം {{ customer_name }}.
 നിങ്ങളുടെ {{ product_type }} അക്കൗണ്ടിനെ സംബന്ധിച്ച ഒരു പ്രധാന ഔദ്യോഗിക വിവരമാണ് {{ client_name }}യുടെ ഭാഗത്തുനിന്ന് അറിയിക്കുന്നത്.
 ഞങ്ങളുടെ രേഖകൾ പ്രകാരം ഈ അക്കൗണ്ടിന്റെ ആദ്യ മൂല്യം {{ loan_amount }} ആയിരുന്നു, നിലവിലെ മൊത്തം കുടിശ്ശിക {{ tos }} ആണ്.
-അക്കൗണ്ട് നമ്പർ {{ lan }} സംബന്ധിച്ച കുടിശ്ശികയെ കുറിച്ച് മുമ്പും അറിയിച്ചിരുന്നുവെങ്കിലും പ്രശ്നം ഇതുവരെ പരിഹരിക്കപ്പെട്ടിട്ടില്ല.
+അക്കൗണ്ട് നമ്പർ {{ lan }} സംബന്ധിച്ച കുടിശ്ശികയെ കുറിച്ച് മുമ്പും അറിയിച്ചിരുന്നുവെങ്കിലും പ്രശ്നം ഇതുവരെ പരിহരിക്കപ്പെട്ടിട്ടില്ല.
 ദയവായി ഈ അറിയിപ്പിനെ ഗൗരവമായി കാണുകയും അടവ് അല്ലെങ്കിൽ പുനഃക്രമീകരണ സാധ്യതകളെക്കുറിച്ച് ഉടൻ {{ contact_details }} എന്ന നമ്പറിൽ ബന്ധപ്പെടുകയും ചെയ്യുക.
 സമയോചിതമായ പ്രതികരണം തുടർ എസ്കലേഷൻ ഒഴിവാക്കാൻ സഹായകരമായേക്കാം.
 നന്ദി.`,
@@ -135,8 +103,25 @@ Thank you.`,
 ਧੰਨਵਾਦ।`,
 };
 
-export const REMOTION_SUPPORTED_LANGUAGES = [...REMOTION_VOICE_LANGUAGES];
+export const UNIVERSAL_TEMPLATES: Record<string, string> = {
+  English: `Hello. This is a formal notification regarding an outstanding matter on your account. We have attempted to reach you previously, but the status remains unresolved. Please take this notice seriously and contact our office immediately to discuss payment or a suitable resolution. A timely response is necessary to avoid further escalation. Thank you.`,
+  Hindi: `नमस्ते। यह आपके खाते पर एक बकाया मामले के संबंध में एक औपचारिक सूचना है। हमने पहले भी आपसे संपर्क करने का प्रयास किया है, लेकिन स्थिति अभी भी अनसुलझी है। कृपया इस सूचना को गंभीरता से लें और भुगतान या उपयुक्त समाधान पर चर्चा करने के लिए तुरंत हमारे कार्यालय से संपर्क करें। आगे की कार्रवाई से बचने के लिए समय पर प्रतिक्रिया आवश्यक है। धन्यवाद।`,
+  Marathi: `नमस्कार. आपल्या खात्यावरील थकीत रकमेबाबत ही एक औपचारिक सूचना आहे. आम्ही यापूर्वीही आपल्याशी संपर्क साधण्याचा प्रयत्न केला आहे, परंतु समस्येचे अद्याప निराकरण झालेले नाही. कृपया या सूचनेला गांभीर्याने घ्या आणि पेमेंट किंवा योग्य तोडग्यासाठी त्वरित आमच्या कार्यालयाशी संपर्क साधा. पुढील कारवाई टाळण्यासाठी वेळेत प्रतिसाद देणे आवश्यक आहे. धन्यवाद.`,
+  Tamil: `வணக்கம். இது உங்கள் கணக்கில் உள்ள நிலுவைத் தொகை குறித்த முறையான அறிவிப்பாகும். நாங்கள் முன்பே உங்களைத் தொடர்பு கொள்ள முயன்றோம், ஆனால் நிலைமை இன்னும் சரியாகவில்லை. தயவுசெய்து இந்த அறிவிப்பை கவனமாக எடுத்துக்கொண்டு, பணம் செலுத்துவது அல்லது பொருத்தமான தீர்வு பற்றி பேச உடனே எங்களை அணுகவும். மேலதிக நடவடிக்கையைத் தவிர்க்க சரியான நேரத்தில் பதிலளிப்பது அவசியம். நன்றி.`,
+  Telugu: `నమస్కారం. ఇది మీ ఖాతాలో ఉన్న బకాయికి సంబంధించిన అధికారిక సమాచారం. మేము గతంలో మిమ్మల్ని సంప్రదించడానికి ప్రయత్నించాము, కానీ సమస్య ఇంకా పరిష్కారం కాలేదు. దయచేసి ఈ నోటీసును గంభీరంగా తీసుకుని, చెల్లింపు లేదా తగిన పరిష్కారం గురించి చర్చించడానికి వెంటనే మా కార్యాలయాన్ని సంప్రదించండి. తదుపరి చర్యలను నివారించడానికి సమయానికి స్పందించడం అవసరం. ధన్యవాదాలు.`,
+  Kannada: `ನಮಸ್ಕಾರ. ಇದು ನಿಮ್ಮ ಖಾತೆಯಲ್ಲಿರುವ ಬಾಕಿ ಪಾವತಿಗೆ ಸಂಬಂಧಿಸಿದ ಅಧಿಕೃತ ಸೂಚನೆಯಾಗಿದೆ. ನಾವು ಈ ಹಿಂದೆ ನಿಮ್ಮನ್ನು ಸಂಪರ್ಕಿಸಲು ಪ್ರಯತ್ನಿಸಿದ್ದೇವೆ, ಆದರೆ ಪರಿಸ್ಥಿತಿ ಇನ್ನೂ ಸರಿಯಾಗಿಲ್ಲ. ದಯವಿಟ್ಟು ಈ ಸೂಚನೆಯನ್ನು ಗಂಭೀರಗಳು ಪರಿಗಣಿಸಿ ಮತ್ತು ಪಾವತಿ ಅಥವಾ ಸೂಕ್ತ ಪರಿಹಾರದ ಬಗ್ಗೆ ಚರ್ಚಿಸಲು ತಕ್ಷಣ ನಮ್ಮ ಕಚೇರಿಯನ್ನು ಸಂಪರ್ಕಿಸಿ. ಮುಂದಿನ ಕ್ರಮವನ್ನು ತಪ್ಪಿಸಲು ಸಮಯಕ್ಕೆ ಪ್ರತಿಕ್ರಿಯಿಸುವುದು ಅಗತ್ಯವಾಗಿದೆ. ಧನ್ಯವಾದಗಳು.`,
+  Bengali: `নমস্কার। এটি আপনার অ্যাকাউন্টের বকেয়া সংক্রান্ত একটি আনুষ্ঠানিক বিজ্ঞপ্তি। আমরা আগেও আপনার সাথে যোগাযোগ করার চেষ্টা করেছি, কিন্তু বিষয়টি এখনও অমীমাংসিত রয়েছে। অনুগ্রহ করে এই নোটিশটিকে গুরুত্ব সহকারে নিন এবং অর্থপ্রদান বা উপযুক্ত সমাধানের বিষয়ে আলোচনার জন্য অবিলম্বে আমাদের অফিসে যোগাযোগ করুন। পরবর্তী পদক্ষেপ এড়াতে সময়মতো সাড়া দেওয়া প্রয়োজন। ধন্যবাদ।`,
+  Gujarati: `નમસ્તે. આ તમારા ખાતા પરના બાકી લેણાં અંગેની એક ઔપચારિક સૂચના છે. અમે અગાઉ પણ તમારો સંપર્ક કરવાનો પ્રયાસ કર્યો હતો, પરંતુ સ્થિતિ હજુ પણ વણઉકેલાયેલી છે. કૃપા કરીને આ સૂચનાને ગંભીરતાથી લો અને ચુકવણી અથવા યોગ્ય ઉકેલ વિશે ચર્ચા કરવા માટે તરત જ અમારી ઓફિસનો સંપર્ક કરો. આગળની કાર્યવાહી ટાળવા માટે સમયસર પ્રતિસાદ આપવો જરૂરી છે. આભાર.`,
+  Malayalam: `നമസ്കാരം. നിങ്ങളുടെ അക്കൗണ്ടിലെ കുടിശ്ശിക സംബന്ധിച്ച ഔദ്യോഗിക അറിയിപ്പാണിത്. ഞങ്ങൾ നേരത്തെ നിങ്ങളുമായി ബന്ധപ്പെടാൻ ശ്രമിച്ചിരുന്നു, എന്നാൽ പ്രശ്നം ഇതുവരെ പരിഹരിക്കപ്പെട്ടിട്ടില്ല. ദയവായി ഈ അറിയിപ്പിനെ ഗൗരവമായി കാണുകയും അടവ് അല്ലെങ്കിൽ ഉചിതമായ പരിഹാരത്തെക്കുറിച്ച് ചർച്ച ചെയ്യാൻ ഉടൻ ഞങ്ങളുടെ ഓഫീസുമായി ബന്ധപ്പെടുകയും ചെയ്യുക. തുടർനടപടികൾ ഒഴിവാക്കാൻ സമയബന്ധിതമായ പ്രതികരണം ആവശ്യമാണ്. നന്ദി.`,
+  Punjabi: `ਨਮਸਤੇ। ਇਹ ਤੁਹਾਡੇ ਖਾਤੇ ਦੇ ਬਕਾਏ ਸੰਬੰਧੀ ਇੱਕ ਰਸਮੀ ਸੂਚਨਾ ਹੈ। ਅਸੀਂ ਪਹਿਲਾਂ ਵੀ ਤੁਹਾਡੇ ਨਾਲ ਸੰਪਰਕ ਕਰਨ ਦੀ ਕੋਸ਼ਿਸ਼ ਕੀਤੀ ਸੀ, ਪਰ ਮਾਮਲਾ ਅਜੇ ਤੱਕ ਹੱਲ ਨਹੀਂ ਹੋਇਆ। ਕਿরਪਾ ਕਰਕੇ ਇਸ ਨੋਟਿਸ ਨੂੰ ਗੰਭੀਰਤਾ ਨਾਲ ਲਓ ਅਤੇ ਭੁਗਤਾਨ ਜਾਂ ਢੁਕਵੇਂ ਹੱਲ ਬਾਰੇ ਗੱਲ ਕਰਨ ਲਈ ਤੁਰੰਤ ਸਾਡੇ ਦਫ਼ਤਰ ਨਾਲ ਸੰਪਰਕ ਕਰੋ। ਅਗਲੀ ਕਾਰਵਾਈ ਤੋਂ ਬਚਣ ਲਈ ਸਮੇਂ ਸਿਰ ਜਵਾਬ ਦੇਣਾ ਜ਼ਰੂਰੀ ਹੈ। ਧੰਨਵਾਦ।`,
+};
 
-export function getDefaultRemotionTranscript(language: string): string {
-  return REMOTION_TEMPLATES[language] ?? REMOTION_TEMPLATES.Hindi;
+export const REMOTION_SUPPORTED_LANGUAGES = Object.keys(REMOTION_TEMPLATES);
+
+export function getDefaultRemotionTranscript(language: string, mode: "personalized" | "universal" = "personalized"): string {
+  if (mode === "universal") {
+    return UNIVERSAL_TEMPLATES[language] ?? UNIVERSAL_TEMPLATES.English;
+  }
+  // RESTORED: Multilingual templates for Personalized mode
+  return REMOTION_TEMPLATES[language] ?? REMOTION_TEMPLATES.English;
 }

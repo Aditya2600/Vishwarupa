@@ -92,7 +92,7 @@ class MediaStylingService:
 
     def __init__(self, client: HeyGenClient | None = None) -> None:
         self.client = client or HeyGenClient()
-        (settings.output_dir / 'styled').mkdir(parents=True, exist_ok=True)
+        (settings.output_dir / 'avatar-videos').mkdir(parents=True, exist_ok=True)
 
     def ensure_ffmpeg_available(self) -> None:
         try:
@@ -122,7 +122,7 @@ class MediaStylingService:
         caption_url = self._extract_caption_url(status_response)
         style_key = self._style_key(video_id, normalized, caption_url)
 
-        artifact_root = settings.output_dir / 'styled' / video_id
+        artifact_root = settings.output_dir / 'avatar-videos' / video_id
         style_dir = artifact_root / style_key
         artifact_root.mkdir(parents=True, exist_ok=True)
         style_dir.mkdir(parents=True, exist_ok=True)
@@ -516,6 +516,7 @@ class MediaStylingService:
             logo_position=logo_position,
             logo_opacity=logo_opacity,
         )
+        logger.info('ffmpeg_command_built', extra={'video_id': str(source_video_path.parent.name), 'command': ' '.join(command)})
         final_video_path.parent.mkdir(parents=True, exist_ok=True)
         try:
             subprocess.run(command, check=True, capture_output=True, text=True)
@@ -551,7 +552,7 @@ class MediaStylingService:
         if logo_file_path:
             command.extend(['-i', str(logo_file_path)])
             filter_parts.append(
-                f'[{len(subtitle_overlays) + 1}:v]scale=w=\'min(iw,220)\':h=-1,format=rgba,colorchannelmixer=aa={logo_opacity / 100:.2f}[logo]'
+                f'[{len(subtitle_overlays) + 1}:v]scale=w=\'min(iw,220)\':h=-2,format=rgba,colorchannelmixer=aa={logo_opacity / 100:.2f}[logo]'
             )
             x_pos, y_pos = self._logo_positions[logo_position]
             filter_parts.append(f'[{last_label}][logo]overlay={x_pos}:{y_pos}:format=auto[styled]')

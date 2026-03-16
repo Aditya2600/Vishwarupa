@@ -47,6 +47,7 @@ export interface WizardState {
   titlePrefix: string;
   productType: string;
   videoType: "avatar" | "remotion";
+  videoVariety: "personalized" | "universal";
   generatedVideo: VideoJobResult | null;
   styledVideoUrl: string;
   styledVideoPath: string;
@@ -88,12 +89,13 @@ const defaultState: WizardState = {
   tos: "",
   loanAmount: "",
   contactDetails: "1800-555-999",
-  templateName: "legal_notice_raw_hi.txt",
+  templateName: "universal_template.txt",
   backgroundColor: "#F4F4F4",
   includeCaptions: true,
   titlePrefix: "Legal Notice",
   productType: "loan",
   videoType: "avatar",
+  videoVariety: "universal",
   generatedVideo: null,
   styledVideoUrl: "",
   styledVideoPath: "",
@@ -223,8 +225,15 @@ export function useWizardStore() {
         return s.videoType === "remotion" || !!s.avatarId;
       case 2:
       case 3:
+        const isUniversal = s.videoVariety === "universal";
+        const hasTranscript = (s.videoType === "remotion" ? s.remotionTranscript : s.transcript).trim().length > 0;
+        
+        if (isUniversal) {
+          return hasTranscript;
+        }
+
         return (
-          (s.videoType === "remotion" ? s.remotionTranscript : s.transcript).trim().length > 0 &&
+          hasTranscript &&
           s.customerName.trim().length > 0 &&
           s.lan.trim().length > 0 &&
           s.clientName.trim().length > 0 &&

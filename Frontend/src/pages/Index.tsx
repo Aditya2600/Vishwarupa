@@ -716,6 +716,7 @@ const Index = () => {
       title_prefix: state.videoType === "avatar" ? state.titlePrefix.trim() || undefined : undefined,
       video_width: dimensions.width,
       video_height: dimensions.height,
+      voice_gender: state.videoType === "remotion" ? (state.voiceGender || "female") : undefined,
     };
 
     if (state.videoType === "remotion") {
@@ -765,6 +766,8 @@ const Index = () => {
             onSelect={handleLanguageSelect}
             videoType={state.videoType}
             onVideoTypeChange={handleVideoTypeChange}
+            gender={state.voiceGender || "female"}
+            onGenderChange={(gender) => update({ voiceGender: gender })}
           />
         );
       case 1:
@@ -788,7 +791,7 @@ const Index = () => {
           />
         );
       case 2:
-        return <StepTranscript state={state} update={update} />;
+        return <StepTranscript state={state} update={update} voices={voices} />;
       case 3:
         return <StepSubtitle state={state} update={update} onLogoSelected={setLogoFile} />;
       case 4:

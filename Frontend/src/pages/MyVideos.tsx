@@ -4,8 +4,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { HeaderBar } from "@/components/HeaderBar";
 import { Button } from "@/components/ui/button";
-import { useQuery } from "@tanstack/react-query";
-import { fetchMyVideos } from "@/lib/api";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { fetchMyVideos, deleteVideo } from "@/lib/api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { WIZARD_STORAGE_KEY, type WizardState } from "@/store/wizardStore";
 import { toast } from "sonner";
@@ -175,38 +175,58 @@ export default function MyVideos() {
     refetchInterval: 10000, // Poll every 10 seconds for status updates
   });
 
-  const openCreate = (mode: "avatar" | "remotion") => {
-    navigate(`/create?mode=${mode}&fresh=1`);
+  const deleteMutation = useMutation({
+    mutationFn: (videoId: string) => deleteVideo(videoId),
+    onSuccess: () => {
+      toast.success("Video deleted successfully.");
+      void refetch();
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to delete video.");
+    },
+  });
+
+  const handleVideoDelete = async (video: VideoListItem) => {
+    if (video.isLocalDraft) {
+      handleSoftDeleteDraft();
+      return;
+    }
+
+    if (!window.confirm("Are you sure you want to delete this video? This action cannot be undone.")) {
+      return;
+    }
+
+    deleteMutation.mutate(video.video_id);
   };
 
-  const handleDraftShare = async (video: VideoListItem) => {
+  const handleShare = async (video: VideoListItem) => {
     if (!video.video_url) {
-      toast.error("This draft does not have a video yet.");
+      toast.error("This video does not have a link yet.");
       return;
     }
 
     try {
       if (navigator.share) {
         await navigator.share({
-          title: video.title || "Draft video",
+          title: video.title || "Shared video",
           url: video.video_url,
         });
         return;
       }
 
       await navigator.clipboard.writeText(video.video_url);
-      toast.success("Draft video link copied.");
+      toast.success("Video link copied.");
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         return;
       }
-      toast.error("Unable to share this draft right now.");
+      toast.error("Unable to share this video right now.");
     }
   };
 
-  const handleDraftDownload = async (video: VideoListItem) => {
+  const handleDownload = async (video: VideoListItem) => {
     if (!video.video_url) {
-      toast.error("This draft does not have a video yet.");
+      toast.error("This video is not ready for download.");
       return;
     }
 
@@ -224,15 +244,19 @@ export default function MyVideos() {
         const objectUrl = window.URL.createObjectURL(blob);
         triggerDownload(objectUrl, filename);
         window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1_000);
-        toast.success("Draft download started.");
+        toast.success("Download started.");
         return;
       }
     } catch (error) {
-      console.error("Falling back to direct draft download link.", error);
+      console.error("Falling back to direct download link.", error);
     }
 
     triggerDownload(video.video_url, filename);
-    toast.success("Draft download started.");
+    toast.success("Download started.");
+  };
+
+  const openCreate = (mode: "avatar" | "remotion") => {
+    navigate(`/create?mode=${mode}&fresh=1`);
   };
 
   const handleSoftDeleteDraft = () => {
@@ -459,44 +483,47 @@ export default function MyVideos() {
                       <span>{video.request_mode.toLowerCase().includes("remotion") ? "Text to Video" : "Avatar Video"}</span>
                       <span>{video.isLocalDraft ? "Saved in browser" : new Date(video.created_at).toLocaleDateString()}</span>
                     </div>
-                    {video.isLocalDraft ? (
-                      <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2">
+                      {video.isLocalDraft && !video.video_url && (
                         <Button variant="outline" className="flex-1 border-border text-xs" onClick={() => navigate("/create")}>
                           Resume Draft
                         </Button>
-                        {video.video_url ? (
-                          <>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              className="border-border text-xs"
-                              onClick={() => void handleDraftShare(video)}
-                            >
-                              <Share2 className="mr-1 h-3.5 w-3.5" />
-                              Share
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              className="border-border text-xs"
-                              onClick={() => void handleDraftDownload(video)}
-                            >
-                              <Download className="mr-1 h-3.5 w-3.5" />
-                              Download
-                            </Button>
-                          </>
-                        ) : null}
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          className="px-3 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
-                          onClick={handleSoftDeleteDraft}
-                        >
-                          <Trash2 className="mr-1 h-3.5 w-3.5" />
-                          Delete
-                        </Button>
-                      </div>
-                    ) : null}
+                      )}
+                      
+                      {video.video_url ? (
+                        <>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="flex-1 border-border text-xs"
+                            onClick={() => void handleShare(video)}
+                          >
+                            <Share2 className="mr-1 h-3.5 w-3.5" />
+                            Share
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="flex-1 border-border text-xs"
+                            onClick={() => void handleDownload(video)}
+                          >
+                            <Download className="mr-1 h-3.5 w-3.5" />
+                            Download
+                          </Button>
+                        </>
+                      ) : null}
+
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="px-3 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() => handleVideoDelete(video)}
+                      >
+                        <Trash2 className="mr-1 h-3.5 w-3.5" />
+                        Delete
+                      </Button>
+                    </div>
+
                     {video.video_url && (
                       <Button variant="link" className="p-0 h-auto text-primary text-xs" onClick={() => window.open(video.video_url, '_blank')}>
                         <ExternalLink className="mr-1 h-3 w-3" />

@@ -56,10 +56,10 @@ function ProcessingFallback({
   const Icon = videoType === "remotion" ? Film : Clapperboard;
   const statusLabel =
     status === "styling"
-      ? "Applying captions and branding"
+      ? "Applying captions"
       : videoType === "remotion"
-        ? "Rendering your text video"
-        : "Generating your avatar video";
+        ? "Rendering Text Video"
+        : "Stitching Video";
 
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-[radial-gradient(circle_at_top,#ffffff_0%,#f8f0ff_34%,#f3e7fd_68%,#ebdaf7_100%)] px-6">
@@ -121,10 +121,10 @@ export function ProcessingScreen({
 
   const statusLabel =
     status === "styling"
-      ? "Applying final branding"
+      ? "Applying final touches"
       : videoType === "remotion"
-        ? "Rendering your text video"
-        : "Generating your avatar video";
+        ? "Rendering Text Video"
+        : "Generating Video";
   const durationHint = estimatedTime ? `Estimated time: ~${estimatedTime} min` : "Estimated time varies with script length";
   const Icon = videoType === "remotion" ? Film : Clapperboard;
 

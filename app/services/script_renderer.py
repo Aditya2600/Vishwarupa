@@ -24,17 +24,24 @@ def _normalize_placeholder_syntax(text: str) -> str:
 
 def build_context(lead: LeadRecord) -> dict:
     language = getattr(lead, 'language', None) or 'Hindi'
+    
+    # Safe defaults for all fields to support universal videos
+    customer_name = lead.customer_name.strip() if lead.customer_name and lead.customer_name.strip() else ('ग्राहक' if language == 'Hindi' else 'Valued Customer')
+    lan = lead.lan.strip() if lead.lan and lead.lan.strip() else 'N/A'
+    client_name = lead.client_name.strip() if lead.client_name and lead.client_name.strip() else ('बैंक' if language == 'Hindi' else 'the bank')
+    
     loan_amount = parse_money(lead.loan_amount, field_name='loan_amount') if lead.loan_amount is not None else ''
     tos = parse_money(lead.tos, field_name='tos') or ('बकाया राशि' if language == 'Hindi' else 'outstanding amount')
     contact_details = lead.contact_details or ('बैंक हेल्पलाइन' if language == 'Hindi' else 'the bank helpline')
     product_type = lead.product_type or 'loan'
+    
     return {
-        'customer_name': lead.customer_name,
-        'customer': lead.customer_name,
-        'lan': lead.lan,
-        'account_number': lead.lan,
-        'client_name': lead.client_name,
-        'client': lead.client_name,
+        'customer_name': customer_name,
+        'customer': customer_name,
+        'lan': lan,
+        'account_number': lan,
+        'client_name': client_name,
+        'client': client_name,
         'tos': tos,
         'balance': tos,
         'outstanding': tos,

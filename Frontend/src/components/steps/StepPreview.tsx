@@ -142,7 +142,7 @@ export function StepPreview({ state, update }: StepPreviewProps) {
               </div>
               <p className="text-sm text-muted-foreground">
                 {isRemotion
-                  ? "Generate the video below to preview the multi-scene output here."
+                  ? "Generate the Text Video below to preview the multi-scene output here."
                   : "Generate the video to preview it here."}
               </p>
             </div>
@@ -217,7 +217,7 @@ function getGenerationStatusLabel(
   }
 
   if (status === "styling") {
-    return "Branding";
+    return "Styling";
   }
 
   if (status === "completed") {

@@ -21,9 +21,18 @@ interface StepLanguageProps {
   onSelect: (lang: string) => void;
   videoType: "avatar" | "remotion";
   onVideoTypeChange: (type: "avatar" | "remotion") => void;
+  gender: "male" | "female";
+  onGenderChange: (gender: "male" | "female") => void;
 }
 
-export function StepLanguage({ selected, onSelect, videoType, onVideoTypeChange }: StepLanguageProps) {
+export function StepLanguage({ 
+  selected, 
+  onSelect, 
+  videoType, 
+  onVideoTypeChange,
+  gender,
+  onGenderChange
+}: StepLanguageProps) {
   const [search, setSearch] = useState("");
   const remotionLanguageSet = new Set(REMOTION_SUPPORTED_LANGUAGES);
   const filtered = LANGUAGES.filter(
@@ -35,27 +44,53 @@ export function StepLanguage({ selected, onSelect, videoType, onVideoTypeChange 
   return (
     <div>
       <div className="flex flex-col gap-6 mb-8">
-        <div>
-          <label className="text-sm font-medium text-muted-foreground mb-3 block">Choose Creation Flow</label>
-          <div className="flex p-1 bg-secondary rounded-xl w-fit border border-border">
-            <button
-              onClick={() => onVideoTypeChange("avatar")}
-              className={`px-6 py-2 rounded-lg text-sm font-semibold transition-all ${videoType === "avatar"
-                  ? "bg-primary text-primary-foreground shadow-lg"
-                  : "text-muted-foreground hover:text-foreground"
-                }`}
-            >
-              Avatar Video
-            </button>
-            <button
-              onClick={() => onVideoTypeChange("remotion")}
-              className={`px-6 py-2 rounded-lg text-sm font-semibold transition-all ${videoType === "remotion"
-                  ? "bg-primary text-primary-foreground shadow-lg"
-                  : "text-muted-foreground hover:text-foreground"
-                }`}
-            >
-              Text to Video
-            </button>
+        <div className="flex gap-8">
+          <div>
+            <label className="text-sm font-medium text-muted-foreground mb-3 block">Choose Creation Flow</label>
+            <div className="flex p-1 bg-secondary rounded-xl w-fit border border-border">
+              <button
+                onClick={() => onVideoTypeChange("avatar")}
+                className={`px-6 py-2 rounded-lg text-sm font-semibold transition-all ${videoType === "avatar"
+                    ? "bg-primary text-primary-foreground shadow-lg"
+                    : "text-muted-foreground hover:text-foreground"
+                  }`}
+              >
+                Avatar Video
+              </button>
+              <button
+                onClick={() => onVideoTypeChange("remotion")}
+                className={`px-6 py-2 rounded-lg text-sm font-semibold transition-all ${videoType === "remotion"
+                    ? "bg-primary text-primary-foreground shadow-lg"
+                    : "text-muted-foreground hover:text-foreground"
+                  }`}
+              >
+                Text to Video
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium text-muted-foreground mb-3 block">Narrator Voice</label>
+            <div className="flex p-1 bg-secondary rounded-xl w-fit border border-border">
+              <button
+                onClick={() => onGenderChange("male")}
+                className={`px-6 py-2 rounded-lg text-sm font-semibold transition-all ${gender === "male"
+                    ? "bg-primary text-primary-foreground shadow-lg"
+                    : "text-muted-foreground hover:text-foreground"
+                  }`}
+              >
+                Male
+              </button>
+              <button
+                onClick={() => onGenderChange("female")}
+                className={`px-6 py-2 rounded-lg text-sm font-semibold transition-all ${gender === "female"
+                    ? "bg-primary text-primary-foreground shadow-lg"
+                    : "text-muted-foreground hover:text-foreground"
+                  }`}
+              >
+                Female
+              </button>
+            </div>
           </div>
         </div>
 
@@ -73,7 +108,7 @@ export function StepLanguage({ selected, onSelect, videoType, onVideoTypeChange 
       <div className="grid grid-cols-3 xl:grid-cols-4 gap-3">
         {filtered.map((lang) => {
           const isSelected = selected === lang.name;
-          const isComingSoon = videoType === "remotion" && !remotionLanguageSet.has(lang.name);
+          const isComingSoon = videoType === "remotion" && !remotionLanguageSet.has(lang.name as any);
           const isAvailable = !isComingSoon;
           return (
             <button

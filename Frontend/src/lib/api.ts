@@ -45,6 +45,7 @@ export interface DirectVideoPayload {
   title_prefix?: string;
   video_width?: number;
   video_height?: number;
+  voice_gender?: "male" | "female";
 }
 
 export interface VideoJobResult {
@@ -78,6 +79,7 @@ export interface RemotionVideoPayload extends DirectVideoPayload {
   logoPosition: string;
   logoOpacity: number;
   logoFile?: File | null;
+  voice_gender?: "male" | "female";
 }
 
 export interface StylizeVideoPayload {
@@ -88,6 +90,13 @@ export interface StylizeVideoPayload {
   logoPosition: string;
   logoOpacity: number;
   logoFile?: File | null;
+}
+
+export interface AppConfig {
+  default_avatar_id: string | null;
+  default_voice_id: string | null;
+  default_template_id: string | null;
+  default_language: string;
 }
 
 export const API_BASE_URL = "/api";
@@ -252,6 +261,7 @@ function extractVoicePreviewUrl(rawVoice: Record<string, unknown>): string | nul
 
   return (
     asString(rawVoice.preview_audio_url) ??
+    asString(rawVoice.preview_audio) ??
     asString(rawVoice.preview_url) ??
     asString(rawVoice.audio_preview_url) ??
     asString(rawVoice.sample_audio_url) ??
@@ -261,6 +271,7 @@ function extractVoicePreviewUrl(rawVoice: Record<string, unknown>): string | nul
     asString(rawVoice.voice_preview_url) ??
     asString(rawVoice.audio_url) ??
     asString(nestedVoice.preview_audio_url) ??
+    asString(nestedVoice.preview_audio) ??
     asString(nestedVoice.preview_url) ??
     asString(nestedVoice.audio_preview_url) ??
     asString(nestedVoice.sample_audio_url) ??
@@ -652,6 +663,10 @@ export async function fetchTemplates(): Promise<TemplateOption[]> {
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
+export async function fetchConfig(): Promise<AppConfig> {
+  return requestJson<AppConfig>("/meta/config");
+}
+
 export async function generateDirectVideo(payload: DirectVideoPayload, wait = true): Promise<VideoJobResult> {
   return requestJson<VideoJobResult>(`/generate/direct?wait=${wait ? "true" : "false"}`, {
     method: "POST",
@@ -674,6 +689,9 @@ export async function generateRemotionVideo(payload: RemotionVideoPayload): Prom
   formData.set("subtitle_position", payload.subtitlePosition);
   formData.set("logo_position", payload.logoPosition);
   formData.set("logo_opacity", String(payload.logoOpacity));
+  if (payload.voice_gender) {
+    formData.set("voice_gender", payload.voice_gender);
+  }
 
   if (payload.tos?.trim()) {
     formData.set("tos", payload.tos.trim());
@@ -746,4 +764,10 @@ export async function saveDraft(draft: any): Promise<{ status: string; draft_id:
 
 export async function fetchDrafts(): Promise<any[]> {
   return requestJson<any[]>("/drafts");
+}
+
+export async function deleteVideo(videoId: string): Promise<{ status: string; message: string }> {
+  return requestJson<{ status: string; message: string }>(`/videos/${videoId}`, {
+    method: "DELETE",
+  });
 }

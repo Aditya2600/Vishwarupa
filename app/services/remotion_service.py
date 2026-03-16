@@ -16,16 +16,46 @@ from app.config import settings
 from app.models import DirectVideoRequest, RemotionVideoRequest
 
 VOICE_MAP = {
-    'English': 'en-US-EmmaMultilingualNeural',
-    'Hindi': 'hi-IN-SwaraNeural',
-    'Marathi': 'mr-IN-AarohiNeural',
-    'Tamil': 'ta-IN-PallaviNeural',
-    'Telugu': 'te-IN-MohanNeural',
-    'Kannada': 'kn-IN-SapnaNeural',
-    'Bengali': 'bn-IN-TanishaNeural',
-    'Gujarati': 'gu-IN-DhwaniNeural',
-    'Malayalam': 'ml-IN-SobhanaNeural',
-    'Punjabi': 'pa-IN-KritikaNeural',
+    'English': {
+        'male': 'en-US-GuyNeural',
+        'female': 'en-US-JennyNeural',
+    },
+    'Hindi': {
+        'male': 'hi-IN-MadhurNeural',
+        'female': 'hi-IN-SwaraNeural',
+    },
+    'Marathi': {
+        'male': 'mr-IN-ManoharNeural',
+        'female': 'mr-IN-AarohiNeural',
+    },
+    'Tamil': {
+        'male': 'ta-IN-ValluvarNeural',
+        'female': 'ta-IN-PallaviNeural',
+    },
+    'Telugu': {
+        'male': 'te-IN-MohanNeural',
+        'female': 'te-IN-ShrutiNeural',
+    },
+    'Kannada': {
+        'male': 'kn-IN-GaganNeural',
+        'female': 'kn-IN-SapnaNeural',
+    },
+    'Bengali': {
+        'male': 'bn-IN-BashkarNeural',
+        'female': 'bn-IN-TanishaNeural',
+    },
+    'Gujarati': {
+        'male': 'gu-IN-NiranjanNeural',
+        'female': 'gu-IN-DhwaniNeural',
+    },
+    'Malayalam': {
+        'male': 'ml-IN-MidhunNeural',
+        'female': 'ml-IN-SobhanaNeural',
+    },
+    'Punjabi': {
+        'male': 'pa-IN-YashpalNeural',
+        'female': 'pa-IN-KritikaNeural',
+    },
 }
 
 DEFAULT_SCRIPT_HI = """नमस्ते {{ customer_name }}।
@@ -56,7 +86,7 @@ class RemotionService:
 
     def __init__(self, remotion_path: Path | None = None) -> None:
         self.remotion_path = remotion_path or settings.remotion_path
-        self.output_dir = settings.output_dir / 'remotion'
+        self.output_dir = settings.output_dir / 'text-videos'
 
     def _local_remotion_binary(self) -> Path:
         return self.remotion_path / 'node_modules' / '.bin' / 'remotion'
@@ -564,7 +594,9 @@ class RemotionService:
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         language = request.language or 'Hindi'
-        voice = VOICE_MAP.get(language, VOICE_MAP['Hindi'])
+        gender = request.voice_gender or 'female'
+        voice_config = VOICE_MAP.get(language, VOICE_MAP['Hindi'])
+        voice = voice_config.get(gender, voice_config.get('female'))
         text_content = self.render_script(request)
         job_id = f'{request.lan}_{int(time.time())}'
         audio_file = audio_dir / f'{job_id}.mp3'
@@ -572,27 +604,18 @@ class RemotionService:
         temp_text_file = self.remotion_path / 'public' / f'temp_{job_id}.txt'
         temp_text_file.write_text(text_content, encoding='utf-8')
 
-        command = [
-            settings.edge_tts_binary,
-            '--file',
-            str(temp_text_file),
-            '--voice',
-            voice,
-            '--write-media',
-            str(audio_file),
-            '--write-subtitles',
-            str(vtt_file),
-        ]
-
         try:
-            process = await asyncio.create_subprocess_exec(
-                *command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            _stdout, stderr = await process.communicate()
-            if process.returncode != 0:
-                error_detail = stderr.decode().strip()
+            full_command = f'"{settings.edge_tts_binary}" --file "{temp_text_file}" --voice "{voice}" --write-media "{audio_file}" --write-subtitles "{vtt_file}"'
+            print(f"DEBUG: Running edge-tts-sync: {full_command}")
+            
+            def run_tts():
+                import subprocess
+                return subprocess.run(full_command, shell=True, capture_output=True, text=True)
+
+            process_result = await asyncio.to_thread(run_tts)
+            
+            if process_result.returncode != 0:
+                error_detail = process_result.stderr.strip()
                 print(f'ERROR: Edge TTS failed for {job_id}: {error_detail}')
                 raise RuntimeError(self._public_error_message(error_detail, stage='audio'))
 

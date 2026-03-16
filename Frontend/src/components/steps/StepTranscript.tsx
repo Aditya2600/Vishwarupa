@@ -1,17 +1,13 @@
-import { ChangeEvent, useId, useRef } from "react";
-import {
-  AlertTriangle,
-  ClipboardPaste,
-  Copy,
-  FileText,
-  Sparkles,
-  Trash2,
-} from "lucide-react";
+import { ChangeEvent, useId, useRef, useState, useEffect } from "react";
+import { AlertTriangle, Clipboard, FileText, Loader2, Pause, Play, RotateCcw, Trash2, Volume2, Sparkles, Copy, ClipboardPaste, Music, Wand2, LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WizardState } from "@/store/wizardStore";
+import { VoiceOption } from "@/lib/api";
+import { UNIVERSAL_TEMPLATES, getDefaultRemotionTranscript, getDefaultAvatarScript } from "@/lib/templates";
 
 const RESET_GENERATION_STATE = {
   generatedVideo: null,
@@ -101,10 +97,14 @@ const DEMO_FIELD_VALUES: Record<WizardFieldKey, string> = {
 interface StepTranscriptProps {
   state: WizardState;
   update: (partial: Partial<WizardState>) => void;
+  voices?: VoiceOption[];
 }
 
 function isRequiredInCurrentMode(field: FieldDefinition, isRemotion: boolean): boolean {
-  return isRemotion || Boolean(field.required);
+  // Make lead personalization mandatory only for Text to Video (Remotion)
+  // Optional for Avatar Video to allow generic generation
+  if (!isRemotion) return false;
+  return field.required ?? false;
 }
 
 function getFieldValue(state: WizardState, key: WizardFieldKey): string {
@@ -156,17 +156,73 @@ function updateField(
   }
 }
 
-export function StepTranscript({ state, update }: StepTranscriptProps) {
+export function StepTranscript({ state, update, voices = [] }: StepTranscriptProps) {
   const importInputId = useId();
   const importInputRef = useRef<HTMLInputElement>(null);
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const isRemotion = state.videoType === "remotion";
   const transcript = isRemotion ? state.remotionTranscript : state.transcript;
   const wordCount = transcript.trim() ? transcript.trim().split(/\s+/).length : 0;
   const duration = Math.max(1, Math.round(wordCount / 130));
   const isLongTranscript = wordCount > 300;
-  const requiredFields = FIELD_DEFINITIONS.filter((field) => isRequiredInCurrentMode(field, isRemotion));
-  const optionalFields = FIELD_DEFINITIONS.filter((field) => !isRequiredInCurrentMode(field, isRemotion));
 
+  // Auto-sync transcripts if language changes and they haven't been customized
+  useEffect(() => {
+    const updates: Partial<WizardState> = {};
+    let hasUpdates = false;
+
+    // 1. Sync Avatar Transcript
+    const currentAvatarText = state.transcript;
+    const avatarContainsPunjabi = /[\u0A00-\u0A7F]/.test(currentAvatarText);
+    const isActuallyPunjabi = state.language === "Punjabi";
+    const shouldForceResetAvatar = avatarContainsPunjabi && !isActuallyPunjabi;
+
+    if (!state.avatarTranscriptCustomized || shouldForceResetAvatar) {
+      const langDefault = getDefaultAvatarScript(state.language, state.voiceGender);
+      if (state.transcript !== langDefault) {
+        updates.transcript = langDefault;
+        updates.avatarTranscriptCustomized = false; // reset flag if we forced it
+        hasUpdates = true;
+      }
+    }
+
+    // 2. Sync Remotion Transcripts
+    if (isRemotion) {
+       const currentRemotionText = state.remotionTranscript;
+       // Defensive: Check if text contains Punjabi characters (Gurmukhi) while language is NOT Punjabi
+       const containsPunjabi = /[\u0A00-\u0A7F]/.test(currentRemotionText);
+       const isActuallyPunjabi = state.language === "Punjabi";
+       const shouldForceReset = containsPunjabi && !isActuallyPunjabi;
+
+       if (state.videoVariety === "universal") {
+         if (!state.remotionTranscriptCustomized || shouldForceReset) {
+            const langUniversal = UNIVERSAL_TEMPLATES[state.language] || UNIVERSAL_TEMPLATES.English;
+            if (state.remotionTranscript !== langUniversal) {
+              updates.remotionTranscript = langUniversal;
+              updates.remotionTranscriptCustomized = false; // reset flag if we forced it
+              hasUpdates = true;
+            }
+         }
+       } else {
+         // Personalized mode - Revert to English-only as requested
+         if (!state.remotionTranscriptCustomized || shouldForceReset) {
+           const langDefault = getDefaultRemotionTranscript(state.language, "personalized");
+           if (state.remotionTranscript !== langDefault) {
+             updates.remotionTranscript = langDefault;
+             updates.remotionTranscriptCustomized = false; // reset flag if we forced it
+             hasUpdates = true;
+           }
+         }
+       }
+    }
+
+    if (hasUpdates) {
+      update(updates);
+    }
+  }, [state.language, state.videoVariety, isRemotion, state.voiceGender, state.avatarTranscriptCustomized, state.remotionTranscriptCustomized, state.transcript, state.remotionTranscript, update]);
+  
   const getErrorClass = (value: string, required = false) =>
     required && !value.trim()
       ? "ring-1 ring-destructive border-transparent focus-visible:ring-destructive bg-destructive/5"
@@ -201,6 +257,94 @@ export function StepTranscript({ state, update }: StepTranscriptProps) {
     }
   };
 
+  const handleResetToDefault = () => {
+    if (isRemotion) {
+      const defaultValue = getDefaultRemotionTranscript(state.language, state.videoVariety);
+      update({
+        remotionTranscript: defaultValue,
+        remotionTranscriptCustomized: false,
+        ...RESET_GENERATION_STATE,
+      });
+      toast.success(`Transcript reset to ${state.language} (${state.videoVariety}) default.`);
+      return;
+    }
+    const defaultValue = getDefaultAvatarScript(state.language, state.voiceGender);
+    update({
+      transcript: defaultValue,
+      avatarTranscriptCustomized: false,
+      ...RESET_GENERATION_STATE,
+    });
+    toast.success(`Transcript reset to ${state.language} default.`);
+  };
+
+  const handleVoicePreview = async () => {
+    if (isPreviewing) return;
+    
+    // If playing, pause
+    if (isPlaying && audioRef.current) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+      return;
+    }
+
+    // If paused but has source, resume
+    if (!isPlaying && audioRef.current && audioRef.current.src && !isRemotion) {
+       // Only for avatar we can reliably resume without regeneration if source is set
+       // For remotion, transcript might change, so we usually want fresh preview 
+       // unless we track if transcript changed.
+       // Let's simplify: if we have a source and we're not generated, just play.
+       audioRef.current.play();
+       setIsPlaying(true);
+       return;
+    }
+
+    setIsPreviewing(true);
+    try {
+      if (isRemotion) {
+        // Text-to-Video voice preview using backend endpoint
+        const formData = new FormData();
+        formData.set("language", state.language);
+        formData.set("gender", state.voiceGender || "female");
+        formData.set("text", transcript.slice(0, 500)); // Limit preview text
+
+        const response = await fetch("/api/preview/voice", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${localStorage.getItem("token")}`,
+          },
+          body: formData,
+        });
+
+        if (!response.ok) throw new Error("Voice preview failed");
+
+        const blob = await response.blob();
+        if (audioRef.current) {
+          audioRef.current.src = URL.createObjectURL(blob);
+          audioRef.current.play();
+          setIsPlaying(true);
+        }
+      } else {
+        // Avatar voice preview using HeyGen static preview URL from voices list
+        const voice = voices.find(v => v.id === state.voiceId);
+        if (voice?.previewUrl) {
+          if (audioRef.current) {
+            const proxyUrl = `/api/proxy-audio?url=${encodeURIComponent(voice.previewUrl)}`;
+            audioRef.current.src = proxyUrl;
+            audioRef.current.play();
+            setIsPlaying(true);
+          }
+        } else {
+          toast.info("Avatar voice preview is available in the Avatar selection step.");
+        }
+      }
+    } catch (error) {
+      console.error("Voice preview error:", error);
+      toast.error("Unable to play voice preview.");
+    } finally {
+      setIsPreviewing(false);
+    }
+  };
+
   const handleImport = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) {
@@ -230,53 +374,103 @@ export function StepTranscript({ state, update }: StepTranscriptProps) {
         return;
       }
 
-      const currentValue = getFieldValue(state, fieldKey).trim();
-      if (currentValue) {
-        return;
-      }
-
       updateField(update, fieldKey, DEMO_FIELD_VALUES[fieldKey]);
     };
 
+  // Helper to get fallback values for Avatar mode if blank
+  const getDisplayValue = (fieldKey: WizardFieldKey) => {
+    const val = getFieldValue(state, fieldKey);
+    // For Avatar mode (NOT remotion), show default if empty
+    if (!isRemotion && !val.trim()) {
+      return DEMO_FIELD_VALUES[fieldKey];
+    }
+    return val;
+  };
+
   return (
     <div className="max-w-5xl">
-      <div className="mb-6 grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(280px,0.95fr)]">
-        <div className="surface-card p-5 space-y-5">
-          <p className="text-sm font-semibold text-foreground">Lead Personalization</p>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {requiredFields.map((field) => (
-              <Field key={field.key} label={field.label} required>
-                <Input
-                  value={getFieldValue(state, field.key)}
-                  onChange={(event) => updateField(update, field.key, event.target.value)}
-                  onKeyDown={handleDemoTab(field.key)}
-                  placeholder={field.placeholder}
-                  className={getErrorClass(getFieldValue(state, field.key), true)}
-                />
-              </Field>
-            ))}
-          </div>
-        </div>
+      <div className="mb-6 flex justify-center">
+        <Tabs
+          value={state.videoVariety}
+          onValueChange={(val) => {
+            const newVariety = val as "personalized" | "universal";
+            const updatePayload: Partial<WizardState> = { 
+              videoVariety: newVariety, 
+              ...RESET_GENERATION_STATE 
+            };
+            
+            // If switching to universal and transcript is default or empty, auto-populate
+            if (newVariety === "universal") {
+              if (isRemotion) {
+                const langUniversal = UNIVERSAL_TEMPLATES[state.language] || UNIVERSAL_TEMPLATES.English;
+                if (!state.remotionTranscriptCustomized || !state.remotionTranscript.trim()) {
+                  updatePayload.remotionTranscript = langUniversal;
+                  updatePayload.remotionTranscriptCustomized = false;
+                }
+              } else {
+                // For Avatar video, we don't have specific universal templates yet beyond the current transcript
+              }
+            } else if (newVariety === "personalized") {
+               if (isRemotion) {
+                 const langUniversal = UNIVERSAL_TEMPLATES[state.language] || UNIVERSAL_TEMPLATES.English;
+                 if (!state.remotionTranscriptCustomized || state.remotionTranscript === langUniversal) {
+                   updatePayload.remotionTranscript = getDefaultRemotionTranscript(state.language, "personalized");
+                   updatePayload.remotionTranscriptCustomized = false;
+                 }
+               }
+            }
 
-        {optionalFields.length > 0 ? (
-          <div className="surface-card h-fit p-5 space-y-5">
-            <p className="text-sm font-semibold text-foreground">Optional Fields</p>
-            <div className="grid gap-4">
-              {optionalFields.map((field) => (
-                <Field key={field.key} label={field.label}>
+            update(updatePayload);
+          }}
+          className="w-full max-w-md"
+        >
+          <TabsList className="grid w-full grid-cols-2 p-1 bg-secondary/50 rounded-xl">
+            <TabsTrigger
+              value="personalized"
+              className="rounded-lg data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm transition-all duration-200"
+            >
+              Personalized
+            </TabsTrigger>
+            <TabsTrigger
+              value="universal"
+              className="rounded-lg data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm transition-all duration-200"
+            >
+              Universal
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
+      {state.videoVariety === "personalized" ? (
+        <div className="mb-6">
+          <div className="surface-card p-5 space-y-5">
+            <p className="text-sm font-semibold text-foreground">Lead Personalization</p>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {FIELD_DEFINITIONS.map((field) => (
+                <Field key={field.key} label={field.label} required={isRemotion && field.required}>
                   <Input
-                    value={getFieldValue(state, field.key)}
+                    value={getDisplayValue(field.key)}
                     onChange={(event) => updateField(update, field.key, event.target.value)}
                     onKeyDown={handleDemoTab(field.key)}
                     placeholder={field.placeholder}
-                    className={getErrorClass(getFieldValue(state, field.key))}
+                    className={getErrorClass(getFieldValue(state, field.key), isRemotion && field.required)}
                   />
                 </Field>
               ))}
             </div>
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : (
+        <div className="mb-6 flex items-center gap-4 p-4 rounded-xl border border-primary/20 bg-primary/5">
+          <div className="p-2 bg-primary/10 rounded-lg">
+            <FileText className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-foreground">Universal Mode Active</p>
+            <p className="text-xs text-muted-foreground">The video will be generated using the exact transcript provided below without any personalization.</p>
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2 mb-4">
         <Button size="sm" type="button" variant="outline" disabled className="opacity-60 cursor-not-allowed">
@@ -288,6 +482,30 @@ export function StepTranscript({ state, update }: StepTranscriptProps) {
           <ClipboardPaste className="mr-1.5 h-4 w-4" />
           Paste Script
         </Button>
+        <Button 
+          size="sm" 
+          type="button" 
+          variant="outline" 
+          onClick={() => void handleVoicePreview()}
+          disabled={isPreviewing}
+          className={isRemotion ? "border-primary/50 text-primary hover:bg-primary/5" : ""}
+        >
+          {isPreviewing ? (
+            <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+          ) : isPlaying ? (
+            <Pause className="mr-1.5 h-4 w-4" />
+          ) : (
+            <Play className="mr-1.5 h-4 w-4" />
+          )}
+          {isPlaying ? "Stop Voice" : "Preview Voice"}
+        </Button>
+        <audio 
+          ref={audioRef} 
+          className="hidden" 
+          onPlay={() => setIsPlaying(true)}
+          onPause={() => setIsPlaying(false)}
+          onEnded={() => setIsPlaying(false)}
+        />
         <Button
           size="sm"
           type="button"
@@ -309,6 +527,16 @@ export function StepTranscript({ state, update }: StepTranscriptProps) {
           size="sm"
           type="button"
           variant="outline"
+          onClick={handleResetToDefault}
+          className="border-primary/30 text-primary hover:bg-primary/5"
+        >
+          <RotateCcw className="mr-1.5 h-4 w-4" />
+          Reset to {state.language} Default
+        </Button>
+        <Button
+          size="sm"
+          type="button"
+          variant="outline"
           onClick={() => handleTranscriptChange("")}
           className="border-border text-muted-foreground hover:text-destructive"
         >
@@ -324,23 +552,25 @@ export function StepTranscript({ state, update }: StepTranscriptProps) {
         className={`${getErrorClass(transcript, true)} min-h-[300px] resize-none rounded-xl text-sm leading-relaxed`}
       />
 
-      <div className="mt-4 rounded-xl border border-secondary bg-secondary/30 p-4">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <p className="text-sm font-semibold text-foreground">Supported Placeholders</p>
-          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-            Click a tag to copy it
-          </p>
+      {state.videoVariety === "personalized" && (
+        <div className="mt-4 rounded-xl border border-secondary bg-secondary/30 p-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-sm font-semibold text-foreground">Supported Placeholders</p>
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              Click a tag to copy it
+            </p>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-3">
+            {FIELD_DEFINITIONS.map((field) => (
+              <PlaceholderTag
+                key={field.key}
+                tag={field.tags[0]}
+                shorthand={field.tags.slice(1).join(", ")}
+              />
+            ))}
+          </div>
         </div>
-        <div className="mt-3 flex flex-wrap gap-3">
-          {FIELD_DEFINITIONS.map((field) => (
-            <PlaceholderTag
-              key={field.key}
-              tag={field.tags[0]}
-              shorthand={field.tags.slice(1).join(", ")}
-            />
-          ))}
-        </div>
-      </div>
+      )}
 
       <div className="flex justify-end gap-4 mt-3 text-xs">
         <span className={isLongTranscript ? "text-amber-500 font-medium flex items-center" : "text-muted-foreground"}>

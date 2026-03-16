@@ -51,21 +51,21 @@ class Draft(BaseModel):
 
 
 class LeadRecord(BaseModel):
-    customer_name: str = Field(min_length=1)
-    lan: str = Field(min_length=1, description='Loan Account Number')
-    client_name: str = Field(min_length=1)
-    tos: str | float | int
+    customer_name: str | None = "Customer"
+    lan: str | None = Field(default="N/A", description='Loan Account Number')
+    client_name: str | None = "Bank"
+    tos: str | float | int | None = "0"
     loan_amount: str | float | int | None = None
     contact_details: str | None = None
     product_type: str | None = "loan"
 
-    @field_validator('customer_name', 'lan', 'client_name')
+    @field_validator('customer_name', 'lan', 'client_name', mode='before')
     @classmethod
-    def strip_required(cls, value: str) -> str:
-        cleaned = value.strip()
-        if not cleaned:
-            raise ValueError('value cannot be empty')
-        return cleaned
+    def strip_and_default(cls, value: str | None) -> str:
+        if value is None:
+            return "Customer"
+        cleaned = str(value).strip()
+        return cleaned or "Customer"
 
 
 class DirectVideoRequest(LeadRecord):
@@ -81,6 +81,7 @@ class DirectVideoRequest(LeadRecord):
     title_prefix: str = 'Legal Notice'
     video_width: int | None = None
     video_height: int | None = None
+    voice_gender: Literal['male', 'female'] | None = 'female'
 
     @field_validator('script_text')
     @classmethod
@@ -104,27 +105,16 @@ class TemplateVideoRequest(LeadRecord):
     folder: str | None = None
 
 
-class RemotionVideoRequest(DirectVideoRequest):
-    tos: str | float | int
-    loan_amount: str | float | int
-    contact_details: str
-    product_type: str
-    title_prefix: str = 'Loan Recall'
-    subtitle_color: Literal['White', 'Blue', 'Green', 'Red', 'Yellow', 'Teal'] = 'White'
-    subtitle_position: Literal['Top', 'Center', 'Bottom'] = 'Bottom'
-    logo_position: Literal['Top Left', 'Top Right', 'Bottom Left', 'Bottom Right'] = 'Top Right'
-    logo_opacity: int = 80
-    logo_filename: str | None = None
-    logo_bytes: bytes | None = Field(default=None, exclude=True)
-
-    @field_validator('tos', 'loan_amount', 'contact_details', 'product_type')
+    @field_validator('tos', 'loan_amount', 'contact_details', 'product_type', mode='before')
     @classmethod
-    def validate_required_remotion_fields(cls, value: str | float | int, info: ValidationInfo) -> str | float | int:
+    def validate_optional_remotion_fields(cls, value: str | float | int | None, info: ValidationInfo) -> str | float | int:
+        if value is None:
+             # Provide sensible defaults for optional fields to avoid rendering issues
+             return "0" if info.field_name in ('tos', 'loan_amount') else ("1800-555-999" if info.field_name == 'contact_details' else "loan")
+        
         if isinstance(value, str):
             cleaned = value.strip()
-            if not cleaned:
-                raise ValueError(f'{info.field_name} is required')
-            return cleaned
+            return cleaned or ("0" if info.field_name in ('tos', 'loan_amount') else ("1800-555-999" if info.field_name == 'contact_details' else "loan"))
         return value
 
     @field_validator('logo_opacity')

@@ -1,10 +1,16 @@
+import asyncio
+import sys
+
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 from typing import Literal
 from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, ValidationError
@@ -34,11 +40,11 @@ async def startup_db_client():
         # The ping command is cheap and does not require auth.
         await users_collection.database.command("ping")
         print("\n" + "="*50)
-        print("✅ SUCCESS: Connected to MongoDB Cluster successfully!")
+        print("SUCCESS: Connected to MongoDB Cluster successfully!")
         print("="*50 + "\n")
     except Exception as e:
         print("\n" + "!"*50)
-        print(f"❌ ERROR: Failed to connect to MongoDB: {e}")
+        print(f"ERROR: Failed to connect to MongoDB: {e}")
         print("!"*50 + "\n")
 app.mount('/artifacts', StaticFiles(directory=settings.output_dir), name='artifacts')
 service = VideoService()
@@ -202,6 +208,30 @@ def list_avatars() -> dict:
 @app.get('/meta/voices')
 def list_voices() -> dict:
     return client.list_voices()
+
+
+@app.get('/meta/config')
+def get_config() -> dict:
+    return {
+        "default_avatar_id": settings.heygen_avatar_id,
+        "default_voice_id": settings.heygen_voice_id,
+        "default_template_id": settings.heygen_template_id,
+        "default_language": "Hindi"
+    }
+
+
+@app.get('/proxy-audio')
+async def proxy_audio(url: str):
+    import httpx
+    from fastapi.responses import StreamingResponse
+    
+    async def stream_audio():
+        async with httpx.AsyncClient() as client:
+            async with client.stream('GET', url) as response:
+                async for chunk in response.aiter_bytes():
+                    yield chunk
+
+    return StreamingResponse(stream_audio(), media_type="audio/mpeg")
 
 
 @app.get('/meta/templates')
@@ -453,6 +483,92 @@ async def get_my_videos(current_user: str = Depends(get_current_user)):
     for video in videos:
         video["_id"] = str(video["_id"])
     return videos
+
+@app.get('/ping')
+async def ping():
+    return {"status": "ok"}
+
+@app.post('/preview/voice')
+async def preview_voice(
+    language: str = Form(...),
+    gender: str = Form(...),
+    text: str = Form(None),
+    current_user: str = Depends(get_current_user)
+):
+    print(f"DEBUG: Voice preview request for {language} {gender} (user: {current_user})")
+    from app.services.remotion_service import RemotionService
+    from app.models import LeadRecord, DirectVideoRequest
+    from app.services.script_renderer import build_context, _normalize_placeholder_syntax
+    from jinja2 import Environment
+    
+    try:
+        remotion_service = RemotionService()
+        
+        # Safe defaults for the preview context
+        dummy_lead = LeadRecord(
+            customer_name="Ramesh Kumar",
+            lan="LAN12345",
+            client_name="ABC Finance",
+            tos="38450",
+            loan_amount="120000",
+            contact_details="1800-555-999",
+            product_type="loan"
+        )
+        # We don't pass language to LeadRecord because it's not a field there
+        context = build_context(dummy_lead)
+        
+        # Render the preview text if it contains placeholders
+        preview_text = text or "Hello, this is a voice preview."
+        try:
+            env = Environment()
+            template = env.from_string(_normalize_placeholder_syntax(preview_text))
+            final_text = template.render(**context)
+        except Exception:
+            final_text = preview_text
+
+        dummy_request = DirectVideoRequest(
+            customer_name=dummy_lead.customer_name,
+            lan=dummy_lead.lan,
+            client_name=dummy_lead.client_name,
+            tos=dummy_lead.tos,
+            loan_amount=dummy_lead.loan_amount,
+            contact_details=dummy_lead.contact_details,
+            product_type=dummy_lead.product_type,
+            language=language,
+            voice_gender=gender,
+            script_text=final_text
+        )
+        
+        result = await remotion_service.generate_tts(dummy_request)
+        audio_path = Path(result['audio_path'])
+        
+        if not audio_path.exists():
+            raise HTTPException(status_code=500, detail="Generated audio file not found")
+
+        return FileResponse(
+            audio_path,
+            media_type="audio/mpeg",
+            filename=f"preview_{language}_{gender}.mp3"
+        )
+    except Exception as exc:
+        import traceback
+        error_msg = f"ERROR in preview_voice: {str(exc)}\n{traceback.format_exc()}"
+        print(error_msg)
+        try:
+            debug_file = Path("c:/Users/RentoBees/Desktop/vid_fix/debug_preview.log")
+            with open(debug_file, "a", encoding="utf-8") as f:
+                f.write(f"\n--- {datetime.now()} ---\n{error_msg}\n")
+        except:
+            pass
+        raise HTTPException(status_code=500, detail=str(exc))
+
+@app.delete('/videos/{video_id}')
+async def delete_video(video_id: str, current_user: str = Depends(get_current_user)):
+    print(f"DEBUG: Delete request for video {video_id} by {current_user}")
+    result = await videos_collection.delete_one({"video_id": video_id, "user_email": current_user})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Video not found")
+    return {"status": "success", "message": "Video deleted successfully"}
 
 @app.post('/drafts/save')
 async def save_draft(draft: dict, current_user: str = Depends(get_current_user)):

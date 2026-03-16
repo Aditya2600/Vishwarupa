@@ -48,16 +48,62 @@ export function StepAvatar({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playingVoiceId, setPlayingVoiceId] = useState("");
   const [previewError, setPreviewError] = useState<string | null>(null);
-  const filters = ["All", ...new Set(avatars.map((avatar) => avatar.category).filter(Boolean))];
-  const filteredByCategory = filter === "All" ? avatars : avatars.filter((avatar) => avatar.category === filter);
-  const filteredAvatars = selectedVoiceGender
+  const INDIAN_SEARCH_NAMES = [
+    "Shruti", "Aditi", "Priya", "Aakash", "Mohan", "Abhishek", "Sneha", "Ananya", 
+    "Vihaan", "Arjun", "Karan", "Ishani", "Sanjay", "Ankit", "Rohan", "Maya", 
+    "Kavya", "Diya", "Ishita", "Ansh", "Kabir"
+  ];
+
+  const isIndianAvatar = (avatar: AvatarOption) => {
+    return INDIAN_SEARCH_NAMES.some(name => avatar.name.includes(name));
+  };
+
+  const filters = ["All", "Indian", ...new Set(avatars.map((avatar) => avatar.category).filter(Boolean))];
+  
+  const filteredByCategory = filter === "All" 
+    ? avatars 
+    : filter === "Indian"
+    ? avatars.filter(isIndianAvatar)
+    : avatars.filter((avatar) => avatar.category === filter);
+
+  const filteredByGender = selectedVoiceGender
     ? filteredByCategory.filter((avatar) => avatar.gender === selectedVoiceGender)
     : filteredByCategory;
+
+  const filteredAvatars = [...filteredByGender].sort((a, b) => {
+    const aIndian = isIndianAvatar(a);
+    const bIndian = isIndianAvatar(b);
+    if (aIndian && !bIndian) return -1;
+    if (!aIndian && bIndian) return 1;
+    return 0;
+  });
+
+  const INDIAN_LANGUAGES = ["Hindi", "Marathi", "Tamil", "Telugu", "Kannada", "Bengali", "Gujarati", "Malayalam", "Punjabi"];
+  
   const filteredVoices = voices
     .filter(
-      (voice) =>
-        isVoiceCompatibleWithLanguage(voice, language) &&
-        (!selectedAvatarGender || voice.gender === selectedAvatarGender),
+      (voice) => {
+        // 1. Strict gender match (Default to female to match Step 0 UI)
+        const targetGender = selectedVoiceGender || "female";
+        if (voice.gender !== targetGender) return false;
+
+        // 2. Language compatibility check
+        const isCompatible = isVoiceCompatibleWithLanguage(voice, language);
+        if (!isCompatible) return false;
+
+        // 3. Indian context preference:
+        // For Indian languages, compatible voices are naturally Indian.
+        // For English, we limit to Indian-accented English voices by name/metadata.
+        if (language === "English") {
+          const INDIAN_LANGUAGES = ["Hindi", "Marathi", "Tamil", "Telugu", "Kannada", "Bengali", "Gujarati", "Malayalam", "Punjabi"];
+          const isIndianSearchNames = ["Aakash", "Mohan", "Shruti", "Aditi", "Abhishek", "Priya", "Rohan", "Ananya", "Sneha", "Vihaan", "Arjun", "Karan", "Ishani"];
+          const matchesIndian = isIndianSearchNames.some(name => voice.name.includes(name)) || 
+                               voice.languages.some(l => INDIAN_LANGUAGES.includes(l));
+          return matchesIndian;
+        }
+
+        return true;
+      }
     )
     .sort((left, right) => compareVoicesForLanguage(left, right, language));
 
@@ -98,7 +144,9 @@ export function StepAvatar({
     stopPreview();
     setPreviewError(null);
 
-    const audio = new Audio(voice.previewUrl);
+    // Use proxy to bypass CORS issues with external S3/HeyGen URLs
+    const proxyUrl = `/api/proxy-audio?url=${encodeURIComponent(voice.previewUrl)}`;
+    const audio = new Audio(proxyUrl);
     audioRef.current = audio;
     audio.onended = () => {
       if (audioRef.current === audio) {
