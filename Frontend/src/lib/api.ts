@@ -116,6 +116,101 @@ const LANGUAGE_CODE_TO_NAME: Record<string, string> = {
 
 const MULTILINGUAL_LANGUAGE_NAME = "Multilingual";
 const MULTILINGUAL_LANGUAGE_PATTERNS = [/multi[\s-]?lingual/i, /multiple languages?/i, /all languages?/i];
+const INDIAN_LANGUAGE_NAMES = ["Hindi", "Marathi", "Tamil", "Telugu", "Kannada", "Bengali", "Gujarati", "Malayalam", "Punjabi"];
+const INDIAN_MARKERS = [
+  "india",
+  "indian",
+  "en-in",
+  "hi-in",
+  "mr-in",
+  "ta-in",
+  "te-in",
+  "kn-in",
+  "bn-in",
+  "gu-in",
+  "ml-in",
+  "pa-in",
+];
+const INDIAN_NAME_HINTS = [
+  "aadya",
+  "aaditya",
+  "aakash",
+  "aarti",
+  "abhishek",
+  "aditi",
+  "ananya",
+  "ankit",
+  "arjun",
+  "diya",
+  "dhwani",
+  "gagan",
+  "ishani",
+  "ishita",
+  "kabir",
+  "karan",
+  "kritika",
+  "kavya",
+  "madhur",
+  "manohar",
+  "maya",
+  "midhun",
+  "mohan",
+  "niranjan",
+  "pallavi",
+  "priya",
+  "ramesh",
+  "rohan",
+  "sapna",
+  "shruti",
+  "sobhana",
+  "swara",
+  "tanisha",
+  "valluvar",
+  "vihaan",
+  "yashpal",
+];
+const INDIAN_AVATAR_DISPLAY_NAMES = {
+  female: [
+    "Aarohi",
+    "Aditi",
+    "Ananya",
+    "Diya",
+    "Ishita",
+    "Kavya",
+    "Meera",
+    "Naina",
+    "Priya",
+    "Riya",
+    "Saanvi",
+    "Shruti",
+  ],
+  male: [
+    "Aarav",
+    "Aditya",
+    "Arjun",
+    "Kabir",
+    "Karan",
+    "Madhav",
+    "Rohan",
+    "Samar",
+    "Sanjay",
+    "Varun",
+    "Vihaan",
+    "Yash",
+  ],
+  neutral: [
+    "Aman",
+    "Dev",
+    "Kiran",
+    "Manav",
+    "Neel",
+    "Pavan",
+    "Rahil",
+    "Rishi",
+    "Shiv",
+    "Tanuj",
+  ],
+} as const;
 
 function clearStoredAuth(): void {
   localStorage.removeItem("token");
@@ -202,6 +297,70 @@ function dedupeStrings(values: string[]): string[] {
   }
 
   return uniqueValues;
+}
+
+function extractStrings(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return dedupeStrings(value.flatMap((entry) => extractStrings(entry)));
+  }
+
+  const record = asRecord(value);
+  if (Object.keys(record).length > 0) {
+    return dedupeStrings(Object.values(record).flatMap((entry) => extractStrings(entry)));
+  }
+
+  const normalized = asString(value);
+  return normalized ? [normalized] : [];
+}
+
+function collectMetadataStrings(record: Record<string, unknown>, keys: string[]): string[] {
+  return dedupeStrings(keys.flatMap((key) => extractStrings(record[key])));
+}
+
+function includesAny(text: string, candidates: string[]): boolean {
+  return candidates.some((candidate) => text.includes(candidate));
+}
+
+function hasIndianNameHint(name: string): boolean {
+  return includesAny(name.toLowerCase(), INDIAN_NAME_HINTS);
+}
+
+function hashString(value: string): number {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+  return hash;
+}
+
+function localizeAvatarDisplayNames(avatars: AvatarOption[]): AvatarOption[] {
+  const assignedNameCounts = new Map<string, number>();
+
+  return avatars.map((avatar) => {
+    if (hasIndianNameHint(avatar.name)) {
+      return avatar;
+    }
+
+    const pool =
+      avatar.gender === "female"
+        ? INDIAN_AVATAR_DISPLAY_NAMES.female
+        : avatar.gender === "male"
+          ? INDIAN_AVATAR_DISPLAY_NAMES.male
+          : INDIAN_AVATAR_DISPLAY_NAMES.neutral;
+    const baseName = pool[hashString(avatar.id) % pool.length];
+    const nextCount = (assignedNameCounts.get(baseName) ?? 0) + 1;
+    assignedNameCounts.set(baseName, nextCount);
+
+    return {
+      ...avatar,
+      name: nextCount === 1 ? baseName : `${baseName} ${nextCount}`,
+    };
+  });
+}
+
+function hasIndianMetadata(record: Record<string, unknown>, keys: string[]): boolean {
+  const metadataText = collectMetadataStrings(record, keys).join(" ").toLowerCase();
+  return includesAny(metadataText, INDIAN_MARKERS);
 }
 
 function normalizeLanguageList(value: unknown): string[] {
@@ -363,7 +522,7 @@ function normalizeNetworkError(error: unknown): Error {
   return new Error("Could not reach the server. Check that the backend is running and try again.");
 }
 
-async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+export async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   headers.set("Accept", "application/json");
 
@@ -406,7 +565,9 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
       if (response.status === 504) {
         throw new Error("The render is taking longer than the frontend proxy timeout. Rebuild the frontend container with the updated timeout and try again.");
       }
-      throw new Error(`Request failed with status ${response.status}`);
+      throw new Error(
+        "The server returned an unexpected HTML response instead of JSON. Check that the backend is running and the /api proxy is configured correctly.",
+      );
     }
     throw new Error(extractErrorMessage(payload) ?? `Request failed with status ${response.status}`);
   }
@@ -476,6 +637,50 @@ function normalizeAvatar(rawAvatar: Record<string, unknown>): AvatarOption | nul
     asString(rawAvatar.poster_url) ??
     asString(asRecord(rawAvatar.preview_image).url);
 
+  const nestedAvatar = asRecord(rawAvatar.avatar);
+  const isIndian =
+    hasIndianMetadata(rawAvatar, [
+      "avatar_name",
+      "name",
+      "title",
+      "description",
+      "country",
+      "region",
+      "locale",
+      "language",
+      "language_code",
+      "nationality",
+      "accent",
+      "group",
+      "style",
+      "category",
+      "tags",
+      "labels",
+    ]) ||
+    hasIndianMetadata(nestedAvatar, [
+      "avatar_name",
+      "name",
+      "title",
+      "description",
+      "country",
+      "region",
+      "locale",
+      "language",
+      "language_code",
+      "nationality",
+      "accent",
+      "group",
+      "style",
+      "category",
+      "tags",
+      "labels",
+    ]) ||
+    hasIndianNameHint(name);
+
+  if (!isIndian) {
+    return null;
+  }
+
   return {
     id,
     name,
@@ -543,13 +748,55 @@ function normalizeVoice(rawVoice: Record<string, unknown>): VoiceOption | null {
     return null;
   }
 
+  const name =
+    asString(rawVoice.voice_name) ??
+    asString(rawVoice.name) ??
+    asString(rawVoice.title) ??
+    id;
+  const nestedVoice = asRecord(rawVoice.voice);
+  const supportsIndianLanguage =
+    INDIAN_LANGUAGE_NAMES.includes(language) ||
+    languages.some((entry) => INDIAN_LANGUAGE_NAMES.includes(entry));
+  const hasIndianVoiceMetadataMatch =
+    hasIndianMetadata(rawVoice, [
+      "accent",
+      "country",
+      "region",
+      "locale",
+      "language",
+      "language_name",
+      "language_code",
+      "locales",
+      "supported_locales",
+      "support_locale",
+      "description",
+      "tags",
+      "labels",
+    ]) ||
+    hasIndianMetadata(nestedVoice, [
+      "accent",
+      "country",
+      "region",
+      "locale",
+      "language",
+      "language_name",
+      "language_code",
+      "locales",
+      "supported_locales",
+      "support_locale",
+      "description",
+      "tags",
+      "labels",
+    ]) ||
+    hasIndianNameHint(name);
+
+  if (!(supportsIndianLanguage || hasIndianVoiceMetadataMatch)) {
+    return null;
+  }
+
   return {
     id,
-    name:
-      asString(rawVoice.voice_name) ??
-      asString(rawVoice.name) ??
-      asString(rawVoice.title) ??
-      id,
+    name,
     language,
     languages,
     previewUrl: extractVoicePreviewUrl(rawVoice),
@@ -629,7 +876,7 @@ export async function fetchAvatars(): Promise<AvatarOption[]> {
     }
   }
 
-  return uniqueAvatars.sort((left, right) => left.name.localeCompare(right.name));
+  return localizeAvatarDisplayNames(uniqueAvatars).sort((left, right) => left.name.localeCompare(right.name));
 }
 
 export async function fetchVoices(): Promise<VoiceOption[]> {

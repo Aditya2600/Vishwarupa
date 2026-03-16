@@ -5,7 +5,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { buildApiUrl } from '@/lib/api';
+import { requestJson } from '@/lib/api';
+
+function getFriendlyLoginErrorMessage(error: unknown): string | null {
+  if (!(error instanceof Error)) {
+    return null;
+  }
+
+  const normalizedMessage = error.message.toLowerCase();
+  if (normalizedMessage.includes('401') || normalizedMessage.includes('invalid credentials')) {
+    return 'Email or password is incorrect.';
+  }
+
+  return null;
+}
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -24,16 +37,14 @@ const Login: React.FC = () => {
       formData.append('username', email.trim().toLowerCase());
       formData.append('password', password);
 
-      const response = await fetch(buildApiUrl('/auth/login'), {
+      const data = await requestJson<{
+        access_token: string;
+        email?: string;
+        full_name?: string | null;
+      }>('/auth/login', {
         method: 'POST',
         body: formData,
       });
-
-      if (!response.ok) {
-        throw new Error('Invalid credentials');
-      }
-
-      const data = await response.json();
       login(data.access_token, {
         email: data.email ?? email.trim().toLowerCase(),
         fullName: typeof data.full_name === 'string' && data.full_name.trim() ? data.full_name.trim() : null,
@@ -41,9 +52,10 @@ const Login: React.FC = () => {
       toast({ title: 'Login Successful', description: 'Welcome back!' });
       navigate('/');
     } catch (error) {
+      const description = getFriendlyLoginErrorMessage(error);
       toast({
         title: 'Login Failed',
-        description: error instanceof Error ? error.message : 'An error occurred',
+        description: description ?? undefined,
         variant: 'destructive',
       });
     } finally {

@@ -105,13 +105,22 @@ class TemplateVideoRequest(LeadRecord):
     folder: str | None = None
 
 
+class RemotionVideoRequest(DirectVideoRequest):
+    title_prefix: str = 'Loan Recall'
+    subtitle_color: str = 'White'
+    subtitle_position: str = 'Bottom'
+    logo_position: str = 'Top Right'
+    logo_opacity: int = 80
+    logo_filename: str | None = None
+    logo_bytes: bytes | None = None
+
     @field_validator('tos', 'loan_amount', 'contact_details', 'product_type', mode='before')
     @classmethod
     def validate_optional_remotion_fields(cls, value: str | float | int | None, info: ValidationInfo) -> str | float | int:
         if value is None:
-             # Provide sensible defaults for optional fields to avoid rendering issues
-             return "0" if info.field_name in ('tos', 'loan_amount') else ("1800-555-999" if info.field_name == 'contact_details' else "loan")
-        
+            # Provide sensible defaults for optional fields to avoid rendering issues.
+            return "0" if info.field_name in ('tos', 'loan_amount') else ("1800-555-999" if info.field_name == 'contact_details' else "loan")
+
         if isinstance(value, str):
             cleaned = value.strip()
             return cleaned or ("0" if info.field_name in ('tos', 'loan_amount') else ("1800-555-999" if info.field_name == 'contact_details' else "loan"))

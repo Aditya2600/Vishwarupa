@@ -4,7 +4,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { buildApiUrl } from '@/lib/api';
+import { requestJson } from '@/lib/api';
+
+function getFriendlySignupErrorMessage(error: unknown): string | null {
+  if (!(error instanceof Error)) {
+    return null;
+  }
+
+  const normalizedMessage = error.message.toLowerCase();
+  if (normalizedMessage.includes('email already registered')) {
+    return 'An account with this email already exists.';
+  }
+
+  return null;
+}
 
 const Signup: React.FC = () => {
   const [fullName, setFullName] = useState('');
@@ -19,7 +32,7 @@ const Signup: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch(buildApiUrl('/auth/signup'), {
+      await requestJson<{ message: string }>('/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -29,17 +42,13 @@ const Signup: React.FC = () => {
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Signup failed');
-      }
-
       toast({ title: 'Signup Successful', description: 'You can now log in.' });
       navigate('/login');
     } catch (error) {
+      const description = getFriendlySignupErrorMessage(error);
       toast({
         title: 'Signup Failed',
-        description: error instanceof Error ? error.message : 'An error occurred',
+        description: description ?? undefined,
         variant: 'destructive',
       });
     } finally {

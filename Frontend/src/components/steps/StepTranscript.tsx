@@ -334,7 +334,7 @@ export function StepTranscript({ state, update, voices = [] }: StepTranscriptPro
             setIsPlaying(true);
           }
         } else {
-          toast.info("Avatar voice preview is available in the Avatar selection step.");
+          toast.info("No preview available for this voice.");
         }
       }
     } catch (error) {

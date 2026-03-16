@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, Check, Crown, LoaderCircle, Mic2, Pause, Play } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { AlertCircle, Check, Crown, LoaderCircle, Pause, Play } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -48,62 +47,20 @@ export function StepAvatar({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playingVoiceId, setPlayingVoiceId] = useState("");
   const [previewError, setPreviewError] = useState<string | null>(null);
-  const INDIAN_SEARCH_NAMES = [
-    "Shruti", "Aditi", "Priya", "Aakash", "Mohan", "Abhishek", "Sneha", "Ananya", 
-    "Vihaan", "Arjun", "Karan", "Ishani", "Sanjay", "Ankit", "Rohan", "Maya", 
-    "Kavya", "Diya", "Ishita", "Ansh", "Kabir"
-  ];
-
-  const isIndianAvatar = (avatar: AvatarOption) => {
-    return INDIAN_SEARCH_NAMES.some(name => avatar.name.includes(name));
-  };
-
-  const filters = ["All", "Indian", ...new Set(avatars.map((avatar) => avatar.category).filter(Boolean))];
-  
-  const filteredByCategory = filter === "All" 
-    ? avatars 
-    : filter === "Indian"
-    ? avatars.filter(isIndianAvatar)
-    : avatars.filter((avatar) => avatar.category === filter);
-
-  const filteredByGender = selectedVoiceGender
+  const filters = ["All", ...new Set(avatars.map((avatar) => avatar.category).filter(Boolean))];
+  const activeFilter = filters.includes(filter) ? filter : "All";
+  const filteredByCategory = activeFilter === "All"
+    ? avatars
+    : avatars.filter((avatar) => avatar.category === activeFilter);
+  const filteredAvatars = selectedVoiceGender
     ? filteredByCategory.filter((avatar) => avatar.gender === selectedVoiceGender)
     : filteredByCategory;
-
-  const filteredAvatars = [...filteredByGender].sort((a, b) => {
-    const aIndian = isIndianAvatar(a);
-    const bIndian = isIndianAvatar(b);
-    if (aIndian && !bIndian) return -1;
-    if (!aIndian && bIndian) return 1;
-    return 0;
-  });
-
-  const INDIAN_LANGUAGES = ["Hindi", "Marathi", "Tamil", "Telugu", "Kannada", "Bengali", "Gujarati", "Malayalam", "Punjabi"];
   
   const filteredVoices = voices
     .filter(
-      (voice) => {
-        // 1. Strict gender match (Default to female to match Step 0 UI)
-        const targetGender = selectedVoiceGender || "female";
-        if (voice.gender !== targetGender) return false;
-
-        // 2. Language compatibility check
-        const isCompatible = isVoiceCompatibleWithLanguage(voice, language);
-        if (!isCompatible) return false;
-
-        // 3. Indian context preference:
-        // For Indian languages, compatible voices are naturally Indian.
-        // For English, we limit to Indian-accented English voices by name/metadata.
-        if (language === "English") {
-          const INDIAN_LANGUAGES = ["Hindi", "Marathi", "Tamil", "Telugu", "Kannada", "Bengali", "Gujarati", "Malayalam", "Punjabi"];
-          const isIndianSearchNames = ["Aakash", "Mohan", "Shruti", "Aditi", "Abhishek", "Priya", "Rohan", "Ananya", "Sneha", "Vihaan", "Arjun", "Karan", "Ishani"];
-          const matchesIndian = isIndianSearchNames.some(name => voice.name.includes(name)) || 
-                               voice.languages.some(l => INDIAN_LANGUAGES.includes(l));
-          return matchesIndian;
-        }
-
-        return true;
-      }
+      (voice) =>
+        isVoiceCompatibleWithLanguage(voice, language) &&
+        (!selectedAvatarGender || voice.gender === selectedAvatarGender),
     )
     .sort((left, right) => compareVoicesForLanguage(left, right, language));
 
@@ -178,11 +135,6 @@ export function StepAvatar({
       stopPreview();
     }
   }, [filteredVoices, playingVoiceId]);
-
-  const handleManualAvatarChange = (value: string) => {
-    const matchingAvatar = avatars.find((avatar) => avatar.id === value.trim());
-    onSelect(value, matchingAvatar?.name ?? "", matchingAvatar?.gender ?? null);
-  };
 
   return (
     <div>
@@ -291,7 +243,7 @@ export function StepAvatar({
                         }`}
                       >
                         {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-                        {voice.previewUrl ? (isPlaying ? "Pause" : "Play") : "No Sample"}
+                        {voice.previewUrl ? (isPlaying ? "Pause" : "Play") : "No Preview Available"}
                       </button>
                       <button
                         type="button"
@@ -314,7 +266,7 @@ export function StepAvatar({
 
         {!voicesLoading && filteredVoices.length === 0 ? (
           <div className="mt-3 rounded-lg border border-border bg-secondary/50 px-3 py-2 text-xs text-muted-foreground">
-            No compatible voices were returned for {language} yet, including multilingual fallbacks.
+            No compatible Indian-market voices were returned for {language} yet.
           </div>
         ) : null}
       </div>
@@ -327,7 +279,7 @@ export function StepAvatar({
           {isLoading ? (
             <div className="inline-flex items-center gap-2 text-xs text-muted-foreground">
               <LoaderCircle className="h-4 w-4 animate-spin" />
-              Loading avatars...
+              Loading Indian avatars...
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">{filteredAvatars.length} avatars available</p>
@@ -347,7 +299,7 @@ export function StepAvatar({
             key={f}
             onClick={() => onFilterChange(f)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              filter === f
+              activeFilter === f
                 ? "bg-primary text-primary-foreground"
                 : "bg-secondary text-muted-foreground hover:text-foreground"
             }`}
@@ -412,20 +364,6 @@ export function StepAvatar({
             </button>
           );
         })}
-      </div>
-
-      <div className="mt-6 max-w-lg space-y-2">
-        <label className="block text-sm font-medium text-foreground">Manual Avatar ID</label>
-        <Input
-          value={selectedId}
-          onChange={(event) => handleManualAvatarChange(event.target.value)}
-          placeholder="Paste an avatar_id"
-          className="bg-secondary border-border"
-        />
-        <p className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Mic2 className="h-3.5 w-3.5" />
-          Manual avatar IDs stay available, but they must match the selected voice gender if a listed avatar is found.
-        </p>
       </div>
     </div>
   );
