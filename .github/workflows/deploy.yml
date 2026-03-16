@@ -1,0 +1,69 @@
+name: Deploy Frontend and Backend
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      BACKEND_IMAGE: prashanth1003/heygen-backend:latest
+      FRONTEND_IMAGE: prashanth1003/heygen-frontend:latest
+      BACKEND_CONTAINER: heygen-backend
+      FRONTEND_CONTAINER: heygen-frontend
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Login DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USER }}
+          password: ${{ secrets.DOCKER_PASS }}
+
+      - name: Build and push Backend
+        run: |
+          docker build -t $BACKEND_IMAGE -f Dockerfile .
+          docker push $BACKEND_IMAGE
+
+      - name: Build and push Frontend
+        run: |
+          docker build \
+            --build-arg VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }} \
+            -t $FRONTEND_IMAGE \
+            -f Frontend/Dockerfile Frontend/
+          docker push $FRONTEND_IMAGE
+
+      - name: Deploy via Bastion
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.STAGE_BA_HOST }}
+          username: ubuntu
+          key: ${{ secrets.GIT_ACT_SSH_KEY_CR_STAGE }}
+          script: |
+            ssh -o StrictHostKeyChecking=no -i ~/.ssh/credresolve-master-key.pem ubuntu@${{ secrets.GIT_ACT_STAGE_HOST }} "
+              echo '${{ secrets.DOCKER_PASS }}' | sudo docker login -u '${{ secrets.DOCKER_USER }}' --password-stdin &&
+              
+              sudo docker pull ${{ env.BACKEND_IMAGE }} &&
+              sudo docker pull ${{ env.FRONTEND_IMAGE }} &&
+
+              sudo docker stop ${{ env.BACKEND_CONTAINER }} || true &&
+              sudo docker rm ${{ env.BACKEND_CONTAINER }} || true &&
+              sudo docker stop ${{ env.FRONTEND_CONTAINER }} || true &&
+              sudo docker rm ${{ env.FRONTEND_CONTAINER }} || true &&
+
+              sudo docker run -d \
+                --name ${{ env.BACKEND_CONTAINER }} \
+                --network host \
+                --mount type=bind,source=/home/ubuntu/.env,target=/app/.env \
+                --restart always \
+                ${{ env.BACKEND_IMAGE }}
+
+              sudo docker run -d \
+                --name ${{ env.FRONTEND_CONTAINER }} \
+                --network host \
+                --restart always \
+                ${{ env.FRONTEND_IMAGE }}
+            "
