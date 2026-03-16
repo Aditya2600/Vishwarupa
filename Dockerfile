@@ -26,7 +26,7 @@ RUN pip install --upgrade pip \
 
 COPY Remotion/package.json Remotion/package-lock.json ./Remotion/
 
-RUN npm --prefix /app/Remotion ci
+RUN npm --prefix /app/Remotion install
 
 COPY app ./app
 COPY Remotion ./Remotion
