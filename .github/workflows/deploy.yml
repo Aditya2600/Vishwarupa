@@ -1,15 +1,7 @@
 name: Deploy Frontend and Backend
 
 on:
-  push:
-    branches:
-      - main
-
-  pull_request:
-    branches:
-      - main
-
-  workflow_dispatch:
+ workflow_dispatch:
 
 jobs:
   deploy:
