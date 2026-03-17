@@ -88,6 +88,9 @@ class MediaStylingService:
         '/System/Library/Fonts/Supplemental/ITFDevanagari.ttc',
         '/System/Library/Fonts/Supplemental/DevanagariMT.ttc',
         '/System/Library/Fonts/Supplemental/Arial Unicode.ttf',
+        'C:\\Windows\\Fonts\\Nirmala.ttf',
+        'C:\\Windows\\Fonts\\Mangal.ttf',
+        'C:\\Windows\\Fonts\\arialuni.ttf',
     )
 
     def __init__(self, client: HeyGenClient | None = None) -> None:
@@ -550,12 +553,16 @@ class MediaStylingService:
             output_label = next_label
 
         if logo_file_path:
+            logo_index = len(subtitle_overlays) + 1
             command.extend(['-i', str(logo_file_path)])
-            filter_parts.append(
-                f'[{len(subtitle_overlays) + 1}:v]scale=w=\'min(iw,220)\':h=-2,format=rgba,colorchannelmixer=aa={logo_opacity / 100:.2f}[logo]'
-            )
-            x_pos, y_pos = self._logo_positions[logo_position]
-            filter_parts.append(f'[{last_label}][logo]overlay={x_pos}:{y_pos}:format=auto[styled]')
+            # Scale logo to max width 220, maintain aspect ratio
+            logo_filter = f'[{logo_index}:v]scale=220:-2,format=rgba,colorchannelmixer=aa={logo_opacity / 100:.2f}[logo]'
+            filter_parts.append(logo_filter)
+            
+            # Use lowercase for dictionary lookup to match "top left", etc.
+            lookup_pos = logo_position.lower().strip()
+            x_pos, y_pos = self._logo_positions.get(lookup_pos, self._logo_positions['top right'])
+            filter_parts.append(f'[{last_label}][logo]overlay={x_pos}:{y_pos}[styled]')
             output_label = 'styled'
 
         if filter_parts:

@@ -47,15 +47,31 @@ export function StepAvatar({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playingVoiceId, setPlayingVoiceId] = useState("");
   const [previewError, setPreviewError] = useState<string | null>(null);
-  const filters = ["All", ...new Set(avatars.map((avatar) => avatar.category).filter(Boolean))];
-  const activeFilter = filters.includes(filter) ? filter : "All";
-  const filteredByCategory = activeFilter === "All"
-    ? avatars
-    : avatars.filter((avatar) => avatar.category === activeFilter);
-  const filteredAvatars = selectedVoiceGender
-    ? filteredByCategory.filter((avatar) => avatar.gender === selectedVoiceGender)
-    : filteredByCategory;
-  
+  const INDIAN_SEARCH_NAMES = [
+    "Shruti", "Aditi", "Priya", "Aakash", "Mohan", "Abhishek", "Sneha", "Ananya",
+    "Vihaan", "Arjun", "Karan", "Ishani", "Sanjay", "Ankit", "Rohan", "Maya",
+    "Kavya", "Diya", "Ishita", "Ansh", "Kabir"
+  ];
+
+  const isIndianAvatar = (avatar: AvatarOption) => {
+    return INDIAN_SEARCH_NAMES.some(name => avatar.name.includes(name));
+  };
+
+
+  const filteredAvatars = avatars.filter((avatar) => {
+    // Strict gender match based on selected filter
+    const targetGender = filter.toLowerCase();
+    return avatar.gender && avatar.gender.toLowerCase() === targetGender;
+  }).sort((a, b) => {
+    const aIndian = isIndianAvatar(a);
+    const bIndian = isIndianAvatar(b);
+    if (aIndian && !bIndian) return -1;
+    if (!aIndian && bIndian) return 1;
+    return 0;
+  });
+
+  const INDIAN_LANGUAGES = ["Hindi", "Marathi", "Tamil", "Telugu", "Kannada", "Bengali", "Gujarati", "Malayalam", "Punjabi"];
+
   const filteredVoices = voices
     .filter(
       (voice) =>
@@ -174,7 +190,7 @@ export function StepAvatar({
               <SelectContent>
                 <SelectItem value="__none">No voice selected</SelectItem>
                 {filteredVoices.map((voice) => (
-                <SelectItem key={voice.id} value={voice.id}>
+                  <SelectItem key={voice.id} value={voice.id}>
                     {voice.name} · {voice.gender === "female" ? "Female" : "Male"}
                     {getVoiceLanguageHint(voice) ? ` · ${getVoiceLanguageHint(voice)}` : ""}
                   </SelectItem>
@@ -184,11 +200,7 @@ export function StepAvatar({
           </div>
 
           <div className="rounded-lg border border-border bg-secondary/50 px-3 py-2 text-xs text-muted-foreground">
-            {selectedVoiceGender
-              ? `${selectedVoiceGender === "female" ? "Female" : "Male"} avatars only`
-              : selectedAvatarGender
-              ? `${selectedAvatarGender === "female" ? "Female" : "Male"} voices only`
-              : "All genders visible"}
+            {filter} {filter.endsWith('s') ? '' : 's'} visible
           </div>
         </div>
 
@@ -219,9 +231,8 @@ export function StepAvatar({
                 return (
                   <div
                     key={`${voice.id}-preview`}
-                    className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 ${
-                      isSelected ? "border-primary bg-primary/5" : "border-border bg-background/80"
-                    }`}
+                    className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 ${isSelected ? "border-primary bg-primary/5" : "border-border bg-background/80"
+                      }`}
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-foreground">{voice.name}</p>
@@ -236,11 +247,10 @@ export function StepAvatar({
                         type="button"
                         disabled={!voice.previewUrl}
                         onClick={() => handlePreviewVoice(voice)}
-                        className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                          voice.previewUrl
-                            ? "bg-secondary text-foreground hover:bg-secondary/80"
-                            : "bg-secondary/60 text-muted-foreground"
-                        }`}
+                        className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${voice.previewUrl
+                          ? "bg-secondary text-foreground hover:bg-secondary/80"
+                          : "bg-secondary/60 text-muted-foreground"
+                          }`}
                       >
                         {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
                         {voice.previewUrl ? (isPlaying ? "Pause" : "Play") : "No Preview Available"}
@@ -248,11 +258,10 @@ export function StepAvatar({
                       <button
                         type="button"
                         onClick={() => onVoiceSelect(voice.id)}
-                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                          isSelected
-                            ? "bg-primary text-primary-foreground"
-                            : "border border-border bg-background text-foreground hover:bg-secondary"
-                        }`}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${isSelected
+                          ? "bg-primary text-primary-foreground"
+                          : "border border-border bg-background text-foreground hover:bg-secondary"
+                          }`}
                       >
                         {isSelected ? "Selected" : "Select"}
                       </button>
@@ -293,21 +302,6 @@ export function StepAvatar({
         ) : null}
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-6">
-        {filters.map((f) => (
-          <button
-            key={f}
-            onClick={() => onFilterChange(f)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeFilter === f
-                ? "bg-primary text-primary-foreground"
-                : "bg-secondary text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {f}
-          </button>
-        ))}
-      </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
         {filteredAvatars.length === 0 && !isLoading ? (
@@ -322,11 +316,10 @@ export function StepAvatar({
             <button
               key={avatar.id}
               onClick={() => onSelect(avatar.id, avatar.name, avatar.gender)}
-              className={`relative group p-6 rounded-xl border text-center transition-all duration-200 hover:scale-[1.02] ${
-                isSelected
-                  ? "glow-purple-border border-primary bg-primary/5"
-                  : "border-border bg-card hover:bg-surface-hover"
-              }`}
+              className={`relative group p-6 rounded-xl border text-center transition-all duration-200 hover:scale-[1.02] ${isSelected
+                ? "glow-purple-border border-primary bg-primary/5"
+                : "border-border bg-card hover:bg-surface-hover"
+                }`}
             >
               <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-secondary mx-auto mb-3 overflow-hidden flex items-center justify-center">
                 {avatar.previewImageUrl ? (
@@ -365,6 +358,7 @@ export function StepAvatar({
           );
         })}
       </div>
+
     </div>
   );
 }
