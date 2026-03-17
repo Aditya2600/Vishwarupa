@@ -94,15 +94,24 @@ class RemotionService:
         voice_key = f"{request.language}-{request.voice_gender.capitalize()}"
         voice = VOICE_MAP.get(voice_key, VOICE_MAP.get("Hindi-Female"))
         
-        template = jinja2.Template(request.script_text or (DEFAULT_SCRIPT_HI if request.language == "Hindi" else DEFAULT_SCRIPT_EN))
-        script_text = template.render(
-            customer_name=request.customer_name,
-            client_name=request.client_name,
-            product_type=request.product_type,
-            tos=request.tos,
-            contact_details=request.contact_details
-        )
-        
+        is_universal = (request.video_variety or "personalized") == "universal"
+
+        raw_script = request.script_text or (DEFAULT_SCRIPT_HI if request.language == "Hindi" else DEFAULT_SCRIPT_EN)
+
+        if is_universal:
+            # Universal transcripts have no placeholders — use the text verbatim
+            # to avoid Jinja errors when customer fields are empty.
+            script_text = raw_script
+        else:
+            template = jinja2.Template(raw_script)
+            script_text = template.render(
+                customer_name=request.customer_name,
+                client_name=request.client_name,
+                product_type=request.product_type,
+                tos=request.tos,
+                contact_details=request.contact_details,
+            )
+
         tts_text = script_text
         if request.language == "Hindi":
             tts_text = normalize_hindi_numbers(script_text)
@@ -153,6 +162,72 @@ class RemotionService:
             "vtt_path": vtt_file,
             "duration": audio_meta.info.length,
             "text": script_text
+        }
+
+    def build_universal_scene_payload(self, request: RemotionVideoRequest) -> dict[str, Any]:
+        """Build a generic, non-personalised scene payload for universal mode."""
+        t = {
+            'English': {
+                'notice': 'Formal Notice',
+                'eyebrow': 'Account Update',
+                'headline': 'Important Account Notice',
+                'subheadline': 'Please review this communication carefully',
+                'account_eyebrow': 'Account Status',
+                'account_headline': 'Account Review Required',
+                'account_supporting': 'Outstanding balance remains unresolved',
+                'account_badge': 'Attention Required',
+                'context_eyebrow': 'Status Summary',
+                'context_headline': 'Payment overdue on account',
+                'context_body': 'Our records indicate that the outstanding balance has not been resolved. Immediate attention is required.',
+                'amounts_eyebrow': 'Financial Summary',
+                'amounts_headline': 'Amount Summary',
+                'amounts_body': 'Payment delay continues to be on record',
+                'amounts_note': 'Please contact us to discuss repayment options.',
+                'action_eyebrow': 'Next Step',
+                'action_headline': 'Contact Us Today',
+                'action_body': 'Please reach out to our office immediately to discuss a suitable repayment arrangement.',
+                'action_cta_label': 'Call Now',
+                'closing_eyebrow': 'Resolution',
+                'closing_headline': 'A timely response helps avoid further escalation',
+                'closing_body': 'Our team is ready to assist you with a suitable resolution.',
+            },
+            'Hindi': {
+                'notice': 'औपचारिक सूचना',
+                'eyebrow': 'खाता अपडेट',
+                'headline': 'महत्वपूर्ण खाता सूचना',
+                'subheadline': 'कृपया इस संचार को ध्यान से पढ़ें',
+                'account_eyebrow': 'खाता स्थिति',
+                'account_headline': 'खाते की समीक्षा आवश्यक',
+                'account_supporting': 'लंबित बकाया राशि अभी तक हल नहीं हुई',
+                'account_badge': 'ध्यान आवश्यक',
+                'context_eyebrow': 'स्थिति सारांश',
+                'context_headline': 'खाते पर भुगतान लंबित है',
+                'context_body': 'हमारी जानकारी के अनुसार बकाया राशि अभी तक हल नहीं हुई है। तत्काल ध्यान आवश्यक है।',
+                'amounts_eyebrow': 'वित्तीय सारांश',
+                'amounts_headline': 'राशि सारांश',
+                'amounts_body': 'भुगतान विलंब अभी भी दर्ज है',
+                'amounts_note': 'कृपया पुनर्भुगतान विकल्पों पर चर्चा के लिए हमसे संपर्क करें।',
+                'action_eyebrow': 'तत्काल अगला कदम',
+                'action_headline': 'आज ही संपर्क करें',
+                'action_body': 'उचित पुनर्भुगतान व्यवस्था पर चर्चा के लिए कृपया तुरंत हमारे कार्यालय से संपर्क करें।',
+                'action_cta_label': 'अभी कॉल करें',
+                'closing_eyebrow': 'समाधान',
+                'closing_headline': 'समय पर प्रतिक्रिया आगे की कार्रवाई से बचने में मदद करती है',
+                'closing_body': 'हमारी टीम उचित समाधान में आपकी सहायता के लिए तैयार है।',
+            },
+        }
+        lang = request.language if request.language in t else 'English'
+        s = t[lang]
+        contact = request.contact_details or ''
+        return {
+            'opening': {'eyebrow': s['notice'], 'headline': s['headline'], 'subheadline': s['subheadline']},
+            'account': {'eyebrow': s['account_eyebrow'], 'headline': s['account_headline'], 'supporting': s['account_supporting'], 'badge': s['account_badge']},
+            'context': {'eyebrow': s['context_eyebrow'], 'headline': s['context_headline'], 'body': s['context_body']},
+            'amounts': {'eyebrow': s['amounts_eyebrow'], 'headline': s['amounts_headline'], 'body': s['amounts_body'], 'note': s['amounts_note']},
+            'action': {'eyebrow': s['action_eyebrow'], 'headline': s['action_headline'], 'body': s['action_body'] + (f' {contact}' if contact else ''), 'cta_label': s['action_cta_label'], 'cta_value': contact},
+            'closing': {'eyebrow': s['closing_eyebrow'], 'headline': s['closing_headline'], 'body': s['closing_body']},
+            'headline_text': s['headline'],
+            'cta_text': s['action_body'],
         }
 
     def build_scene_payload(self, request: RemotionVideoRequest, outstanding_value: str, loan_value: str, urgency_level: str) -> dict[str, Any]:
@@ -250,8 +325,14 @@ class RemotionService:
         return {
             "id": job_id,
             "language": request.language,
+            "video_variety": request.video_variety or "personalized",
             "audio_url": audio_path,
             "subtitles": subtitles,
+            # For universal mode, preserve customer_name etc. as empty so Remotion
+            # scene cards display generic text (built from scene_payload).
+            "customer_name": request.customer_name if (request.video_variety or "personalized") == "personalized" else "",
+            "lan": request.lan if (request.video_variety or "personalized") == "personalized" else "",
+            "client_name": request.client_name if (request.video_variety or "personalized") == "personalized" else "",
             "scene_payload": scene_payload,
             "branding": {
                 "logo": {
@@ -325,9 +406,16 @@ class RemotionService:
         # Save logo asset if present
         if request.logo_bytes and request.logo_filename:
             await self._persist_logo_asset(request.logo_bytes, request.logo_filename)
-            
+
+        is_universal = (request.video_variety or "personalized") == "universal"
+
         tts = await self.generate_tts(request)
-        scene = self.build_scene_payload(request, request.tos or "0", request.loan_amount or "", "elevated")
+        # Universal mode: use generic scene cards so no empty customer data leaks
+        # into the Remotion visual scenes.
+        if is_universal:
+            scene = self.build_universal_scene_payload(request)
+        else:
+            scene = self.build_scene_payload(request, request.tos or "0", request.loan_amount or "", "elevated")
         render_p = self.build_render_payload(request, tts['job_id'], tts['text'], tts['audio_path'], tts['vtt_path'], scene)
         video_url = await self.render_video(request, tts['job_id'], scene, render_p)
         return {

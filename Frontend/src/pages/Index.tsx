@@ -329,9 +329,9 @@ const Index = () => {
       ...EMPTY_VOICE_SELECTION,
       ...(!state.avatarTranscriptCustomized
         ? {
-            transcript: buildAvatarDefaultTranscript(state.language, selectedAvatar.gender, null),
-            avatarTranscriptCustomized: false,
-          }
+          transcript: buildAvatarDefaultTranscript(state.language, selectedAvatar.gender, null),
+          avatarTranscriptCustomized: false,
+        }
         : {}),
       ...RESET_GENERATION_STATE,
     });
@@ -353,9 +353,9 @@ const Index = () => {
       ...EMPTY_VOICE_SELECTION,
       ...(!state.avatarTranscriptCustomized
         ? {
-            transcript: buildAvatarDefaultTranscript(state.language, state.avatarGender, null),
-            avatarTranscriptCustomized: false,
-          }
+          transcript: buildAvatarDefaultTranscript(state.language, state.avatarGender, null),
+          avatarTranscriptCustomized: false,
+        }
         : {}),
       ...RESET_GENERATION_STATE,
     });
@@ -459,18 +459,18 @@ const Index = () => {
       requestedFreshDraft || requestedMode === "remotion"
         ? EMPTY_AVATAR_SELECTION
         : {
-            avatarId: state.avatarId,
-            avatarName: state.avatarName,
-            avatarGender: state.avatarGender,
-          };
+          avatarId: state.avatarId,
+          avatarName: state.avatarName,
+          avatarGender: state.avatarGender,
+        };
     const preservedVoice =
       requestedFreshDraft || requestedMode === "remotion"
         ? EMPTY_VOICE_SELECTION
         : {
-            voiceId: state.voiceId,
-            voiceName: state.voiceName,
-            voiceGender: state.voiceGender,
-          };
+          voiceId: state.voiceId,
+          voiceName: state.voiceName,
+          voiceGender: state.voiceGender,
+        };
 
     update({
       currentStep: 0,
@@ -549,15 +549,15 @@ const Index = () => {
       ...(shouldClearVoice ? EMPTY_VOICE_SELECTION : {}),
       ...(!state.avatarTranscriptCustomized
         ? {
-            transcript: buildAvatarDefaultTranscript(language, state.avatarGender, nextVoiceGender),
-            avatarTranscriptCustomized: false,
-          }
+          transcript: buildAvatarDefaultTranscript(language, state.avatarGender, nextVoiceGender),
+          avatarTranscriptCustomized: false,
+        }
         : {}),
       ...(!state.remotionTranscriptCustomized
         ? {
-            remotionTranscript: getDefaultRemotionTranscript(language, state.videoVariety, nextVoiceGender),
-            remotionTranscriptCustomized: false,
-          }
+          remotionTranscript: getDefaultRemotionTranscript(language, state.videoVariety, nextVoiceGender),
+          remotionTranscriptCustomized: false,
+        }
         : {}),
       ...RESET_GENERATION_STATE,
     });
@@ -572,15 +572,15 @@ const Index = () => {
       videoType,
       ...(!state.avatarTranscriptCustomized
         ? {
-            transcript: buildAvatarDefaultTranscript(state.language, state.avatarGender, state.voiceGender),
-            avatarTranscriptCustomized: false,
-          }
+          transcript: buildAvatarDefaultTranscript(state.language, state.avatarGender, state.voiceGender),
+          avatarTranscriptCustomized: false,
+        }
         : {}),
       ...(!state.remotionTranscriptCustomized
         ? {
-            remotionTranscript: getDefaultRemotionTranscript(state.language, state.videoVariety, state.voiceGender),
-            remotionTranscriptCustomized: false,
-          }
+          remotionTranscript: getDefaultRemotionTranscript(state.language, state.videoVariety, state.voiceGender),
+          remotionTranscriptCustomized: false,
+        }
         : {}),
       ...RESET_GENERATION_STATE,
     });
@@ -778,7 +778,7 @@ const Index = () => {
             onVideoTypeChange={handleVideoTypeChange}
             gender={state.voiceGender || "female"}
             onGenderChange={(gender) => {
-              const partial: any = { 
+              const partial: any = {
                 voiceGender: gender,
                 avatarFilter: gender === "male" ? "Male" : "Female",
                 ...RESET_GENERATION_STATE,
@@ -800,7 +800,7 @@ const Index = () => {
                 partial.remotionTranscript = getDefaultRemotionTranscript(state.language, state.videoVariety, gender);
                 partial.remotionTranscriptCustomized = false;
               }
-              
+
               update(partial);
             }}
           />
@@ -824,20 +824,20 @@ const Index = () => {
             onVoiceSelect={handleVoiceSelect}
             onFilterChange={(filter) => {
               const gender = filter.toLowerCase() as "male" | "female";
-              update({ 
+              update({
                 avatarFilter: filter,
                 voiceGender: gender,
                 ...(!state.avatarTranscriptCustomized
                   ? {
-                      transcript: getDefaultAvatarScript(state.language, gender, state.videoVariety),
-                      avatarTranscriptCustomized: false,
-                    }
+                    transcript: getDefaultAvatarScript(state.language, gender, state.videoVariety),
+                    avatarTranscriptCustomized: false,
+                  }
                   : {}),
                 ...(!state.remotionTranscriptCustomized
                   ? {
-                      remotionTranscript: getDefaultRemotionTranscript(state.language, state.videoVariety, gender),
-                      remotionTranscriptCustomized: false,
-                    }
+                    remotionTranscript: getDefaultRemotionTranscript(state.language, state.videoVariety, gender),
+                    remotionTranscriptCustomized: false,
+                  }
                   : {}),
                 ...RESET_GENERATION_STATE,
               });

@@ -640,6 +640,12 @@ function normalizeAvatar(rawAvatar: Record<string, unknown>): AvatarOption | nul
 
   const nestedAvatar = asRecord(rawAvatar.avatar);
   const isIndian =
+    category === "My Avatars" ||
+    category === "Lead Avatar" ||
+    category === "Talking Photo" ||
+    id === "d322b0d77e004f348318ee3345467075" ||
+    id === "83a2a157f5474b8a9c16e6a617d979ce" ||
+    id === "0874e3967d6e4a12aab0f8bde2d500dd" ||
     hasIndianMetadata(rawAvatar, [
       "avatar_name",
       "name",
@@ -682,13 +688,29 @@ function normalizeAvatar(rawAvatar: Record<string, unknown>): AvatarOption | nul
     return null;
   }
 
+  let finalName = name;
+  let finalCategory = category;
+  let finalIsPremium = asBoolean(rawAvatar.is_premium) || asBoolean(rawAvatar.premium);
+
+  if (id === "0874e3967d6e4a12aab0f8bde2d500dd") {
+    finalName = "Mahesh";
+    finalCategory = "Avatar";
+    finalIsPremium = false;
+  } else if (id === "d322b0d77e004f348318ee3345467075") {
+    finalName = "Priya";
+    finalCategory = "Avatar";
+  } else if (id === "83a2a157f5474b8a9c16e6a617d979ce") {
+    finalName = "Yash";
+    finalCategory = "Avatar";
+  }
+
   return {
     id,
-    name,
-    category,
+    name: finalName,
+    category: finalCategory,
     gender,
     previewImageUrl,
-    isPremium: asBoolean(rawAvatar.is_premium) || asBoolean(rawAvatar.premium),
+    isPremium: finalIsPremium,
     raw: rawAvatar,
   };
 }
@@ -939,6 +961,9 @@ export async function generateRemotionVideo(payload: RemotionVideoPayload): Prom
   formData.set("logo_opacity", String(payload.logoOpacity));
   if (payload.voice_gender) {
     formData.set("voice_gender", payload.voice_gender);
+  }
+  if (payload.video_variety) {
+    formData.set("video_variety", payload.video_variety);
   }
 
   if (payload.tos?.trim()) {

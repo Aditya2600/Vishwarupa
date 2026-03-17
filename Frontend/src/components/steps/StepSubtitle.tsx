@@ -142,11 +142,10 @@ export function StepSubtitle({ state, update, onLogoSelected }: StepSubtitleProp
               <button
                 key={c.name}
                 onClick={() => update({ subtitleColor: c.name, ...RESET_GENERATION_STATE })}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-all ${
-                  state.subtitleColor === c.name
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-all ${state.subtitleColor === c.name
                     ? "border-primary bg-primary/10 text-foreground"
                     : "border-border bg-secondary text-muted-foreground hover:text-foreground"
-                }`}
+                  }`}
               >
                 <span className={`w-3 h-3 rounded-full ${c.color}`} />
                 {c.name}
@@ -162,11 +161,10 @@ export function StepSubtitle({ state, update, onLogoSelected }: StepSubtitleProp
               <button
                 key={p}
                 onClick={() => update({ subtitlePosition: p, ...RESET_GENERATION_STATE })}
-                className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all ${
-                  state.subtitlePosition === p
+                className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all ${state.subtitlePosition === p
                     ? "border-primary bg-primary/10 text-foreground"
                     : "border-border bg-secondary text-muted-foreground hover:text-foreground"
-                }`}
+                  }`}
               >
                 {p}
               </button>
@@ -182,9 +180,6 @@ export function StepSubtitle({ state, update, onLogoSelected }: StepSubtitleProp
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
             <div>
               <p className="text-sm font-semibold text-foreground">Logo missing</p>
-              <p className="text-xs text-muted-foreground">
-                Avatar videos usually look better branded. Upload a company logo before generating if you want it shown in the final export.
-              </p>
             </div>
           </div>
         ) : null}
@@ -230,11 +225,10 @@ export function StepSubtitle({ state, update, onLogoSelected }: StepSubtitleProp
               <button
                 key={p}
                 onClick={() => update({ logoPosition: p, ...RESET_GENERATION_STATE })}
-                className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all ${
-                  state.logoPosition === p
+                className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all ${state.logoPosition === p
                     ? "border-primary bg-primary/10 text-foreground"
                     : "border-border bg-secondary text-muted-foreground hover:text-foreground"
-                }`}
+                  }`}
               >
                 {p}
               </button>

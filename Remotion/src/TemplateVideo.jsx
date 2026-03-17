@@ -289,10 +289,12 @@ const SceneShell = ({scene, frame, children, align = 'center'}) => {
 
 // ─── Brand HUD ──────────────────────────────────────────────────────────────
 
-const BrandHud = ({lead, accentColor, activeSceneLabel, frame, uiCopy}) => {
+const BrandHud = ({lead, accentColor, activeSceneLabel, frame, uiCopy, logo}) => {
   // Breathing dot: oscillates scale gently
   const dotPulse = 1 + Math.sin(frame * 0.14) * 0.22;
   const dotGlow = 0.55 + Math.sin(frame * 0.14) * 0.45;
+
+  const showTopRightLogo = logo?.public_path && (!logo.position || logo.position === 'Top Right');
 
   return (
     <div
@@ -338,41 +340,57 @@ const BrandHud = ({lead, accentColor, activeSceneLabel, frame, uiCopy}) => {
         </div>
       </div>
 
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          padding: '12px 16px',
-          borderRadius: 18,
-          border: 'none',
-          background: 'transparent',
-          backdropFilter: 'none',
-        }}
-      >
-        {/* Breathing pulse dot */}
-        <span
-          style={{
-            width: 10,
-            height: 10,
-            borderRadius: 999,
-            background: accentColor,
-            boxShadow: `0 0 ${Math.round(12 + dotGlow * 18)}px ${accentColor}`,
-            transform: `scale(${dotPulse})`,
-            display: 'inline-block',
-          }}
-        />
+      <div style={{display: 'flex', alignItems: 'center', gap: 20}}>
         <div
           style={{
-            fontSize: 12,
-            letterSpacing: 1.8,
-            textTransform: 'uppercase',
-            color: '#cbd5e1',
-            ...SAFE_TEXT_STYLE,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '12px 16px',
+            borderRadius: 18,
+            border: 'none',
+            background: 'transparent',
+            backdropFilter: 'none',
           }}
         >
-          {activeSceneLabel}
+          {/* Breathing pulse dot */}
+          <span
+            style={{
+              width: 10,
+              height: 10,
+              borderRadius: 999,
+              background: accentColor,
+              boxShadow: `0 0 ${Math.round(12 + dotGlow * 18)}px ${accentColor}`,
+              transform: `scale(${dotPulse})`,
+              display: 'inline-block',
+            }}
+          />
+          <div
+            style={{
+              fontSize: 12,
+              letterSpacing: 1.8,
+              textTransform: 'uppercase',
+              color: '#cbd5e1',
+              ...SAFE_TEXT_STYLE,
+            }}
+          >
+            {activeSceneLabel}
+          </div>
         </div>
+
+        {showTopRightLogo && (
+          <Img
+            src={staticFile(logo.public_path)}
+            style={{
+              display: 'block',
+              maxWidth: 160,
+              maxHeight: 52,
+              objectFit: 'contain',
+              opacity: clamp((logo.opacity ?? 80) / 100, 0, 1),
+              filter: 'drop-shadow(0 4px 12px rgba(2, 6, 23, 0.4))',
+            }}
+          />
+        )}
       </div>
     </div>
   );
@@ -526,7 +544,7 @@ const SubtitlePanel = ({subtitle, subtitleProgress, branding, fallbackText}) => 
 };
 
 const LogoOverlay = ({logo}) => {
-  if (!logo?.public_path) {
+  if (!logo?.public_path || logo.position === 'Top Right' || !logo.position) {
     return null;
   }
 
@@ -1671,6 +1689,7 @@ export const TemplateVideo = ({leadId}) => {
           activeSceneLabel={activeSceneLabel}
           frame={frame}
           uiCopy={uiCopy}
+          logo={logoBranding}
         />
         <LogoOverlay logo={logoBranding} />
 

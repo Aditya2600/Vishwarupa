@@ -57,7 +57,7 @@ const Signup: React.FC = () => {
   };
 
   return (
-    <div className="flex items-center justify-center min-vh-100 bg-slate-50 dark:bg-slate-950 p-4">
+    <div className="flex items-center justify-center min-h-screen bg-background p-4">
       <Card className="w-full max-w-md shadow-lg border-2 border-slate-200 dark:border-slate-800">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-6">

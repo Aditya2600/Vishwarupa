@@ -365,25 +365,6 @@ export function StepTranscript({ state, update, voices = [] }: StepTranscriptPro
       if (!response.ok) throw new Error("Voice preview failed");
 
       const blob = await response.blob();
-<<<<<<< HEAD
-      if (audioRef.current) {
-        audioRef.current.src = URL.createObjectURL(blob);
-        audioRef.current.play();
-        setIsPlaying(true);
-      }
-    } else {
-      // Avatar voice preview using HeyGen static preview URL from voices list
-      const voice = voices.find(v => v.id === state.voiceId);
-      if (voice?.previewUrl) {
-        if (audioRef.current) {
-          const proxyUrl = `/api/proxy-audio?url=${encodeURIComponent(voice.previewUrl)}`;
-          audioRef.current.src = proxyUrl;
-          audioRef.current.play();
-          setIsPlaying(true);
-        }
-      } else {
-        toast.info("Avatar voice preview is available in the Avatar selection step.");
-=======
       const audioUrl = URL.createObjectURL(blob);
       
       if (audioRef.current) {
@@ -399,16 +380,14 @@ export function StepTranscript({ state, update, voices = [] }: StepTranscriptPro
           });
         }
         setIsPlaying(true);
->>>>>>> vid-fix--khushi
       }
+    } catch (error) {
+      console.error("Voice preview error:", error);
+      toast.error("Unable to play voice preview.");
+    } finally {
+      setIsPreviewing(false);
     }
-  } catch (error) {
-    console.error("Voice preview error:", error);
-    toast.error("Unable to play voice preview.");
-  } finally {
-    setIsPreviewing(false);
-  }
-};
+  };
 
 const handleImport = async (event: ChangeEvent<HTMLInputElement>) => {
   const file = event.target.files?.[0];
