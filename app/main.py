@@ -26,6 +26,8 @@ from app.auth import get_password_hash, verify_password, create_access_token, ge
 
 app = FastAPI(title='Personalized Video Generator', version='1.0.0')
 settings.output_dir.mkdir(parents=True, exist_ok=True)
+(settings.output_dir / "text-videos").mkdir(parents=True, exist_ok=True)
+(settings.output_dir / "avatar-videos").mkdir(parents=True, exist_ok=True)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -606,7 +608,7 @@ async def preview_voice(
     voice_id: Optional[str] = Form(None),
     current_user: str = Depends(get_current_user)
 ):
-    print(f"DEBUG: Voice preview request for {language} {gender} (voice: {voice_id}) (user: {current_user})")
+    print(f"DEBUG: Voice preview request - lang: {language}, gender: {gender}, voice_id: {voice_id}, text_len: {len(text or '') if text else 0}")
     
     # If we have a HeyGen voice_id, try using HeyGen's TTS for a perfectly matched preview
     if voice_id and not (voice_id.startswith("en-") or voice_id.startswith("hi-") or "-" in voice_id and len(voice_id) < 20):

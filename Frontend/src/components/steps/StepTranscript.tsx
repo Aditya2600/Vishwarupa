@@ -170,9 +170,9 @@ export function StepTranscript({ state, update, voices = [] }: StepTranscriptPro
       audioRef.current.currentTime = 0;
       audioRef.current.onended = null;
       audioRef.current.onerror = null;
-      audioRef.current = null;
     }
     setIsPlayingPreview(false);
+    setIsPlaying(false);
   };
 
   const playVoicePreview = () => {
@@ -185,30 +185,19 @@ export function StepTranscript({ state, update, voices = [] }: StepTranscriptPro
     stopVoicePreview();
 
     const proxyUrl = `/api/proxy-audio?url=${encodeURIComponent(voice.previewUrl)}`;
-    const audio = new Audio(proxyUrl);
-    audioRef.current = audio;
-
-    audio.onended = () => {
-      if (audioRef.current === audio) {
-        audioRef.current = null;
-      }
+    
+    if (!audioRef.current) {
+      audioRef.current = new Audio();
+    }
+    
+    audioRef.current.src = proxyUrl;
+    audioRef.current.onended = () => setIsPlayingPreview(false);
+    audioRef.current.onerror = () => {
       setIsPlayingPreview(false);
+      toast.error("Voice preview unavailable");
     };
-
-    audio.onerror = () => {
-      if (audioRef.current === audio) {
-        audioRef.current = null;
-      }
-      setIsPlayingPreview(false);
-    };
-
+    audioRef.current.play().catch(console.error);
     setIsPlayingPreview(true);
-    void audio.play().catch(() => {
-      if (audioRef.current === audio) {
-        audioRef.current = null;
-      }
-      setIsPlayingPreview(false);
-    });
   };
 
   useEffect(() => stopVoicePreview, []);
@@ -376,11 +365,20 @@ export function StepTranscript({ state, update, voices = [] }: StepTranscriptPro
       if (!response.ok) throw new Error("Voice preview failed");
 
       const blob = await response.blob();
+      const audioUrl = URL.createObjectURL(blob);
+      
       if (audioRef.current) {
-        // Stop any current playback
         audioRef.current.pause();
-        audioRef.current.src = URL.createObjectURL(blob);
-        audioRef.current.play();
+        audioRef.current.src = audioUrl;
+        audioRef.current.load(); // Explicitly load the new source
+        
+        const playPromise = audioRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(error => {
+            console.error("Playback failed:", error);
+            setIsPlaying(false);
+          });
+        }
         setIsPlaying(true);
       }
     } catch (error) {
