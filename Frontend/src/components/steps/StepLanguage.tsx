@@ -71,10 +71,10 @@ export function StepLanguage({
 
           <div>
             <label className="text-sm font-medium text-muted-foreground mb-3 block">Narrator Voice</label>
-            <div className="flex p-1 bg-secondary rounded-xl w-fit border border-border">
+            <div className="flex p-1 bg-secondary rounded-xl w-fit border border-border relative z-10">
               <button
                 onClick={() => onGenderChange("male")}
-                className={`px-6 py-2 rounded-lg text-sm font-semibold transition-all ${gender === "male"
+                className={`relative z-20 px-6 py-2 rounded-lg text-sm font-semibold transition-all ${gender === "male"
                     ? "bg-primary text-primary-foreground shadow-lg"
                     : "text-muted-foreground hover:text-foreground"
                   }`}
@@ -83,7 +83,7 @@ export function StepLanguage({
               </button>
               <button
                 onClick={() => onGenderChange("female")}
-                className={`px-6 py-2 rounded-lg text-sm font-semibold transition-all ${gender === "female"
+                className={`relative z-20 px-6 py-2 rounded-lg text-sm font-semibold transition-all ${gender === "female"
                     ? "bg-primary text-primary-foreground shadow-lg"
                     : "text-muted-foreground hover:text-foreground"
                   }`}

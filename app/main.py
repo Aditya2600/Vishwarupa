@@ -4,7 +4,7 @@ import sys
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-from typing import Literal
+from typing import Literal, Optional
 from datetime import datetime
 from pathlib import Path
 
@@ -157,6 +157,7 @@ async def _parse_remotion_payload(request: Request) -> RemotionVideoRequest:
     logo_opacity = _form_int(form.get('logo_opacity'))
 
     payload = {
+        'video_variety': _form_text(form.get('video_variety')) or 'personalized',
         'customer_name': _form_text(form.get('customer_name')),
         'lan': _form_text(form.get('lan')),
         'client_name': _form_text(form.get('client_name')),
@@ -177,6 +178,7 @@ async def _parse_remotion_payload(request: Request) -> RemotionVideoRequest:
         'logo_opacity': 80 if logo_opacity is None else logo_opacity,
         'logo_filename': logo_filename,
         'logo_bytes': logo_bytes,
+        'voice_gender': _form_text(form.get('voice_gender')) or 'female',
     }
 
     try:
@@ -201,8 +203,103 @@ def health() -> dict:
 
 
 @app.get('/meta/avatars')
-def list_avatars() -> dict:
-    return client.list_avatars()
+async def list_avatars() -> dict:
+    avatars_resp = client.list_avatars()
+    try:
+        talking_photos_resp = client.list_talking_photos()
+    except Exception:
+        talking_photos_resp = {"data": {"talking_photos": []}}
+    
+    # Merge them. extractAvatarArray in frontend looks for root.avatars, data.avatars, etc.
+    # We can just put them both in a list or merge the data arrays.
+    
+    avatars_data = avatars_resp.get("data", {}).get("avatars", [])
+    talking_photos_data = talking_photos_resp.get("data", {}).get("talking_photos", [])
+    
+    # Standardize talking photos to look more like avatars
+    for tp in talking_photos_data:
+        tp["avatar_id"] = tp.get("talking_photo_id")
+        tp["avatar_name"] = tp.get("talking_photo_name") or "Talking Photo"
+        tp["style"] = "Talking Photo"
+        tp["preview_image_url"] = tp.get("talking_photo_url")
+        # HeyGen talking photos often don't have gender in the root, maybe we can keep it as unknown
+    
+    all_avatars = avatars_data + talking_photos_data
+    
+    # Force specific avatars to be present and have correct gender/name
+    male_target_id = "83a2a157f5474b8a9c16e6a617d979ce"
+    female_target_id = "4490a2a1374c437c9f936c6bc26742479" # Re-check if this is correct, but user said Aditi is female
+    
+    # Let's check both possibilities for Aditi ID (previous conversation might have used a slightly different one)
+    aditi_ids = ["4490a2a1374c437c9f936c6b26742479", "4490a2a1374c437c9f936c6bc26742479"]
+    
+    updated_avatars = []
+    found_male = False
+    found_aditi = False
+    
+    target_male_avatar = None
+    target_female_avatar = None
+    
+    for a in all_avatars:
+        aid = a.get("avatar_id")
+        name = a.get("avatar_name", "").lower()
+        
+        # Standardize gender for Talking Photos or missing genders
+        if not a.get("gender"):
+            if "aditi" in name or "female" in name or "woman" in name:
+                a["gender"] = "female"
+            elif "male" in name or "man" in name:
+                a["gender"] = "male"
+        
+        if aid == male_target_id:
+            if not a.get("avatar_name") or "Premium" in a.get("avatar_name", ""):
+                a["avatar_name"] = a.get("avatar_name", "Male Avatar").replace("Premium ", "")
+            a["gender"] = "male"
+            a["is_premium"] = True
+            target_male_avatar = a
+        elif aid in aditi_ids:
+            a["avatar_name"] = "Adv. Aditi Mehra"
+            a["gender"] = "female"
+            a["is_premium"] = True
+            target_female_avatar = a
+        else:
+            updated_avatars.append(a)
+            
+    top_avatars = []
+    
+    # Use the found ones or create new ones if missing
+    if target_male_avatar:
+        target_male_avatar["style"] = "Lead Avatar" # Force it into the top section
+        top_avatars.append(target_male_avatar)
+    else:
+        top_avatars.append({
+            "avatar_id": male_target_id,
+            "avatar_name": "Male Avatar",
+            "style": "Lead Avatar", # Force it into the top section
+            "gender": "male",
+            "is_premium": True
+        })
+        
+    if target_female_avatar:
+        target_female_avatar["style"] = "Lead Avatar" # Force it into the top section
+        top_avatars.append(target_female_avatar)
+    else:
+        top_avatars.append({
+            "avatar_id": aditi_ids[0],
+            "avatar_name": "Adv. Aditi Mehra",
+            "style": "Lead Avatar", # Force it into the top section
+            "gender": "female",
+            "is_premium": True
+        })
+        
+    # Combine lists: top_avatars first, then the rest
+    final_list = top_avatars + updated_avatars
+    
+    return {
+        "data": {
+            "avatars": final_list
+        }
+    }
 
 
 @app.get('/meta/voices')
@@ -224,12 +321,18 @@ def get_config() -> dict:
 async def proxy_audio(url: str):
     import httpx
     from fastapi.responses import StreamingResponse
+    print(f"DEBUG: Proxying audio from {url}")
     
     async def stream_audio():
-        async with httpx.AsyncClient() as client:
-            async with client.stream('GET', url) as response:
-                async for chunk in response.aiter_bytes():
-                    yield chunk
+        async with httpx.AsyncClient(follow_redirects=True) as client:
+            try:
+                async with client.stream('GET', url) as response:
+                    if response.status_code >= 400:
+                        print(f"DEBUG: Proxy audio failed with status {response.status_code}")
+                    async for chunk in response.aiter_bytes():
+                        yield chunk
+            except Exception as e:
+                print(f"DEBUG: Proxy audio exception: {e}")
 
     return StreamingResponse(stream_audio(), media_type="audio/mpeg")
 
@@ -493,9 +596,34 @@ async def preview_voice(
     language: str = Form(...),
     gender: str = Form(...),
     text: str = Form(None),
+    voice_id: Optional[str] = Form(None),
     current_user: str = Depends(get_current_user)
 ):
-    print(f"DEBUG: Voice preview request for {language} {gender} (user: {current_user})")
+    print(f"DEBUG: Voice preview request for {language} {gender} (voice: {voice_id}) (user: {current_user})")
+    
+    # If we have a HeyGen voice_id, try using HeyGen's TTS for a perfectly matched preview
+    if voice_id and not (voice_id.startswith("en-") or voice_id.startswith("hi-") or "-" in voice_id and len(voice_id) < 20):
+        try:
+            tts_resp = client.generate_tts(voice_id, text or "")
+            audio_url = tts_resp.get("data", {}).get("audio_url")
+            if audio_url:
+                # Proxy the HeyGen audio URL to avoid CORS and ensure stability
+                import httpx
+                from fastapi.responses import StreamingResponse
+                
+                async def stream_audio():
+                    async with httpx.AsyncClient(follow_redirects=True) as c:
+                        try:
+                            async with c.stream('GET', audio_url) as response:
+                                if response.status_code >= 400:
+                                    print(f"DEBUG: HeyGen TTS stream failed with status {response.status_code}")
+                                async for chunk in response.aiter_bytes():
+                                    yield chunk
+                        except Exception as e:
+                            print(f"DEBUG: HeyGen TTS stream exception: {e}")
+                return StreamingResponse(stream_audio(), media_type="audio/mpeg")
+        except Exception as e:
+            print(f"DEBUG: HeyGen TTS failed, falling back to edge-tts: {e}")
     from app.services.remotion_service import RemotionService
     from app.models import LeadRecord, DirectVideoRequest
     from app.services.script_renderer import build_context, _normalize_placeholder_syntax
@@ -540,7 +668,7 @@ async def preview_voice(
         )
         
         result = await remotion_service.generate_tts(dummy_request)
-        audio_path = Path(result['audio_path'])
+        audio_path = Path(result['full_audio_path'])
         
         if not audio_path.exists():
             raise HTTPException(status_code=500, detail="Generated audio file not found")

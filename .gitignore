@@ -54,8 +54,17 @@ yarn-error.log*
 Remotion/public/metadata.json
 Remotion/public/audio/*
 !Remotion/public/audio/.gitkeep
+Remotion/public/assets/*
+!Remotion/public/assets/credresolve_logo_2-removebg-preview.png
 Remotion/out/
+Remotion/output.mp4
 
-# Temporary files
+# Temporary files and Debug Scripts
 *.tmp
 *.swp
+*.mp3
+*debug*.py
+verify_server_avatars.py
+find_avatars.py
+find_voices*.py
+test_remotion.py

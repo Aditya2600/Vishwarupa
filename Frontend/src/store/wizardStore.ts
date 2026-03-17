@@ -67,12 +67,12 @@ const defaultState: WizardState = {
   avatarId: "",
   avatarName: "",
   avatarGender: null,
-  avatarFilter: "All",
+  avatarFilter: "Female",
   voiceId: "",
   voiceName: "",
   voiceGender: null,
   transcript: getDefaultAvatarScript("Hindi", "female"),
-  remotionTranscript: getDefaultRemotionTranscript("Hindi"),
+  remotionTranscript: getDefaultRemotionTranscript("Hindi", "universal"),
   avatarTranscriptCustomized: false,
   remotionTranscriptCustomized: false,
   subtitleColor: "White",
@@ -111,7 +111,8 @@ function restoreSavedState(savedState: Partial<WizardState>): WizardState {
     savedState.language ?? defaultState.language,
     resolveNarratorGender(savedVoiceGender ?? savedAvatarGender),
   );
-  const defaultRemotionTranscript = getDefaultRemotionTranscript(savedState.language ?? defaultState.language);
+  const savedVariety = (savedState.videoVariety ?? defaultState.videoVariety) as "personalized" | "universal";
+  const defaultRemotionTranscript = getDefaultRemotionTranscript(savedState.language ?? defaultState.language, savedVariety);
   const restored = {
     ...defaultState,
     ...savedState,

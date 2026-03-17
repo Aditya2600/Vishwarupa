@@ -485,10 +485,10 @@ const Index = () => {
           ? state.transcript
           : buildAvatarDefaultTranscript(language, preservedAvatar.avatarGender, preservedVoice.voiceGender),
       remotionTranscript: requestedFreshDraft
-        ? getDefaultRemotionTranscript(language)
+        ? getDefaultRemotionTranscript(language, state.videoVariety, state.voiceGender)
         : state.remotionTranscriptCustomized
           ? state.remotionTranscript
-          : getDefaultRemotionTranscript(language),
+          : getDefaultRemotionTranscript(language, state.videoVariety, state.voiceGender),
       avatarTranscriptCustomized: requestedFreshDraft ? false : state.avatarTranscriptCustomized,
       remotionTranscriptCustomized: requestedFreshDraft ? false : state.remotionTranscriptCustomized,
       ...RESET_GENERATION_STATE,
@@ -555,7 +555,7 @@ const Index = () => {
         : {}),
       ...(!state.remotionTranscriptCustomized
         ? {
-            remotionTranscript: getDefaultRemotionTranscript(language),
+            remotionTranscript: getDefaultRemotionTranscript(language, state.videoVariety, nextVoiceGender),
             remotionTranscriptCustomized: false,
           }
         : {}),
@@ -578,7 +578,7 @@ const Index = () => {
         : {}),
       ...(!state.remotionTranscriptCustomized
         ? {
-            remotionTranscript: getDefaultRemotionTranscript(state.language),
+            remotionTranscript: getDefaultRemotionTranscript(state.language, state.videoVariety, state.voiceGender),
             remotionTranscriptCustomized: false,
           }
         : {}),
@@ -675,22 +675,31 @@ const Index = () => {
       return;
     }
 
-    if (
-      !state.customerName.trim() ||
-      !state.lan.trim() ||
-      !state.clientName.trim() ||
-      (state.videoType === "remotion" &&
-        (
-          !state.tos.trim() ||
-          !state.loanAmount.trim() ||
-          !state.contactDetails.trim() ||
-          !state.productType.trim()
-        )) ||
-      !activeTranscript.trim()
-    ) {
-      toast.error("Complete the lead details and transcript before generating the video.");
-      goToStep(2);
-      return;
+    const isUniversal = state.videoVariety === "universal";
+    const hasTranscript = activeTranscript.trim().length > 0;
+
+    if (isUniversal) {
+      if (!hasTranscript) {
+        toast.error("Complete the transcript before generating the video.");
+        goToStep(2);
+        return;
+      }
+    } else {
+      if (
+        !state.customerName.trim() ||
+        !state.lan.trim() ||
+        !state.clientName.trim() ||
+        (state.videoType === "remotion" &&
+          (!state.tos.trim() ||
+            !state.loanAmount.trim() ||
+            !state.contactDetails.trim() ||
+            !state.productType.trim())) ||
+        !hasTranscript
+      ) {
+        toast.error("Complete the lead details and transcript before generating the video.");
+        goToStep(2);
+        return;
+      }
     }
 
     if (state.videoType === "avatar" && !logoFile) {
@@ -722,6 +731,7 @@ const Index = () => {
     if (state.videoType === "remotion") {
       generateRemotionMutation.mutate({
         ...payload,
+        video_variety: state.videoVariety,
         subtitleColor: state.subtitleColor,
         subtitlePosition: state.subtitlePosition,
         logoPosition: state.logoPosition,
@@ -767,7 +777,32 @@ const Index = () => {
             videoType={state.videoType}
             onVideoTypeChange={handleVideoTypeChange}
             gender={state.voiceGender || "female"}
-            onGenderChange={(gender) => update({ voiceGender: gender })}
+            onGenderChange={(gender) => {
+              const partial: any = { 
+                voiceGender: gender,
+                avatarFilter: gender === "male" ? "Male" : "Female",
+                ...RESET_GENERATION_STATE,
+              };
+
+              // Clear selection if incompatible with new gender
+              if (state.avatarId && state.avatarGender && state.avatarGender !== gender) {
+                Object.assign(partial, EMPTY_AVATAR_SELECTION);
+              }
+              if (state.voiceId && state.voiceGender && state.voiceGender !== gender) {
+                Object.assign(partial, EMPTY_VOICE_SELECTION);
+              }
+
+              if (!state.avatarTranscriptCustomized) {
+                partial.transcript = getDefaultAvatarScript(state.language, gender, state.videoVariety);
+                partial.avatarTranscriptCustomized = false;
+              }
+              if (!state.remotionTranscriptCustomized) {
+                partial.remotionTranscript = getDefaultRemotionTranscript(state.language, state.videoVariety, gender);
+                partial.remotionTranscriptCustomized = false;
+              }
+              
+              update(partial);
+            }}
           />
         );
       case 1:
@@ -787,7 +822,26 @@ const Index = () => {
             filter={state.avatarFilter}
             onSelect={handleAvatarSelect}
             onVoiceSelect={handleVoiceSelect}
-            onFilterChange={(filter) => update({ avatarFilter: filter })}
+            onFilterChange={(filter) => {
+              const gender = filter.toLowerCase() as "male" | "female";
+              update({ 
+                avatarFilter: filter,
+                voiceGender: gender,
+                ...(!state.avatarTranscriptCustomized
+                  ? {
+                      transcript: getDefaultAvatarScript(state.language, gender, state.videoVariety),
+                      avatarTranscriptCustomized: false,
+                    }
+                  : {}),
+                ...(!state.remotionTranscriptCustomized
+                  ? {
+                      remotionTranscript: getDefaultRemotionTranscript(state.language, state.videoVariety, gender),
+                      remotionTranscriptCustomized: false,
+                    }
+                  : {}),
+                ...RESET_GENERATION_STATE,
+              });
+            }}
           />
         );
       case 2:

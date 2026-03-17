@@ -8,6 +8,7 @@ from app.config import settings
 from app.models import DirectVideoRequest, TemplateVideoRequest, VideoJobResult
 from app.services.heygen_client import HeyGenClient
 from app.services.script_renderer import build_context, render_inline_template, render_template
+from app.utils.text_utils import normalize_hindi_numbers
 from app.utils.validation import require_non_null
 
 
@@ -46,6 +47,9 @@ class VideoService:
         width = request.video_width or settings.default_video_width
         height = request.video_height or settings.default_video_height
         voice_id = request.voice_id or settings.heygen_voice_id
+
+        if request.language == "Hindi":
+            script_text = normalize_hindi_numbers(script_text)
 
         # The provider's direct generate endpoint validates text voices under voice.text.*.
         # Keep the top-level fields too for backward compatibility with older payload variants.

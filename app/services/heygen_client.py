@@ -81,6 +81,12 @@ class HeyGenClient:
         self._raise_for_status(response)
         return response.json()
 
+    def list_talking_photos(self) -> dict[str, Any]:
+        with httpx.Client(timeout=60.0) as client:
+            response = client.get(self._url('/v2/talking_photos'), headers=self.headers)
+        self._raise_for_status(response)
+        return response.json()
+
     def list_voices(self) -> dict[str, Any]:
         with httpx.Client(timeout=60.0) as client:
             response = client.get(self._url('/v2/voices'), headers=self.headers)
@@ -123,3 +129,13 @@ class HeyGenClient:
                 for chunk in response.iter_bytes():
                     handle.write(chunk)
         return target_path
+
+    def generate_tts(self, voice_id: str, text: str) -> dict[str, Any]:
+        payload = {
+            "voice_id": voice_id,
+            "input_text": text
+        }
+        with httpx.Client(timeout=60.0) as client:
+            response = client.post(self._url('/v2/video/text_to_speech'), headers=self.headers, json=payload)
+        self._raise_for_status(response)
+        return response.json()

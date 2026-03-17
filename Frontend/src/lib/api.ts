@@ -80,6 +80,7 @@ export interface RemotionVideoPayload extends DirectVideoPayload {
   logoOpacity: number;
   logoFile?: File | null;
   voice_gender?: "male" | "female";
+  video_variety?: "personalized" | "universal";
 }
 
 export interface StylizeVideoPayload {

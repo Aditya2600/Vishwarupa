@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WizardState } from "@/store/wizardStore";
 import { VoiceOption } from "@/lib/api";
-import { UNIVERSAL_TEMPLATES, getDefaultRemotionTranscript, getDefaultAvatarScript } from "@/lib/templates";
+import { UNIVERSAL_TEMPLATES, REMOTION_TEMPLATES, getDefaultRemotionTranscript, getDefaultAvatarScript } from "@/lib/templates";
 
 const RESET_GENERATION_STATE = {
   generatedVideo: null,
@@ -161,7 +161,58 @@ export function StepTranscript({ state, update, voices = [] }: StepTranscriptPro
   const importInputRef = useRef<HTMLInputElement>(null);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  
+  const stopVoicePreview = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current.onended = null;
+      audioRef.current.onerror = null;
+      audioRef.current = null;
+    }
+    setIsPlayingPreview(false);
+  };
+
+  const playVoicePreview = () => {
+    const vId = state.voiceId;
+    if (!vId || !voices.length) return;
+
+    const voice = voices.find((v) => v.id === vId);
+    if (!voice?.previewUrl) return;
+
+    stopVoicePreview();
+
+    const proxyUrl = `/api/proxy-audio?url=${encodeURIComponent(voice.previewUrl)}`;
+    const audio = new Audio(proxyUrl);
+    audioRef.current = audio;
+
+    audio.onended = () => {
+      if (audioRef.current === audio) {
+        audioRef.current = null;
+      }
+      setIsPlayingPreview(false);
+    };
+
+    audio.onerror = () => {
+      if (audioRef.current === audio) {
+        audioRef.current = null;
+      }
+      setIsPlayingPreview(false);
+    };
+
+    setIsPlayingPreview(true);
+    void audio.play().catch(() => {
+      if (audioRef.current === audio) {
+        audioRef.current = null;
+      }
+      setIsPlayingPreview(false);
+    });
+  };
+
+  useEffect(() => stopVoicePreview, []);
+
   const isRemotion = state.videoType === "remotion";
   const transcript = isRemotion ? state.remotionTranscript : state.transcript;
   const wordCount = transcript.trim() ? transcript.trim().split(/\s+/).length : 0;
@@ -180,7 +231,8 @@ export function StepTranscript({ state, update, voices = [] }: StepTranscriptPro
     const shouldForceResetAvatar = avatarContainsPunjabi && !isActuallyPunjabi;
 
     if (!state.avatarTranscriptCustomized || shouldForceResetAvatar) {
-      const langDefault = getDefaultAvatarScript(state.language, state.voiceGender);
+      const mode = state.videoVariety;
+      const langDefault = getDefaultAvatarScript(state.language, state.voiceGender, mode);
       if (state.transcript !== langDefault) {
         updates.transcript = langDefault;
         updates.avatarTranscriptCustomized = false; // reset flag if we forced it
@@ -196,9 +248,10 @@ export function StepTranscript({ state, update, voices = [] }: StepTranscriptPro
        const isActuallyPunjabi = state.language === "Punjabi";
        const shouldForceReset = containsPunjabi && !isActuallyPunjabi;
 
+       const gen = state.voiceGender || "female";
        if (state.videoVariety === "universal") {
          if (!state.remotionTranscriptCustomized || shouldForceReset) {
-            const langUniversal = UNIVERSAL_TEMPLATES[state.language] || UNIVERSAL_TEMPLATES.English;
+            const langUniversal = getDefaultRemotionTranscript(state.language, "universal", gen);
             if (state.remotionTranscript !== langUniversal) {
               updates.remotionTranscript = langUniversal;
               updates.remotionTranscriptCustomized = false; // reset flag if we forced it
@@ -206,14 +259,14 @@ export function StepTranscript({ state, update, voices = [] }: StepTranscriptPro
             }
          }
        } else {
-         // Personalized mode - Revert to English-only as requested
+         // Personalized mode
          if (!state.remotionTranscriptCustomized || shouldForceReset) {
-           const langDefault = getDefaultRemotionTranscript(state.language, "personalized");
-           if (state.remotionTranscript !== langDefault) {
-             updates.remotionTranscript = langDefault;
-             updates.remotionTranscriptCustomized = false; // reset flag if we forced it
-             hasUpdates = true;
-           }
+            const langDefault = getDefaultRemotionTranscript(state.language, "personalized", gen);
+            if (state.remotionTranscript !== langDefault) {
+              updates.remotionTranscript = langDefault;
+              updates.remotionTranscriptCustomized = false; // reset flag if we forced it
+              hasUpdates = true;
+            }
          }
        }
     }
@@ -268,7 +321,7 @@ export function StepTranscript({ state, update, voices = [] }: StepTranscriptPro
       toast.success(`Transcript reset to ${state.language} (${state.videoVariety}) default.`);
       return;
     }
-    const defaultValue = getDefaultAvatarScript(state.language, state.voiceGender);
+    const defaultValue = getDefaultAvatarScript(state.language, state.voiceGender, state.videoVariety);
     update({
       transcript: defaultValue,
       avatarTranscriptCustomized: false,
@@ -300,42 +353,35 @@ export function StepTranscript({ state, update, voices = [] }: StepTranscriptPro
 
     setIsPreviewing(true);
     try {
-      if (isRemotion) {
-        // Text-to-Video voice preview using backend endpoint
-        const formData = new FormData();
-        formData.set("language", state.language);
-        formData.set("gender", state.voiceGender || "female");
-        formData.set("text", transcript.slice(0, 500)); // Limit preview text
+      // Unified voice preview using backend endpoint for both Avatar and Remotion
+      // This ensures scripts with variables and Hindi number normalization are previewed correctly
+      const formData = new FormData();
+      formData.set("language", state.language);
+      formData.set("gender", state.voiceGender || "female");
+      formData.set("text", transcript.slice(0, 800)); // Increased limit for detailed scripts
+      
+      // Pass the actual selected voiceId if it exists (for HeyGen matched previews)
+      if (state.voiceId) {
+        formData.set("voice_id", state.voiceId);
+      }
 
-        const response = await fetch("/api/preview/voice", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${localStorage.getItem("token")}`,
-          },
-          body: formData,
-        });
+      const response = await fetch("/api/preview/voice", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: formData,
+      });
 
-        if (!response.ok) throw new Error("Voice preview failed");
+      if (!response.ok) throw new Error("Voice preview failed");
 
-        const blob = await response.blob();
-        if (audioRef.current) {
-          audioRef.current.src = URL.createObjectURL(blob);
-          audioRef.current.play();
-          setIsPlaying(true);
-        }
-      } else {
-        // Avatar voice preview using HeyGen static preview URL from voices list
-        const voice = voices.find(v => v.id === state.voiceId);
-        if (voice?.previewUrl) {
-          if (audioRef.current) {
-            const proxyUrl = `/api/proxy-audio?url=${encodeURIComponent(voice.previewUrl)}`;
-            audioRef.current.src = proxyUrl;
-            audioRef.current.play();
-            setIsPlaying(true);
-          }
-        } else {
-          toast.info("Avatar voice preview is available in the Avatar selection step.");
-        }
+      const blob = await response.blob();
+      if (audioRef.current) {
+        // Stop any current playback
+        audioRef.current.pause();
+        audioRef.current.src = URL.createObjectURL(blob);
+        audioRef.current.play();
+        setIsPlaying(true);
       }
     } catch (error) {
       console.error("Voice preview error:", error);
@@ -399,28 +445,46 @@ export function StepTranscript({ state, update, voices = [] }: StepTranscriptPro
               ...RESET_GENERATION_STATE 
             };
             
-            // If switching to universal and transcript is default or empty, auto-populate
+            // Auto-populate when switching tabs if content is default or empty
+            const gen = state.voiceGender || "female";
+            const currentUniversal = getDefaultRemotionTranscript(state.language, "universal", gen);
+            const currentPersonalized = getDefaultRemotionTranscript(state.language, "personalized", gen);
+
             if (newVariety === "universal") {
               if (isRemotion) {
-                const langUniversal = UNIVERSAL_TEMPLATES[state.language] || UNIVERSAL_TEMPLATES.English;
-                if (!state.remotionTranscriptCustomized || !state.remotionTranscript.trim()) {
-                  updatePayload.remotionTranscript = langUniversal;
+                // If switching to universal and transcript is empty or still personalized default, update it
+                if (!state.remotionTranscript.trim() || state.remotionTranscript === currentPersonalized) {
+                  updatePayload.remotionTranscript = currentUniversal;
                   updatePayload.remotionTranscriptCustomized = false;
                 }
               } else {
-                // For Avatar video, we don't have specific universal templates yet beyond the current transcript
+                const avatarPersonalized = getDefaultAvatarScript(state.language, gen, "personalized");
+                if (!state.transcript.trim() || state.transcript === avatarPersonalized) {
+                  updatePayload.transcript = currentUniversal;
+                  updatePayload.avatarTranscriptCustomized = false;
+                }
               }
             } else if (newVariety === "personalized") {
                if (isRemotion) {
-                 const langUniversal = UNIVERSAL_TEMPLATES[state.language] || UNIVERSAL_TEMPLATES.English;
-                 if (!state.remotionTranscriptCustomized || state.remotionTranscript === langUniversal) {
-                   updatePayload.remotionTranscript = getDefaultRemotionTranscript(state.language, "personalized");
+                 if (!state.remotionTranscript.trim() || state.remotionTranscript === currentUniversal) {
+                   updatePayload.remotionTranscript = currentPersonalized;
                    updatePayload.remotionTranscriptCustomized = false;
+                 }
+               } else {
+                 const avatarPersonalized = getDefaultAvatarScript(state.language, gen, "personalized");
+                 if (!state.transcript.trim() || state.transcript === currentUniversal) {
+                   updatePayload.transcript = avatarPersonalized;
+                   updatePayload.avatarTranscriptCustomized = false;
                  }
                }
             }
 
             update(updatePayload);
+            
+            // Play audio preview when switching variety as requested
+            setTimeout(() => {
+              playVoicePreview();
+            }, 100);
           }}
           className="w-full max-w-md"
         >

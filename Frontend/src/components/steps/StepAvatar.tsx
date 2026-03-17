@@ -58,19 +58,12 @@ export function StepAvatar({
     return INDIAN_SEARCH_NAMES.some(name => avatar.name.includes(name));
   };
 
-  const filters = ["All", "Indian", ...new Set(avatars.map((avatar) => avatar.category).filter(Boolean))];
   
-  const filteredByCategory = filter === "All" 
-    ? avatars 
-    : filter === "Indian"
-    ? avatars.filter(isIndianAvatar)
-    : avatars.filter((avatar) => avatar.category === filter);
-
-  const filteredByGender = selectedVoiceGender
-    ? filteredByCategory.filter((avatar) => avatar.gender === selectedVoiceGender)
-    : filteredByCategory;
-
-  const filteredAvatars = [...filteredByGender].sort((a, b) => {
+  const filteredAvatars = avatars.filter((avatar) => {
+    // Strict gender match based on selected filter
+    const targetGender = filter.toLowerCase();
+    return avatar.gender && avatar.gender.toLowerCase() === targetGender;
+  }).sort((a, b) => {
     const aIndian = isIndianAvatar(a);
     const bIndian = isIndianAvatar(b);
     if (aIndian && !bIndian) return -1;
@@ -232,11 +225,7 @@ export function StepAvatar({
           </div>
 
           <div className="rounded-lg border border-border bg-secondary/50 px-3 py-2 text-xs text-muted-foreground">
-            {selectedVoiceGender
-              ? `${selectedVoiceGender === "female" ? "Female" : "Male"} avatars only`
-              : selectedAvatarGender
-              ? `${selectedAvatarGender === "female" ? "Female" : "Male"} voices only`
-              : "All genders visible"}
+            {filter} {filter.endsWith('s') ? '' : 's'} visible
           </div>
         </div>
 
@@ -341,21 +330,6 @@ export function StepAvatar({
         ) : null}
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-6">
-        {filters.map((f) => (
-          <button
-            key={f}
-            onClick={() => onFilterChange(f)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              filter === f
-                ? "bg-primary text-primary-foreground"
-                : "bg-secondary text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {f}
-          </button>
-        ))}
-      </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
         {filteredAvatars.length === 0 && !isLoading ? (
@@ -414,19 +388,6 @@ export function StepAvatar({
         })}
       </div>
 
-      <div className="mt-6 max-w-lg space-y-2">
-        <label className="block text-sm font-medium text-foreground">Manual Avatar ID</label>
-        <Input
-          value={selectedId}
-          onChange={(event) => handleManualAvatarChange(event.target.value)}
-          placeholder="Paste an avatar_id"
-          className="bg-secondary border-border"
-        />
-        <p className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Mic2 className="h-3.5 w-3.5" />
-          Manual avatar IDs stay available, but they must match the selected voice gender if a listed avatar is found.
-        </p>
-      </div>
     </div>
   );
 }
