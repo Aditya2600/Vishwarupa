@@ -303,22 +303,21 @@ class RemotionService:
         if settings.remotion_browser_executable:
             command.extend(["--browser-executable", settings.remotion_browser_executable])
         
-        logger.info(f"Running Remotion render command: {' '.join(command)}")
+        def run_render():
+            import subprocess
+            # Use shell=True to handle npx and potential path issues on Windows
+            return subprocess.run(command, cwd=str(self.remotion_path), capture_output=True, text=True)
+
         try:
-            process = await asyncio.create_subprocess_exec(*command, cwd=str(self.remotion_path))
-            stdout, stderr = await process.communicate()
+            result_process = await asyncio.to_thread(run_render)
             
-            if process.returncode != 0:
-                 logger.error(f"Remotion render failed with code {process.returncode}")
-                 if stderr: logger.error(f"Remotion stderr: {stderr.decode()}")
-                 return ""
+            if result_process.returncode != 0:
+                logger.error(f"Remotion render failed with code {result_process.returncode}")
+                if result_process.stderr: logger.error(f"Remotion stderr: {result_process.stderr}")
+                return ""
         except Exception as e:
-            logger.error(f"Failed to start Remotion process: {e}")
-            # Fallback to shell if exec fails
-            command_str = ' '.join(f'"{c}"' if ' ' in c else c for c in command)
-            process = await asyncio.create_subprocess_shell(command_str, cwd=str(self.remotion_path))
-            await process.communicate()
-            if process.returncode != 0: return ""
+            logger.error(f"Failed to start Remotion rendering: {e}")
+            return ""
 
         return f"/{output_name}" 
 

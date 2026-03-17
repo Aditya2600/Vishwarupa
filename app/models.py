@@ -99,26 +99,8 @@ class DirectVideoRequest(LeadRecord):
         return value
 
 
-class RemotionVideoRequest(LeadRecord):
-    video_variety: Literal['personalized', 'universal'] | None = 'personalized'
-    language: str | None = "Hindi"
-    voice_gender: Literal['male', 'female'] | None = 'female'
-    script_text: str | None = None
-    background_color: str | None = "#F4F4F4"
-    include_captions: bool = True
-    title_prefix: str | None = "Legal Notice"
-    video_width: int | None = 1280
-    video_height: int | None = 720
-    subtitle_color: str | None = "White"
-    subtitle_position: str | None = "Bottom"
-    logo_position: str | None = "Top Right"
-    logo_opacity: int = 80
-    logo_filename: str | None = None
-    logo_bytes: bytes | None = None
-    primary_color: str | None = "#003366"
-    secondary_color: str | None = "#FF9900"
-
 class RemotionVideoRequest(DirectVideoRequest):
+    video_variety: Literal['personalized', 'universal'] | None = 'personalized'
     title_prefix: str = 'Loan Recall'
     subtitle_color: str = 'White'
     subtitle_position: str = 'Bottom'
@@ -126,6 +108,8 @@ class RemotionVideoRequest(DirectVideoRequest):
     logo_opacity: int = 80
     logo_filename: str | None = None
     logo_bytes: bytes | None = None
+    primary_color: str | None = "#003366"
+    secondary_color: str | None = "#FF9900"
 
     @field_validator('tos', 'loan_amount', 'contact_details', 'product_type', mode='before')
     @classmethod

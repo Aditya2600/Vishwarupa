@@ -57,6 +57,11 @@ export function StepAvatar({
     return INDIAN_SEARCH_NAMES.some(name => avatar.name.includes(name));
   };
 
+<<<<<<< HEAD
+=======
+  const filters = ["Male", "Female"];
+  const activeFilter = filters.includes(filter) ? filter : (selectedVoiceGender === "male" ? "Male" : "Female");
+>>>>>>> vid-fix--khushi
 
   const filteredAvatars = avatars.filter((avatar) => {
     // Strict gender match based on selected filter
@@ -248,8 +253,13 @@ export function StepAvatar({
                         disabled={!voice.previewUrl}
                         onClick={() => handlePreviewVoice(voice)}
                         className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${voice.previewUrl
+<<<<<<< HEAD
                           ? "bg-secondary text-foreground hover:bg-secondary/80"
                           : "bg-secondary/60 text-muted-foreground"
+=======
+                            ? "bg-secondary text-foreground hover:bg-secondary/80"
+                            : "bg-secondary/60 text-muted-foreground"
+>>>>>>> vid-fix--khushi
                           }`}
                       >
                         {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
@@ -259,8 +269,13 @@ export function StepAvatar({
                         type="button"
                         onClick={() => onVoiceSelect(voice.id)}
                         className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${isSelected
+<<<<<<< HEAD
                           ? "bg-primary text-primary-foreground"
                           : "border border-border bg-background text-foreground hover:bg-secondary"
+=======
+                            ? "bg-primary text-primary-foreground"
+                            : "border border-border bg-background text-foreground hover:bg-secondary"
+>>>>>>> vid-fix--khushi
                           }`}
                       >
                         {isSelected ? "Selected" : "Select"}
@@ -302,6 +317,24 @@ export function StepAvatar({
         ) : null}
       </div>
 
+<<<<<<< HEAD
+=======
+      <div className="flex flex-wrap gap-2 mb-6">
+        {(filters || []).map((f) => (
+          <button
+            key={f}
+            onClick={() => onFilterChange(f)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              (activeFilter || "All") === f
+                ? "bg-primary text-primary-foreground"
+                : "bg-secondary text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {f}
+          </button>
+        ))}
+      </div>
+>>>>>>> vid-fix--khushi
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
         {filteredAvatars.length === 0 && !isLoading ? (
@@ -317,8 +350,13 @@ export function StepAvatar({
               key={avatar.id}
               onClick={() => onSelect(avatar.id, avatar.name, avatar.gender)}
               className={`relative group p-6 rounded-xl border text-center transition-all duration-200 hover:scale-[1.02] ${isSelected
+<<<<<<< HEAD
                 ? "glow-purple-border border-primary bg-primary/5"
                 : "border-border bg-card hover:bg-surface-hover"
+=======
+                  ? "glow-purple-border border-primary bg-primary/5"
+                  : "border-border bg-card hover:bg-surface-hover"
+>>>>>>> vid-fix--khushi
                 }`}
             >
               <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-secondary mx-auto mb-3 overflow-hidden flex items-center justify-center">
@@ -358,7 +396,10 @@ export function StepAvatar({
           );
         })}
       </div>
+<<<<<<< HEAD
 
+=======
+>>>>>>> vid-fix--khushi
     </div>
   );
 }
