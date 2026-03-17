@@ -36,6 +36,13 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_db_client():
+    if sys.platform == 'win32':
+        try:
+            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+            print("DEBUG: Set WindowsProactorEventLoopPolicy in startup")
+        except Exception as e:
+            print(f"DEBUG: Failed to set event loop policy in startup: {e}")
+            
     try:
         # The ping command is cheap and does not require auth.
         await users_collection.database.command("ping")

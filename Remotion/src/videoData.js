@@ -322,17 +322,20 @@ export const getLeadDimensions = (lead) => ({
 });
 
 export const getTrackMeta = (leadId) => {
-  const track = metadata[leadId];
-  if (!track || typeof track !== 'object') {
-    return {duration: DEFAULT_DURATION_SECONDS, subtitles: []};
-  }
+  const lead = getLeadById(leadId);
+  const track = metadata[leadId] || {};
+  
+  const subtitles = Array.isArray(lead?.subtitles) && lead.subtitles.length > 0 
+    ? lead.subtitles 
+    : (Array.isArray(track.subtitles) ? track.subtitles : []);
+
+  const duration = typeof track.duration === 'number' && Number.isFinite(track.duration)
+    ? track.duration
+    : (subtitles.length > 0 ? Math.max(DEFAULT_DURATION_SECONDS, subtitles[subtitles.length - 1].end) : DEFAULT_DURATION_SECONDS);
 
   return {
-    duration:
-      typeof track.duration === 'number' && Number.isFinite(track.duration)
-        ? track.duration
-        : DEFAULT_DURATION_SECONDS,
-    subtitles: Array.isArray(track.subtitles) ? track.subtitles : [],
+    duration,
+    subtitles,
   };
 };
 

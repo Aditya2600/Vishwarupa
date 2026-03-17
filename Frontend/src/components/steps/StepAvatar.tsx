@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, Check, Crown, LoaderCircle, Mic2, Pause, Play } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { AlertCircle, Check, Crown, LoaderCircle, Pause, Play } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -58,7 +57,6 @@ export function StepAvatar({
     return INDIAN_SEARCH_NAMES.some(name => avatar.name.includes(name));
   };
 
-  
   const filteredAvatars = avatars.filter((avatar) => {
     // Strict gender match based on selected filter
     const targetGender = filter.toLowerCase();
@@ -75,28 +73,9 @@ export function StepAvatar({
   
   const filteredVoices = voices
     .filter(
-      (voice) => {
-        // 1. Strict gender match (Default to female to match Step 0 UI)
-        const targetGender = selectedVoiceGender || "female";
-        if (voice.gender !== targetGender) return false;
-
-        // 2. Language compatibility check
-        const isCompatible = isVoiceCompatibleWithLanguage(voice, language);
-        if (!isCompatible) return false;
-
-        // 3. Indian context preference:
-        // For Indian languages, compatible voices are naturally Indian.
-        // For English, we limit to Indian-accented English voices by name/metadata.
-        if (language === "English") {
-          const INDIAN_LANGUAGES = ["Hindi", "Marathi", "Tamil", "Telugu", "Kannada", "Bengali", "Gujarati", "Malayalam", "Punjabi"];
-          const isIndianSearchNames = ["Aakash", "Mohan", "Shruti", "Aditi", "Abhishek", "Priya", "Rohan", "Ananya", "Sneha", "Vihaan", "Arjun", "Karan", "Ishani"];
-          const matchesIndian = isIndianSearchNames.some(name => voice.name.includes(name)) || 
-                               voice.languages.some(l => INDIAN_LANGUAGES.includes(l));
-          return matchesIndian;
-        }
-
-        return true;
-      }
+      (voice) =>
+        isVoiceCompatibleWithLanguage(voice, language) &&
+        (!selectedAvatarGender || voice.gender === selectedAvatarGender),
     )
     .sort((left, right) => compareVoicesForLanguage(left, right, language));
 
@@ -171,11 +150,6 @@ export function StepAvatar({
       stopPreview();
     }
   }, [filteredVoices, playingVoiceId]);
-
-  const handleManualAvatarChange = (value: string) => {
-    const matchingAvatar = avatars.find((avatar) => avatar.id === value.trim());
-    onSelect(value, matchingAvatar?.name ?? "", matchingAvatar?.gender ?? null);
-  };
 
   return (
     <div>
@@ -280,7 +254,7 @@ export function StepAvatar({
                         }`}
                       >
                         {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-                        {voice.previewUrl ? (isPlaying ? "Pause" : "Play") : "No Sample"}
+                        {voice.previewUrl ? (isPlaying ? "Pause" : "Play") : "No Preview Available"}
                       </button>
                       <button
                         type="button"
@@ -303,7 +277,7 @@ export function StepAvatar({
 
         {!voicesLoading && filteredVoices.length === 0 ? (
           <div className="mt-3 rounded-lg border border-border bg-secondary/50 px-3 py-2 text-xs text-muted-foreground">
-            No compatible voices were returned for {language} yet, including multilingual fallbacks.
+            No compatible Indian-market voices were returned for {language} yet.
           </div>
         ) : null}
       </div>
@@ -316,7 +290,7 @@ export function StepAvatar({
           {isLoading ? (
             <div className="inline-flex items-center gap-2 text-xs text-muted-foreground">
               <LoaderCircle className="h-4 w-4 animate-spin" />
-              Loading avatars...
+              Loading Indian avatars...
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">{filteredAvatars.length} avatars available</p>
@@ -330,6 +304,24 @@ export function StepAvatar({
         ) : null}
       </div>
 
+<<<<<<< HEAD
+=======
+      <div className="flex flex-wrap gap-2 mb-6">
+        {filters.map((f) => (
+          <button
+            key={f}
+            onClick={() => onFilterChange(f)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeFilter === f
+                ? "bg-primary text-primary-foreground"
+                : "bg-secondary text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {f}
+          </button>
+        ))}
+      </div>
+>>>>>>> prod/main
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
         {filteredAvatars.length === 0 && !isLoading ? (
@@ -387,7 +379,6 @@ export function StepAvatar({
           );
         })}
       </div>
-
     </div>
   );
 }
