@@ -304,15 +304,13 @@ export function StepAvatar({
         ) : null}
       </div>
 
-<<<<<<< HEAD
-=======
       <div className="flex flex-wrap gap-2 mb-6">
-        {filters.map((f) => (
+        {["Male", "Female"].map((f) => (
           <button
             key={f}
             onClick={() => onFilterChange(f)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeFilter === f
+              filter === f
                 ? "bg-primary text-primary-foreground"
                 : "bg-secondary text-muted-foreground hover:text-foreground"
             }`}
@@ -321,7 +319,6 @@ export function StepAvatar({
           </button>
         ))}
       </div>
->>>>>>> prod/main
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
         {filteredAvatars.length === 0 && !isLoading ? (
