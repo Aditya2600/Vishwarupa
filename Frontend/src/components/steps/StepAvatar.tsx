@@ -92,11 +92,22 @@ export function StepAvatar({
 
   const INDIAN_LANGUAGES = ["Hindi", "Marathi", "Tamil", "Telugu", "Kannada", "Bengali", "Gujarati", "Malayalam", "Punjabi"];
 
+  const effectiveGenderFilter = filter.toLowerCase();
+
   const filteredVoices = voices
     .filter(
-      (voice) =>
-        isVoiceCompatibleWithLanguage(voice, language) &&
-        (!selectedAvatarGender || voice.gender === selectedAvatarGender),
+      (voice) => {
+        const isLangCompatible = isVoiceCompatibleWithLanguage(voice, language);
+        if (!isLangCompatible) {
+            return false;
+        }
+
+        const voiceGen = (voice.gender || "").toLowerCase();
+        if (effectiveGenderFilter === "female") return voiceGen === "female";
+        if (effectiveGenderFilter === "male") return voiceGen === "male";
+        
+        return (!selectedAvatarGender || voiceGen === selectedAvatarGender.toLowerCase());
+      }
     )
     .sort((left, right) => compareVoicesForLanguage(left, right, language));
 
@@ -124,11 +135,7 @@ export function StepAvatar({
     setPlayingVoiceId("");
   };
 
-  const handlePreviewVoice = (voice: VoiceOption) => {
-    if (!voice.previewUrl) {
-      return;
-    }
-
+  const handlePreviewVoice = async (voice: VoiceOption) => {
     if (playingVoiceId === voice.id) {
       stopPreview();
       return;
@@ -136,34 +143,54 @@ export function StepAvatar({
 
     stopPreview();
     setPreviewError(null);
+    setPlayingVoiceId(voice.id); // immediate visual feedback
 
-    // Use proxy to bypass CORS issues with external S3/HeyGen URLs
-    const proxyUrl = `/api/proxy-audio?url=${encodeURIComponent(voice.previewUrl)}`;
-    const audio = new Audio(proxyUrl);
-    audioRef.current = audio;
-    audio.onended = () => {
-      if (audioRef.current === audio) {
-        audioRef.current = null;
+    try {
+      let audioSrc: string;
+
+      if (voice.previewUrl) {
+        // Fast path: use the static HeyGen preview via proxy
+        audioSrc = `/api/proxy-audio?url=${encodeURIComponent(voice.previewUrl)}`;
+      } else {
+        // Fallback: generate TTS on-the-fly using the voice id
+        const form = new FormData();
+        form.set("language", language || "English");
+        form.set("gender", voice.gender || "female");
+        form.set("text", language?.toLowerCase() === "hindi" || language?.toLowerCase() === "hi-in"
+          ? "नमस्ते, यह मेरी आवाज़ का एक नमूना है। अगर आपको यह पसंद है तो मुझे चुनें।"
+          : "Hello, this is a sample of my voice. Select me if you like how I sound."
+        );
+        form.set("voice_id", voice.id);
+
+        const res = await fetch("/api/preview/voice", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+          body: form,
+        });
+        if (!res.ok) throw new Error("TTS failed");
+        const blob = await res.blob();
+        audioSrc = URL.createObjectURL(blob);
       }
-      setPlayingVoiceId("");
-    };
-    audio.onerror = () => {
-      if (audioRef.current === audio) {
-        audioRef.current = null;
-      }
+
+      const audio = new Audio(audioSrc);
+      audioRef.current = audio;
+      audio.onended = () => {
+        if (audioRef.current === audio) audioRef.current = null;
+        setPlayingVoiceId("");
+      };
+      audio.onerror = () => {
+        if (audioRef.current === audio) audioRef.current = null;
+        setPlayingVoiceId("");
+        setPreviewError(`Voice preview is unavailable for ${voice.name}.`);
+      };
+      await audio.play();
+    } catch {
+      if (audioRef.current) audioRef.current = null;
       setPlayingVoiceId("");
       setPreviewError(`Voice preview is unavailable for ${voice.name}.`);
-    };
-
-    setPlayingVoiceId(voice.id);
-    void audio.play().catch(() => {
-      if (audioRef.current === audio) {
-        audioRef.current = null;
-      }
-      setPlayingVoiceId("");
-      setPreviewError(`Voice preview is unavailable for ${voice.name}.`);
-    });
+    }
   };
+
 
   useEffect(() => stopPreview, []);
   useEffect(() => {
@@ -255,7 +282,7 @@ export function StepAvatar({
                       }`}
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-foreground">{voice.name}</p>
+                      <p className="truncate text-sm font-medium text-foreground">{voice.name.split('-')[0].trim()}</p>
                       <p className="truncate text-xs text-muted-foreground">
                         {voice.gender === "female" ? "Female" : "Male"}
                         {voiceLanguageHint ? ` · ${voiceLanguageHint}` : ""}
@@ -265,15 +292,12 @@ export function StepAvatar({
                     <div className="flex shrink-0 items-center gap-2">
                       <button
                         type="button"
-                        disabled={!voice.previewUrl}
-                        onClick={() => handlePreviewVoice(voice)}
-                        className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${voice.previewUrl
-                          ? "bg-secondary text-foreground hover:bg-secondary/80"
-                          : "bg-secondary/60 text-muted-foreground"
-                          }`}
+                        disabled={false}
+                        onClick={() => void handlePreviewVoice(voice)}
+                        className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors bg-secondary text-foreground hover:bg-secondary/80"
                       >
                         {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-                        {voice.previewUrl ? (isPlaying ? "Pause" : "Play") : "No Preview Available"}
+                        {isPlaying ? "Pause" : "Play"}
                       </button>
                       <button
                         type="button"

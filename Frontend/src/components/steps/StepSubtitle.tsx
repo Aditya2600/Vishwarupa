@@ -58,7 +58,7 @@ function getLogoPreviewPosition(position: string): string {
 export function StepSubtitle({ state, update, onLogoSelected }: StepSubtitleProps) {
   const fileInputId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const showAvatarLogoAlert = state.videoType === "avatar" && !state.logoFileName;
+  const showAvatarLogoAlert = false; // Intentionally disabled per user request
 
   const handleLogoChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
@@ -82,7 +82,9 @@ export function StepSubtitle({ state, update, onLogoSelected }: StepSubtitleProp
   };
 
   const subtitlePreviewClass =
-    state.subtitleColor === "Blue"
+    state.subtitleColor === "White"
+      ? "text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]"
+      : state.subtitleColor === "Blue"
       ? "text-blue-400"
       : state.subtitleColor === "Green"
         ? "text-emerald-400"
@@ -175,15 +177,6 @@ export function StepSubtitle({ state, update, onLogoSelected }: StepSubtitleProp
 
       {/* Right – logo */}
       <div className="space-y-6">
-        {showAvatarLogoAlert ? (
-          <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-            <div>
-              <p className="text-sm font-semibold text-foreground">Logo missing</p>
-            </div>
-          </div>
-        ) : null}
-
         <div>
           <label className="block text-sm font-medium text-foreground mb-2">Company Logo</label>
           <label

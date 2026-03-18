@@ -139,13 +139,20 @@ const INDIAN_NAME_HINTS = [
   "aarti",
   "abhishek",
   "aditi",
+  "aditya",
   "ananya",
   "ankit",
   "arjun",
+  "aryan",
   "diya",
   "dhwani",
   "gagan",
   "ishani",
+  "ishita",
+  "kabir",
+  "karan",
+  "mahesh",
+  "rahul",
   "ishita",
   "kabir",
   "karan",
@@ -448,12 +455,24 @@ function isMultilingualLanguage(language: string): boolean {
 }
 
 export function isVoiceCompatibleWithLanguage(
-  voice: Pick<VoiceOption, "language" | "languages">,
+  voice: Pick<VoiceOption, "language" | "languages" | "name">,
   selectedLanguage: string,
 ): boolean {
   const normalizedSelectedLanguage = normalizeLanguageName(selectedLanguage);
   if (!normalizedSelectedLanguage) {
     return false;
+  }
+
+  // Explicitly whitelist the user's highly preferred voices for either English or Hindi
+  const whiteListedIndianVoices = [
+    "aaditya k", "aahana verma", "adv. aditi mehra", "anika mehra", "aditi - calm"
+  ];
+  
+  if (
+    voice.name && whiteListedIndianVoices.includes(voice.name.toLowerCase()) &&
+    (normalizedSelectedLanguage === "Hindi" || normalizedSelectedLanguage === "English")
+  ) {
+    return true;
   }
 
   const normalizedLanguages = dedupeStrings(
@@ -684,24 +703,13 @@ function normalizeAvatar(rawAvatar: Record<string, unknown>): AvatarOption | nul
     ]) ||
     hasIndianNameHint(name);
 
-  if (!isIndian) {
-    return null;
-  }
-
   let finalName = name;
   let finalCategory = category;
   let finalIsPremium = asBoolean(rawAvatar.is_premium) || asBoolean(rawAvatar.premium);
 
-  if (id === "0874e3967d6e4a12aab0f8bde2d500dd") {
-    finalName = "Mahesh";
+  if (id === "0874e3967d6e4a12aab0f8bde2d500dd" || id === "d322b0d77e004f348318ee3345467075" || id === "83a2a157f5474b8a9c16e6a617d979ce" || id === "4490a2a1374c437c9f936c6bc26742479") {
     finalCategory = "Avatar";
     finalIsPremium = false;
-  } else if (id === "d322b0d77e004f348318ee3345467075") {
-    finalName = "Priya";
-    finalCategory = "Avatar";
-  } else if (id === "83a2a157f5474b8a9c16e6a617d979ce") {
-    finalName = "Yash";
-    finalCategory = "Avatar";
   }
 
   return {

@@ -207,9 +207,11 @@ export default function MyVideos() {
 
     try {
       if (navigator.share) {
+        // By using 'text' instead of 'url', the native Share Sheet won't explicitly parse
+        // the domain (HeyGen) to display as the primary subtitle in the OS UI.
         await navigator.share({
           title: video.title || "Shared video",
-          url: video.video_url,
+          text: `Here is the video: ${video.video_url}`,
         });
         return;
       }
