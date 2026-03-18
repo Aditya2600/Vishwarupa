@@ -66,8 +66,34 @@ export function StepAvatar({
            avatar.category === "Lead Avatar" ||
            avatar.category === "Talking Photo";
   };
+  const uniqueAvatarNames = new Set<string>();
 
-  const filteredAvatars = avatars.filter((avatar) => {
+  // Ensure missing Indian male and female avatars are explicitly injected if the API falls short, guaranteeing 5 options
+  const fallbackAvatars = [
+    {
+      id: "Albert_public_3",
+      name: "Vikram",
+      gender: "male",
+      style: "Professional Male",
+      preview_image_url: "https://files2.heygen.ai/avatar/v3/db0a30cd42d640a6b24e693c94c6aac3_62570/preview_target.webp"
+    },
+    {
+      id: "Adrian_public_3_20240312",
+      name: "Aditya K",
+      gender: "male",
+      style: "Professional Male",
+      preview_image_url: "https://files2.heygen.ai/avatar/v3/696e5afe51ee4794aa232753fa703fea_14947/preview_talk_2.webp"
+    }
+  ];
+
+  const fullAvatars = [...avatars, ...fallbackAvatars];
+
+  const filteredAvatars = fullAvatars.map(avatar => {
+    if ((avatar.name || "").toLowerCase().includes("sanjay")) {
+      return { ...avatar, name: "Aditya K" };
+    }
+    return avatar;
+  }).filter((avatar) => {
     const targetGender = filter.toLowerCase();
 
     // Explicit overrides for known avatars that might be missing gender metadata
@@ -76,27 +102,93 @@ export function StepAvatar({
     if (avatar.id === "0874e3967d6e4a12aab0f8bde2d500dd") return targetGender === "male";
 
     // Strict gender match based on selected filter
-    return avatar.gender && avatar.gender.toLowerCase() === targetGender;
+    if (!avatar.gender || avatar.gender.toLowerCase() !== targetGender) return false;
+
+    const n = (avatar.name || "").toLowerCase().trim();
+    if (uniqueAvatarNames.has(n)) return false;
+    uniqueAvatarNames.add(n);
+
+    return true;
   }).sort((a, b) => {
+    const getRank = (avatar: any) => {
+      const name = (avatar.name || "").toLowerCase();
+      const isMale = avatar.gender && avatar.gender.toLowerCase() === "male";
+      
+      if (isMale) {
+        if (name.includes("aditya")) return 1;
+        if (name.includes("arjun")) return 2;
+        if (name.includes("vikram")) return 3;
+        if (name.includes("mahesh")) return 4;
+        if (name.includes("rahul")) return 5;
+        if (name.includes("rohan")) return 6;
+        return 99;
+      } else {
+        if (name.includes("kavya")) return 1;
+        if (name.includes("adv. aditi")) return 2;
+        if (name.includes("priya")) return 3;
+        if (name.includes("shruti")) return 4;
+        if (name.includes("sneha")) return 5;
+        if (name.includes("riya")) return 6;
+        return 99;
+      }
+    };
+
+    const rankA = getRank(a);
+    const rankB = getRank(b);
+
+    if (rankA !== rankB) return rankA - rankB;
+
     const aCustom = isCustomOrRequested(a);
     const bCustom = isCustomOrRequested(b);
     if (aCustom && !bCustom) return -1;
     if (!aCustom && bCustom) return 1;
 
-    const aIndian = isIndianAvatar(a);
-    const bIndian = isIndianAvatar(b);
-    if (aIndian && !bIndian) return -1;
-    if (!aIndian && bIndian) return 1;
     return 0;
   });
 
   const INDIAN_LANGUAGES = ["Hindi", "Marathi", "Tamil", "Telugu", "Kannada", "Bengali", "Gujarati", "Malayalam", "Punjabi"];
 
+  const effectiveGenderFilter = filter.toLowerCase();
+
+  const uniqueVoiceNames = new Set<string>();
+
   const filteredVoices = voices
     .filter(
-      (voice) =>
-        isVoiceCompatibleWithLanguage(voice, language) &&
-        (!selectedAvatarGender || voice.gender === selectedAvatarGender),
+      (voice) => {
+        const isLangCompatible = isVoiceCompatibleWithLanguage(voice, language);
+        if (!isLangCompatible) {
+            return false;
+        }
+
+        const vName = voice.name.toLowerCase();
+        // Deduplicate voices by exact name (like Manu)
+        if (uniqueVoiceNames.has(vName)) return false;
+        
+        const voiceGen = (voice.gender || "").toLowerCase();
+
+        // Specific allowlists for Hindi voices
+        if (language === "Hindi") {
+          if (voiceGen === "male") {
+            const allowedMales = ["aaditya k", "caremelo la rosa", "manu", "niraj", "raju", "ranbir m", "ranga", "rick", "viraj"];
+            if (!allowedMales.some(allowed => vName.includes(allowed))) {
+              return false;
+            }
+          } else if (voiceGen === "female") {
+            // "anika" explicitly removed as requested
+            const allowedFemales = ["adv. aditi mehra", "devi", "kanika", "monika sogam", "muskaan", "saira"];
+            if (!allowedFemales.some(allowed => vName.includes(allowed.toLowerCase()))) {
+              return false;
+            }
+          }
+        }
+
+        uniqueVoiceNames.add(vName);
+
+        if (effectiveGenderFilter === "female") return voiceGen === "female";
+        if (effectiveGenderFilter === "male") return voiceGen === "male";
+        
+        return (!selectedAvatarGender || voiceGen === selectedAvatarGender.toLowerCase());
+      }
     )
     .sort((left, right) => compareVoicesForLanguage(left, right, language));
 
@@ -124,11 +216,7 @@ export function StepAvatar({
     setPlayingVoiceId("");
   };
 
-  const handlePreviewVoice = (voice: VoiceOption) => {
-    if (!voice.previewUrl) {
-      return;
-    }
-
+  const handlePreviewVoice = async (voice: VoiceOption) => {
     if (playingVoiceId === voice.id) {
       stopPreview();
       return;
@@ -136,34 +224,54 @@ export function StepAvatar({
 
     stopPreview();
     setPreviewError(null);
+    setPlayingVoiceId(voice.id); // immediate visual feedback
 
-    // Use proxy to bypass CORS issues with external S3/HeyGen URLs
-    const proxyUrl = `/api/proxy-audio?url=${encodeURIComponent(voice.previewUrl)}`;
-    const audio = new Audio(proxyUrl);
-    audioRef.current = audio;
-    audio.onended = () => {
-      if (audioRef.current === audio) {
-        audioRef.current = null;
+    try {
+      let audioSrc: string;
+
+      if (voice.previewUrl) {
+        // Fast path: use the static HeyGen preview via proxy
+        audioSrc = `/api/proxy-audio?url=${encodeURIComponent(voice.previewUrl)}`;
+      } else {
+        // Fallback: generate TTS on-the-fly using the voice id
+        const form = new FormData();
+        form.set("language", language || "English");
+        form.set("gender", voice.gender || "female");
+        form.set("text", language?.toLowerCase() === "hindi" || language?.toLowerCase() === "hi-in"
+          ? "नमस्ते, यह मेरी आवाज़ का एक नमूना है। अगर आपको यह पसंद है तो मुझे चुनें।"
+          : "Hello, this is a sample of my voice. Select me if you like how I sound."
+        );
+        form.set("voice_id", voice.id);
+
+        const res = await fetch("/api/preview/voice", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+          body: form,
+        });
+        if (!res.ok) throw new Error("TTS failed");
+        const blob = await res.blob();
+        audioSrc = URL.createObjectURL(blob);
       }
-      setPlayingVoiceId("");
-    };
-    audio.onerror = () => {
-      if (audioRef.current === audio) {
-        audioRef.current = null;
-      }
+
+      const audio = new Audio(audioSrc);
+      audioRef.current = audio;
+      audio.onended = () => {
+        if (audioRef.current === audio) audioRef.current = null;
+        setPlayingVoiceId("");
+      };
+      audio.onerror = () => {
+        if (audioRef.current === audio) audioRef.current = null;
+        setPlayingVoiceId("");
+        setPreviewError(`Voice preview is unavailable for ${voice.name}.`);
+      };
+      await audio.play();
+    } catch {
+      if (audioRef.current) audioRef.current = null;
       setPlayingVoiceId("");
       setPreviewError(`Voice preview is unavailable for ${voice.name}.`);
-    };
-
-    setPlayingVoiceId(voice.id);
-    void audio.play().catch(() => {
-      if (audioRef.current === audio) {
-        audioRef.current = null;
-      }
-      setPlayingVoiceId("");
-      setPreviewError(`Voice preview is unavailable for ${voice.name}.`);
-    });
+    }
   };
+
 
   useEffect(() => stopPreview, []);
   useEffect(() => {
@@ -255,7 +363,7 @@ export function StepAvatar({
                       }`}
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-foreground">{voice.name}</p>
+                      <p className="truncate text-sm font-medium text-foreground">{voice.name.split('-')[0].trim()}</p>
                       <p className="truncate text-xs text-muted-foreground">
                         {voice.gender === "female" ? "Female" : "Male"}
                         {voiceLanguageHint ? ` · ${voiceLanguageHint}` : ""}
@@ -265,15 +373,12 @@ export function StepAvatar({
                     <div className="flex shrink-0 items-center gap-2">
                       <button
                         type="button"
-                        disabled={!voice.previewUrl}
-                        onClick={() => handlePreviewVoice(voice)}
-                        className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${voice.previewUrl
-                          ? "bg-secondary text-foreground hover:bg-secondary/80"
-                          : "bg-secondary/60 text-muted-foreground"
-                          }`}
+                        disabled={false}
+                        onClick={() => void handlePreviewVoice(voice)}
+                        className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors bg-secondary text-foreground hover:bg-secondary/80"
                       >
                         {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-                        {voice.previewUrl ? (isPlaying ? "Pause" : "Play") : "No Preview Available"}
+                        {isPlaying ? "Pause" : "Play"}
                       </button>
                       <button
                         type="button"

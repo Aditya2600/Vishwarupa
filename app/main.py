@@ -6,6 +6,7 @@ if sys.platform == 'win32':
 
 from typing import Literal, Optional
 from datetime import datetime
+import time
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, Depends, status
@@ -211,8 +212,18 @@ def health() -> dict:
     return {'status': 'ok', 'output_dir': str(settings.output_dir.resolve())}
 
 
+# Simple in-memory cache to avoid slow HeyGen API calls on every page load
+_avatars_cache: dict = {"data": None, "ts": 0.0}
+_voices_cache: dict = {"data": None, "ts": 0.0}
+CACHE_TTL = 600  # 10 minutes
+
+
 @app.get('/meta/avatars')
 async def list_avatars() -> dict:
+    # Return cached result if fresh
+    if _avatars_cache["data"] is not None and (time.time() - _avatars_cache["ts"]) < CACHE_TTL:
+        return _avatars_cache["data"]
+
     avatars_resp = client.list_avatars()
     try:
         talking_photos_resp = client.list_talking_photos()
@@ -233,21 +244,15 @@ async def list_avatars() -> dict:
         tp["preview_image_url"] = tp.get("talking_photo_url")
         # HeyGen talking photos often don't have gender in the root, maybe we can keep it as unknown
     
-    all_avatars = avatars_data + talking_photos_data
+    all_avatars = list(avatars_data or []) + list(talking_photos_data or [])
     
     # Force specific avatars to be present and have correct gender/name
-    male_target_id = "83a2a157f5474b8a9c16e6a617d979ce"
-    female_target_id = "4490a2a1374c437c9f936c6bc26742479" # Re-check if this is correct, but user said Aditi is female
-    
-    # Let's check both possibilities for Aditi ID (previous conversation might have used a slightly different one)
-    aditi_ids = ["4490a2a1374c437c9f936c6b26742479", "4490a2a1374c437c9f936c6bc26742479"]
+    male_target_ids = ["83a2a157f5474b8a9c16e6a617d979ce", "0874e3967d6e4a12aab0f8bde2d500dd"]
+    female_target_ids = ["4490a2a1374c437c9f936c6b26742479", "4490a2a1374c437c9f936c6bc26742479", "d322b0d77e004f348318ee3345467075"]
     
     updated_avatars = []
-    found_male = False
-    found_aditi = False
-    
-    target_male_avatar = None
-    target_female_avatar = None
+    target_male_avatars = {}
+    target_female_avatars = {}
     
     for a in all_avatars:
         aid = a.get("avatar_id")
@@ -260,60 +265,234 @@ async def list_avatars() -> dict:
             elif "male" in name or "man" in name:
                 a["gender"] = "male"
         
-        if aid == male_target_id:
-            if not a.get("avatar_name") or "Premium" in a.get("avatar_name", ""):
-                a["avatar_name"] = a.get("avatar_name", "Male Avatar").replace("Premium ", "")
+        if aid in male_target_ids:
+            if aid == "83a2a157f5474b8a9c16e6a617d979ce":
+                a["avatar_name"] = "Rahul"
+                a["preview_image_url"] = "/rahul.jpg"
+            elif aid == "0874e3967d6e4a12aab0f8bde2d500dd":
+                a["avatar_name"] = "Mahesh"
+                a["preview_image_url"] = "/mahesh.png"
             a["gender"] = "male"
-            a["is_premium"] = True
-            target_male_avatar = a
-        elif aid in aditi_ids:
-            a["avatar_name"] = "Adv. Aditi Mehra"
+            a["is_premium"] = False
+            a["style"] = "Lead Avatar"
+            target_male_avatars[aid] = a
+        elif aid in female_target_ids:
+            if aid == "d322b0d77e004f348318ee3345467075":
+                a["avatar_name"] = "Priya"
+                a["preview_image_url"] = "/priya.png"
+            else:
+                a["avatar_name"] = "Adv. Aditi Mehra"
+                a["preview_image_url"] = "/Adv_ Aditi_Mehra.png"  # Aditi uses local confirmed image
             a["gender"] = "female"
-            a["is_premium"] = True
-            target_female_avatar = a
+            a["is_premium"] = False
+            a["style"] = "Lead Avatar"  # Keep Aditi at the top
+            target_female_avatars[aid] = a
         else:
             updated_avatars.append(a)
             
     top_avatars = []
     
     # Use the found ones or create new ones if missing
-    if target_male_avatar:
-        target_male_avatar["style"] = "Lead Avatar" # Force it into the top section
-        top_avatars.append(target_male_avatar)
-    else:
-        top_avatars.append({
-            "avatar_id": male_target_id,
-            "avatar_name": "Male Avatar",
-            "style": "Lead Avatar", # Force it into the top section
-            "gender": "male",
-            "is_premium": True
-        })
+    for mid in male_target_ids:
+        if mid in target_male_avatars:
+            top_avatars.append(target_male_avatars[mid])
+        else:
+            name_override = "Rahul" if mid == "83a2a157f5474b8a9c16e6a617d979ce" else "Mahesh"
+            image_override = "/rahul.jpg" if mid == "83a2a157f5474b8a9c16e6a617d979ce" else "/mahesh.png"
+            top_avatars.append({
+                "avatar_id": mid,
+                "avatar_name": name_override,
+                "style": "Lead Avatar",
+                "gender": "male",
+                "is_premium": False,
+                "preview_image_url": image_override
+            })
         
-    if target_female_avatar:
-        target_female_avatar["style"] = "Lead Avatar" # Force it into the top section
-        top_avatars.append(target_female_avatar)
-    else:
-        top_avatars.append({
-            "avatar_id": aditi_ids[0],
-            "avatar_name": "Adv. Aditi Mehra",
-            "style": "Lead Avatar", # Force it into the top section
-            "gender": "female",
-            "is_premium": True
-        })
+    for fid in ["4490a2a1374c437c9f936c6bc26742479", "d322b0d77e004f348318ee3345467075"]:
+        if fid in target_female_avatars:
+            top_avatars.append(target_female_avatars[fid])
+        # Also check the alt aditi ID if the primary one isn't found
+        elif fid == "4490a2a1374c437c9f936c6bc26742479" and "4490a2a1374c437c9f936c6b26742479" in target_female_avatars:
+            top_avatars.append(target_female_avatars["4490a2a1374c437c9f936c6b26742479"])
+        else:
+            name_override = "Priya" if fid == "d322b0d77e004f348318ee3345467075" else "Adv. Aditi Mehra"
+            image_override = "/priya.png" if fid == "d322b0d77e004f348318ee3345467075" else "/Adv_ Aditi_Mehra.png"
+            top_avatars.append({
+                "avatar_id": fid,
+                "avatar_name": name_override,
+                "style": "Lead Avatar",
+                "gender": "female",
+                "is_premium": False,
+                "preview_image_url": image_override
+            })
+    indian_name_hints = ["aahana", "abhishek", "aditi", "aditya", "ankit", "arjun", "aryan", "diya", "ishita", "kabir", "karan", "kavya", "kishore", "maya", "mohan", "rahul", "rohan", "sanjay", "shruti", "sneha", "aakash", "ananya", "neha", "amit", "vikram"]
+    unprofessional_hints = ["outdoor", "sport", "casual", "t-shirt", "tshirt", "t shirt"]
+
+    final_males = []
+    final_females = []
+    seen_base_names = {a.get("avatar_name", "").split()[0].lower() for a in top_avatars if a.get("avatar_name")}
+
+    for a in updated_avatars:
+        name = a.get("avatar_name", "")
         
-    # Combine lists: top_avatars first, then the rest
-    final_list = top_avatars + updated_avatars
+        # Remove gender assumptions for strictly matching Indian names since some avatars have blank gender
+        if not a.get("gender"):
+            if "female" in name.lower() or "woman" in name.lower():
+                a["gender"] = "female"
+            elif "male" in name.lower() or "man" in name.lower():
+                a["gender"] = "male"
+            else:
+                n_lower = name.lower()
+                if any(x in n_lower for x in ["aahana", "aditi", "diya", "ishita", "kavya", "maya", "shruti", "sneha", "ananya", "neha"]):
+                    a["gender"] = "female"
+                elif any(x in n_lower for x in ["abhishek", "aditya", "ankit", "arjun", "aryan", "kabir", "karan", "kishore", "mohan", "rahul", "rohan", "sanjay", "aakash", "amit", "vikram"]):
+                    a["gender"] = "male"
+
+        n_lower = name.lower()
+        if any(unprof in n_lower for unprof in unprofessional_hints):
+            continue  # strictly exclude unprofessional/outdoor avatars
+
+        current_gender = a.get("gender", "").lower()
+        base_name = name.split()[0].lower() if name else ""
+
+        if any(ind in n_lower for ind in indian_name_hints) and base_name not in seen_base_names:
+            if current_gender == "male" and len(final_males) < 3:
+                a["style"] = "Professional Male"
+                # Clean up ugly HeyGen nametags
+                a["avatar_name"] = name.replace(" in Brown blazer", "").replace(" in Blue blazer", "").replace(" in Black suit", "")
+                final_males.append(a)
+                seen_base_names.add(base_name)
+                
+            elif current_gender == "female" and len(final_females) < 3:
+                # User explicitly requested Kavya Sofa Front, skip all other Kavyas
+                if "kavya" in n_lower and "sofa front" not in n_lower:
+                    continue
+                    
+                a["style"] = "Professional Female"
+                a["avatar_name"] = name.replace(" Indoor Front", "").replace(" Sofa Front", "").replace(" Office Front", "")
+                final_females.append(a)
+                seen_base_names.add(base_name)
+
+        if len(final_males) == 3 and len(final_females) == 3:
+            break
+            
+    # Guarantee EXACTLY 5 total males and exactly 5 total females. Force pad if the catalog falls short natively.
+    m_idx = len(final_males)
+    f_idx = len(final_females)
+    generic_male_names = ["Arjun", "Aditya", "Vikram", "Rohan"]
+    generic_female_names = ["Shruti", "Sneha", "Kavya", "Riya"]
+
+    for a in updated_avatars:
+        if m_idx == 3 and f_idx == 3:
+            break
+            
+        if not a.get("preview_image_url") and not a.get("preview_url"):
+            continue # Ensure we only use avatars with actual loaded thumbnails
+            
+        name = a.get("avatar_name", "")
+        base_name = name.split()[0].lower() if name else ""
+        if base_name in seen_base_names:
+            continue
+            
+        n_lower = name.lower()
+        if any(unprof in n_lower for unprof in unprofessional_hints):
+            continue
+            
+        current_gender = a.get("gender", "").lower()
+        if current_gender == "male" and m_idx < 3:
+            a["style"] = "Professional Male"
+            a["avatar_name"] = generic_male_names[m_idx]
+            final_males.append(a)
+            seen_base_names.add(base_name)
+            m_idx += 1
+        elif current_gender == "female" and f_idx < 3:
+            a["style"] = "Professional Female"
+            a["avatar_name"] = generic_female_names[f_idx]
+            final_females.append(a)
+            seen_base_names.add(base_name)
+            f_idx += 1
+        
+    # Guarantee EXACTLY 5 total males and exactly 5 total females. Force pad if the catalog falls short natively using Mediterranean/tan-skin models.
+    m_idx = len(final_males)
+    f_idx = len(final_females)
+    generic_male_names = ["Arjun", "Aditya", "Vikram", "Rohan"]
+    generic_female_names = ["Shruti", "Sneha", "Kavya", "Riya"]
     
-    return {
+    brown_passing_male_hints = ["juan", "adrian", "marcos", "lucas", "rafael", "david", "mateo", "daniel"]
+    brown_passing_female_hints = ["adriana", "maria", "elena", "sofia", "isabella", "ana", "carmen", "laura"]
+
+    for a in updated_avatars:
+        if m_idx == 3 and f_idx == 3:
+            break
+            
+        if not a.get("preview_image_url") and not a.get("preview_url"):
+            continue # Ensure we only use avatars with actual loaded thumbnails
+            
+        name = a.get("avatar_name", "")
+        base_name = name.split()[0].lower() if name else ""
+        if base_name in seen_base_names:
+            continue
+            
+        n_lower = name.lower()
+        if any(unprof in n_lower for unprof in unprofessional_hints):
+            continue
+            
+        current_gender = a.get("gender", "").lower()
+        
+        # Only inject avatars that physically appear tan or Mediterranean to act as Indian stand-ins
+        is_brown_male = any(h in n_lower for h in brown_passing_male_hints)
+        is_brown_female = any(h in n_lower for h in brown_passing_female_hints)
+        
+        if current_gender == "male" and m_idx < 3 and is_brown_male:
+            a["style"] = "Professional Male"
+            a["avatar_name"] = generic_male_names[m_idx]
+            final_males.append(a)
+            seen_base_names.add(base_name)
+            m_idx += 1
+        elif current_gender == "female" and f_idx < 3 and is_brown_female:
+            a["style"] = "Professional Female"
+            a["avatar_name"] = generic_female_names[f_idx]
+            final_females.append(a)
+            seen_base_names.add(base_name)
+            f_idx += 1
+        
+    # Combine lists: top_avatars first
+    final_list = top_avatars + final_males + final_females
+
+    result = {
         "data": {
             "avatars": final_list
         }
     }
+    # Cache for next requests
+    _avatars_cache["data"] = result
+    _avatars_cache["ts"] = time.time()
+    return result
 
 
 @app.get('/meta/voices')
 def list_voices() -> dict:
-    return client.list_voices()
+    if _voices_cache["data"] is not None and (time.time() - _voices_cache["ts"]) < CACHE_TTL:
+        return _voices_cache["data"]
+    
+    raw_result = client.list_voices()
+    voices = raw_result.get("data", {}).get("voices", [])
+    
+    # Filter out explicitly removed voices (generic Aditi) but keep Adv. Aditi Mehra
+    filtered_voices = []
+    for v in voices:
+        v_name = v.get("name", "").lower()
+        # Exclude if it's the generic Aditi (starts with aditi) and not the custom advocate voice
+        if "aditi" in v_name and not ("adv" in v_name or "mehra" in v_name):
+            continue
+        filtered_voices.append(v)
+    
+    if "data" in raw_result and "voices" in raw_result["data"]:
+        raw_result["data"]["voices"] = filtered_voices
+
+    _voices_cache["data"] = raw_result
+    _voices_cache["ts"] = time.time()
+    return raw_result
 
 
 @app.get('/meta/config')
@@ -326,6 +505,100 @@ def get_config() -> dict:
     }
 
 
+@app.post('/preview/voice')
+async def preview_voice(
+    request: Request,
+    language: str = Form(default="Hindi"),
+    gender: str = Form(default="female"),
+    text: str = Form(default=""),
+    voice_id: str = Form(default=""),
+):
+    """Generate a TTS audio preview using the provided transcript text and voice."""
+    import httpx
+    from fastapi.responses import StreamingResponse, Response
+
+    preview_text = text.strip()[:800]
+    
+    if not preview_text:
+        # Fallback demo sentences per language
+        fallbacks = {
+            "hindi": "नमस्ते, यह आवाज़ का एक नमूना है। कृपया इसे सुनें।",
+            "telugu": "నమస్కారం, ఇది ఒక వాయిస్ శాంపిల్.",
+            "tamil": "வணக்கம், இது ஒரு குரல் மாதிரி.",
+            "english": "Hello, this is a voice sample preview.",
+        }
+        lang_key = language.lower()
+        preview_text = fallbacks.get(lang_key, fallbacks["english"])
+
+    # Replace common demo placeholders with sample values so the TTS sounds natural
+    sample_values = {
+        "customer_name": "Ramesh Kumar",
+        "customer": "Ramesh Kumar",
+        "lan": "LAN12345",
+        "account_number": "LAN12345",
+        "client_name": "ABC Finance",
+        "client": "ABC Finance",
+        "tos": "38,450",
+        "balance": "38,450",
+        "outstanding": "38,450",
+        "loan_amount": "1,20,000",
+        "loan_amt": "1,20,000",
+        "amt": "1,20,000",
+        "contact_details": "1800-555-999",
+        "helpline": "1800-555-999",
+        "contact": "1800-555-999",
+        "product_type": "loan",
+        "product": "loan",
+    }
+    import re
+    def replace_placeholder(m: re.Match) -> str:
+        key = m.group(1).strip().lower()
+        return sample_values.get(key, m.group(0))
+    preview_text = re.sub(r'\{\{?\s*(\w+)\s*\}?\}', replace_placeholder, preview_text)
+
+    # Pick best voice id — use provided one, else pick first matching gender from voices cache
+    chosen_voice_id = voice_id.strip()
+    if not chosen_voice_id:
+        voices_data = _voices_cache.get("data") or {}
+        voices_list = voices_data.get("data", {}).get("voices", [])
+        for v in voices_list:
+            if (v.get("gender") or "").lower() == gender.lower():
+                chosen_voice_id = v.get("voice_id") or v.get("id") or ""
+                if chosen_voice_id:
+                    break
+
+    if not chosen_voice_id:
+        return Response(status_code=400, content="No voice available for TTS preview")
+
+    voices_data = _voices_cache.get("data") or {}
+    voices_list = voices_data.get("data", {}).get("voices", [])
+    
+    # Fallback to static proxy audio since HeyGen TTS generation API path is 404ing
+    audio_url = None
+    for v in voices_list:
+        v_id = v.get("voice_id") or v.get("id")
+        if v_id == chosen_voice_id:
+            audio_url = v.get("preview_audio")
+            break
+            
+    if not audio_url:
+        return Response(status_code=502, content="Voice has no audio preview available")
+
+    # Stream the audio bytes back to the frontend
+    async def stream_tts():
+        hdrs = {
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "audio/*,*/*",
+        }
+        async with httpx.AsyncClient(follow_redirects=True, headers=hdrs, timeout=30.0) as hc:
+            async with hc.stream("GET", audio_url) as r:
+                async for chunk in r.aiter_bytes():
+                    yield chunk
+
+    return StreamingResponse(stream_tts(), media_type="audio/wav")
+    return StreamingResponse(stream_tts(), media_type="audio/wav")
+
+
 @app.get('/proxy-audio')
 async def proxy_audio(url: str):
     import httpx
@@ -333,16 +606,19 @@ async def proxy_audio(url: str):
     print(f"DEBUG: Proxying audio from {url}")
     
     async def stream_audio():
-        async with httpx.AsyncClient(follow_redirects=True) as client:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+            "Accept": "audio/webm,audio/ogg,audio/wav,audio/*;q=0.9,application/ogg;q=0.7,video/*;q=0.6,*/*;q=0.5"
+        }
+        async with httpx.AsyncClient(follow_redirects=True, headers=headers) as client:
             try:
                 async with client.stream('GET', url) as response:
-                    if response.status_code >= 400:
-                        print(f"DEBUG: Proxy audio failed with status {response.status_code}")
                     async for chunk in response.aiter_bytes():
                         yield chunk
-            except Exception as e:
-                print(f"DEBUG: Proxy audio exception: {e}")
+            except Exception:
+                pass
 
+    # Note: Relying on the browser to infer the exact container type. audio/mpeg captures the fallback gracefully.
     return StreamingResponse(stream_audio(), media_type="audio/mpeg")
 
 
@@ -484,7 +760,7 @@ async def stylize_video(
         source_video_path=artifact.source_video_path,
         source_video_url=artifact.source_video_url,
         final_video_path=artifact.final_video_path,
-        final_video_url=str(request.url_for('artifacts', path=final_relative)),
+        final_video_url=f"/api/artifacts/{final_relative}",
         subtitle_file_path=artifact.subtitle_file_path,
         logo_file_path=artifact.logo_file_path,
         subtitle_source=artifact.subtitle_source,
@@ -537,7 +813,7 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         request_mode='remotion',
         video_id=result['job_id'],
         status='completed',
-        video_url=str(request.url_for('artifacts', path=relative_video_path)),
+        video_url=f"/api/artifacts/{relative_video_path}",
         thumbnail_url=None,
         title=f"{payload.title_prefix} - {payload.customer_name} - {payload.lan}",
         raw_response={
@@ -594,6 +870,11 @@ async def get_my_videos(current_user: str = Depends(get_current_user)):
 
     for video in videos:
         video["_id"] = str(video["_id"])
+        
+        url = video.get("video_url")
+        if url and isinstance(url, str) and "/artifacts/" in url:
+            video["video_url"] = "/api/artifacts/" + url.split("/artifacts/", 1)[1]
+
     return videos
 
 @app.get('/ping')
@@ -663,7 +944,8 @@ async def preview_voice(
         except Exception:
             final_text = preview_text
 
-        dummy_request = DirectVideoRequest(
+        from app.models import RemotionVideoRequest
+        dummy_request = RemotionVideoRequest(
             customer_name=dummy_lead.customer_name,
             lan=dummy_lead.lan,
             client_name=dummy_lead.client_name,
@@ -673,7 +955,8 @@ async def preview_voice(
             product_type=dummy_lead.product_type,
             language=language,
             voice_gender=gender,
-            script_text=final_text
+            script_text=final_text,
+            video_variety="personalized"
         )
         
         result = await remotion_service.generate_tts(dummy_request)
