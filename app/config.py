@@ -12,6 +12,11 @@ class Settings(BaseSettings):
     heygen_voice_id: str | None = None
     heygen_template_id: str | None = None
     heygen_template_payload_path: str = 'sample_data/template_payload.json'
+    
+    # Custom Avatars Configuration
+    avatar_id_mahesh: str = "2311cba09f374de6b971ea5fa23ff993"
+    avatar_id_rahul: str = "932371fea0eb462ea9beccff656d4823"
+    avatar_id_priya: str = "c56120f1c7564d20b1f87416a6b8d0d1"
     default_video_width: int = 1280
     default_video_height: int = 720
     default_background_color: str = '#F4F4F4'
@@ -29,6 +34,12 @@ class Settings(BaseSettings):
     strict_validation: bool = True
     cors_allow_all: bool = True
     cors_allow_origins: str = 'http://localhost:8080,http://127.0.0.1:8080,http://localhost:4173,http://127.0.0.1:4173'
+    
+    # AWS S3 Settings
+    aws_access_key_id: str | None = None
+    aws_secret_access_key: str | None = None
+    aws_region: str = 'us-east-1'
+    s3_bucket_name: str | None = None
 
     @field_validator('heygen_avatar_id', 'heygen_voice_id', 'heygen_template_id', mode='before')
     @classmethod

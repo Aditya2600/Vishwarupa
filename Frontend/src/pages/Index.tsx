@@ -12,6 +12,16 @@ import { StepShare } from "@/components/steps/StepShare";
 import { StepSubtitle } from "@/components/steps/StepSubtitle";
 import { StepTranscript } from "@/components/steps/StepTranscript";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   getDefaultAvatarScript,
   getDefaultRemotionTranscript,
   resolveNarratorGender,
@@ -129,6 +139,9 @@ const Index = () => {
   const { state, update, nextStep, prevStep, goToStep, reset, canProceed } = useWizardStore();
   const navigate = useNavigate();
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [showLogoWarning, setShowLogoWarning] = useState(false);
+  const continueWithoutLogoRef = useRef(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const stylingRequestedRef = useRef(false);
   const draftSyncWarningShownRef = useRef(false);
@@ -449,6 +462,7 @@ const Index = () => {
     generateRemotionMutation.reset();
     stylizeVideoMutation.reset();
     setLogoFile(null);
+    continueWithoutLogoRef.current = false;
 
     if (requestedFreshDraft) {
       reset();
@@ -523,6 +537,7 @@ const Index = () => {
     generateRemotionMutation.reset();
     stylizeVideoMutation.reset();
     setLogoFile(null);
+    continueWithoutLogoRef.current = false;
     reset();
     toast.success("New video draft started!");
   };
@@ -532,6 +547,7 @@ const Index = () => {
     generateVideoMutation.reset();
     generateRemotionMutation.reset();
     stylizeVideoMutation.reset();
+    continueWithoutLogoRef.current = false;
     update({
       generationStatus: "idle",
       generationError: "",
@@ -702,8 +718,9 @@ const Index = () => {
       }
     }
 
-    if (state.videoType === "avatar" && !logoFile) {
-      toast.info("No logo has been uploaded for this avatar video. Add one in Subtitle & Logo if you want branded output.");
+    if (!logoFile && !continueWithoutLogoRef.current) {
+      setShowLogoWarning(true);
+      return;
     }
 
     const dimensions = ASPECT_RATIO_DIMENSIONS[state.aspectRatio] ?? ASPECT_RATIO_DIMENSIONS["16:9"];
@@ -889,6 +906,56 @@ const Index = () => {
           {renderStep()}
         </StepLayout>
       </div>
+
+      <AlertDialog open={showLogoWarning} onOpenChange={setShowLogoWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Missing Logo</AlertDialogTitle>
+            <AlertDialogDescription>
+              Logo not uploaded. Do you want to continue without logo?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={(e) => {
+                e.preventDefault();
+                setShowLogoWarning(false);
+                setTimeout(() => {
+                  logoInputRef.current?.click();
+                }, 100);
+              }}
+            >
+              Upload Logo
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setShowLogoWarning(false);
+                continueWithoutLogoRef.current = true;
+                handleGenerate();
+              }}
+            >
+              Continue Without Logo
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <input
+        type="file"
+        ref={logoInputRef}
+        className="hidden"
+        accept="image/png, image/jpeg, image/webp"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) {
+            setLogoFile(file);
+            toast.success("Logo uploaded.");
+          }
+          if (logoInputRef.current) {
+            logoInputRef.current.value = "";
+          }
+        }}
+      />
     </div>
   );
 };

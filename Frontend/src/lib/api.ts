@@ -662,9 +662,9 @@ function normalizeAvatar(rawAvatar: Record<string, unknown>): AvatarOption | nul
     category === "My Avatars" ||
     category === "Lead Avatar" ||
     category === "Talking Photo" ||
-    id === "d322b0d77e004f348318ee3345467075" ||
-    id === "83a2a157f5474b8a9c16e6a617d979ce" ||
-    id === "0874e3967d6e4a12aab0f8bde2d500dd" ||
+    id === "c56120f1c7564d20b1f87416a6b8d0d1" ||
+    id === "932371fea0eb462ea9beccff656d4823" ||
+    id === "2311cba09f374de6b971ea5fa23ff993" ||
     hasIndianMetadata(rawAvatar, [
       "avatar_name",
       "name",
@@ -707,7 +707,7 @@ function normalizeAvatar(rawAvatar: Record<string, unknown>): AvatarOption | nul
   let finalCategory = category;
   let finalIsPremium = asBoolean(rawAvatar.is_premium) || asBoolean(rawAvatar.premium);
 
-  if (id === "0874e3967d6e4a12aab0f8bde2d500dd" || id === "d322b0d77e004f348318ee3345467075" || id === "83a2a157f5474b8a9c16e6a617d979ce" || id === "4490a2a1374c437c9f936c6bc26742479") {
+  if (id === "2311cba09f374de6b971ea5fa23ff993" || id === "c56120f1c7564d20b1f87416a6b8d0d1" || id === "932371fea0eb462ea9beccff656d4823" || id === "4490a2a1374c437c9f936c6b26742479") {
     finalCategory = "Avatar";
     finalIsPremium = false;
   }

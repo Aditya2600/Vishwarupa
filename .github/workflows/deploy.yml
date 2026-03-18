@@ -58,6 +58,10 @@ jobs:
                 --name ${{ env.BACKEND_CONTAINER }} \
                 --network host \
                 --mount type=bind,source=/home/ubuntu/.env,target=/app/.env \
+                --env AWS_ACCESS_KEY_ID='${{ secrets.AWS_ACCESS_KEY_ID }}' \
+                --env AWS_SECRET_ACCESS_KEY='${{ secrets.AWS_SECRET_ACCESS_KEY }}' \
+                --env AWS_REGION='${{ secrets.AWS_REGION }}' \
+                --env S3_BUCKET_NAME='${{ secrets.S3_BUCKET_NAME }}' \
                 --restart always \
                 ${{ env.BACKEND_IMAGE }}
 

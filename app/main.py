@@ -22,6 +22,7 @@ from app.services.heygen_client import HeyGenClient
 from app.services.media_styling_service import MediaStylingService, StyleRequest
 from app.services.remotion_service import RemotionService
 from app.services.video_service import VideoService
+from app.services.s3_service import S3Service
 from app.database import users_collection, videos_collection, drafts_collection
 from app.auth import get_password_hash, verify_password, create_access_token, get_current_user
 
@@ -61,6 +62,7 @@ service = VideoService()
 client = HeyGenClient()
 styling_service = MediaStylingService(client=client)
 remotion_service = RemotionService()
+s3_service = S3Service()
 
 
 def _normalize_video_status(status_value: str | None) -> str:
@@ -247,8 +249,8 @@ async def list_avatars() -> dict:
     all_avatars = list(avatars_data or []) + list(talking_photos_data or [])
     
     # Force specific avatars to be present and have correct gender/name
-    male_target_ids = ["83a2a157f5474b8a9c16e6a617d979ce", "0874e3967d6e4a12aab0f8bde2d500dd"]
-    female_target_ids = ["4490a2a1374c437c9f936c6b26742479", "4490a2a1374c437c9f936c6bc26742479", "d322b0d77e004f348318ee3345467075"]
+    male_target_ids = [settings.avatar_id_rahul, settings.avatar_id_mahesh]
+    female_target_ids = ["4490a2a1374c437c9f936c6b26742479", settings.avatar_id_priya]
     
     updated_avatars = []
     target_male_avatars = {}
@@ -266,10 +268,10 @@ async def list_avatars() -> dict:
                 a["gender"] = "male"
         
         if aid in male_target_ids:
-            if aid == "83a2a157f5474b8a9c16e6a617d979ce":
+            if aid == settings.avatar_id_rahul:
                 a["avatar_name"] = "Rahul"
                 a["preview_image_url"] = "/rahul.jpg"
-            elif aid == "0874e3967d6e4a12aab0f8bde2d500dd":
+            elif aid == settings.avatar_id_mahesh:
                 a["avatar_name"] = "Mahesh"
                 a["preview_image_url"] = "/mahesh.png"
             a["gender"] = "male"
@@ -277,7 +279,7 @@ async def list_avatars() -> dict:
             a["style"] = "Lead Avatar"
             target_male_avatars[aid] = a
         elif aid in female_target_ids:
-            if aid == "d322b0d77e004f348318ee3345467075":
+            if aid == settings.avatar_id_priya:
                 a["avatar_name"] = "Priya"
                 a["preview_image_url"] = "/priya.png"
             else:
@@ -297,8 +299,8 @@ async def list_avatars() -> dict:
         if mid in target_male_avatars:
             top_avatars.append(target_male_avatars[mid])
         else:
-            name_override = "Rahul" if mid == "83a2a157f5474b8a9c16e6a617d979ce" else "Mahesh"
-            image_override = "/rahul.jpg" if mid == "83a2a157f5474b8a9c16e6a617d979ce" else "/mahesh.png"
+            name_override = "Rahul" if mid == settings.avatar_id_rahul else "Mahesh"
+            image_override = "/rahul.jpg" if mid == settings.avatar_id_rahul else "/mahesh.png"
             top_avatars.append({
                 "avatar_id": mid,
                 "avatar_name": name_override,
@@ -308,15 +310,12 @@ async def list_avatars() -> dict:
                 "preview_image_url": image_override
             })
         
-    for fid in ["4490a2a1374c437c9f936c6bc26742479", "d322b0d77e004f348318ee3345467075"]:
+    for fid in ["4490a2a1374c437c9f936c6b26742479", settings.avatar_id_priya]:
         if fid in target_female_avatars:
             top_avatars.append(target_female_avatars[fid])
-        # Also check the alt aditi ID if the primary one isn't found
-        elif fid == "4490a2a1374c437c9f936c6bc26742479" and "4490a2a1374c437c9f936c6b26742479" in target_female_avatars:
-            top_avatars.append(target_female_avatars["4490a2a1374c437c9f936c6b26742479"])
         else:
-            name_override = "Priya" if fid == "d322b0d77e004f348318ee3345467075" else "Adv. Aditi Mehra"
-            image_override = "/priya.png" if fid == "d322b0d77e004f348318ee3345467075" else "/Adv_ Aditi_Mehra.png"
+            name_override = "Priya" if fid == settings.avatar_id_priya else "Adv. Aditi Mehra"
+            image_override = "/priya.png" if fid == settings.avatar_id_priya else "/Adv_ Aditi_Mehra.png"
             top_avatars.append({
                 "avatar_id": fid,
                 "avatar_name": name_override,
@@ -379,7 +378,7 @@ async def list_avatars() -> dict:
     # Guarantee EXACTLY 5 total males and exactly 5 total females. Force pad if the catalog falls short natively.
     m_idx = len(final_males)
     f_idx = len(final_females)
-    generic_male_names = ["Arjun", "Aditya", "Vikram", "Rohan"]
+    generic_male_names = ["Arjun", "Aditya", "Karan", "Rohan"]
     generic_female_names = ["Shruti", "Sneha", "Kavya", "Riya"]
 
     for a in updated_avatars:
@@ -415,7 +414,7 @@ async def list_avatars() -> dict:
     # Guarantee EXACTLY 5 total males and exactly 5 total females. Force pad if the catalog falls short natively using Mediterranean/tan-skin models.
     m_idx = len(final_males)
     f_idx = len(final_females)
-    generic_male_names = ["Arjun", "Aditya", "Vikram", "Rohan"]
+    generic_male_names = ["Arjun", "Aditya", "Karan", "Rohan"]
     generic_female_names = ["Shruti", "Sneha", "Kavya", "Riya"]
     
     brown_passing_male_hints = ["juan", "adrian", "marcos", "lucas", "rafael", "david", "mateo", "daniel"]
@@ -696,6 +695,11 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 async def generate_direct(request: DirectVideoRequest, wait: bool = True, current_user: str = Depends(get_current_user)):
     result = service.generate_direct(request, wait=wait)
     
+    if wait and result.saved_to:
+        s3_url = s3_service.upload_video(result.saved_to, f"videos/direct_{result.video_id}.mp4")
+        if s3_url:
+            result.video_url = s3_url
+    
     # Save to MongoDB
     video_record = VideoRecord(
         user_email=current_user,
@@ -754,13 +758,19 @@ async def stylize_video(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     final_relative = artifact.final_video_path.relative_to(settings.output_dir).as_posix()
+    video_url = f"/api/artifacts/{final_relative}"
+    
+    s3_url = s3_service.upload_video(artifact.final_video_path, f"videos/styled_{video_id}.mp4")
+    if s3_url:
+        video_url = s3_url
+
     result = StyledVideoResult(
         video_id=video_id,
         status='styled',
         source_video_path=artifact.source_video_path,
         source_video_url=artifact.source_video_url,
         final_video_path=artifact.final_video_path,
-        final_video_url=f"/api/artifacts/{final_relative}",
+        final_video_url=video_url,
         subtitle_file_path=artifact.subtitle_file_path,
         logo_file_path=artifact.logo_file_path,
         subtitle_source=artifact.subtitle_source,
@@ -783,6 +793,11 @@ async def stylize_video(
 async def generate_template(request: TemplateVideoRequest, wait: bool = True, current_user: str = Depends(get_current_user)):
     print(f"DEBUG: Template generation request by {current_user}")
     result = service.generate_from_template(request, wait=wait)
+    
+    if wait and result.saved_to:
+        s3_url = s3_service.upload_video(result.saved_to, f"videos/template_{result.video_id}.mp4")
+        if s3_url:
+            result.video_url = s3_url
     
     # Save to MongoDB
     video_record = VideoRecord(
@@ -808,12 +823,17 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     relative_video_path = result['video_path'].relative_to(settings.output_dir).as_posix()
+    video_url = f"/api/artifacts/{relative_video_path}"
+    
+    s3_url = s3_service.upload_video(result['video_path'], f"videos/remotion_{result['job_id']}.mp4")
+    if s3_url:
+        video_url = s3_url
     
     job_result = VideoJobResult(
         request_mode='remotion',
         video_id=result['job_id'],
         status='completed',
-        video_url=f"/api/artifacts/{relative_video_path}",
+        video_url=video_url,
         thumbnail_url=None,
         title=f"{payload.title_prefix} - {payload.customer_name} - {payload.lan}",
         raw_response={

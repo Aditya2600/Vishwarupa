@@ -383,8 +383,8 @@ const BrandHud = ({lead, accentColor, activeSceneLabel, frame, uiCopy, logo}) =>
             src={staticFile(logo.public_path)}
             style={{
               display: 'block',
-              maxWidth: 160,
-              maxHeight: 52,
+              maxWidth: 300,
+              maxHeight: 120,
               objectFit: 'contain',
               opacity: clamp((logo.opacity ?? 80) / 100, 0, 1),
               filter: 'drop-shadow(0 4px 12px rgba(2, 6, 23, 0.4))',
@@ -560,8 +560,8 @@ const LogoOverlay = ({logo}) => {
         src={staticFile(logo.public_path)}
         style={{
           display: 'block',
-          maxWidth: 170,
-          maxHeight: 56,
+          maxWidth: 300,
+          maxHeight: 120,
           objectFit: 'contain',
           opacity: clamp((logo.opacity ?? 80) / 100, 0, 1),
           filter: 'drop-shadow(0 10px 22px rgba(2, 6, 23, 0.28))',

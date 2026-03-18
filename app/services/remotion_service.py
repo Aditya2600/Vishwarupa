@@ -395,10 +395,10 @@ class RemotionService:
             if result_process.returncode != 0:
                 logger.error(f"Remotion render failed with code {result_process.returncode}")
                 if result_process.stderr: logger.error(f"Remotion stderr: {result_process.stderr}")
-                return ""
+                raise ValueError(f"Remotion render failed: {result_process.stderr}")
         except Exception as e:
             logger.error(f"Failed to start Remotion rendering: {e}")
-            return ""
+            raise e
 
         return f"/{output_name}" 
 

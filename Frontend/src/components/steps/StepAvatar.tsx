@@ -59,9 +59,9 @@ export function StepAvatar({
 
 
   const isCustomOrRequested = (avatar: AvatarOption) => {
-    return avatar.id === "d322b0d77e004f348318ee3345467075" ||
-           avatar.id === "83a2a157f5474b8a9c16e6a617d979ce" ||
-           avatar.id === "0874e3967d6e4a12aab0f8bde2d500dd" ||
+    return avatar.id === "c56120f1c7564d20b1f87416a6b8d0d1" ||
+           avatar.id === "932371fea0eb462ea9beccff656d4823" ||
+           avatar.id === "2311cba09f374de6b971ea5fa23ff993" ||
            avatar.category === "My Avatars" ||
            avatar.category === "Lead Avatar" ||
            avatar.category === "Talking Photo";
@@ -69,20 +69,15 @@ export function StepAvatar({
   const uniqueAvatarNames = new Set<string>();
 
   // Ensure missing Indian male and female avatars are explicitly injected if the API falls short, guaranteeing 5 options
-  const fallbackAvatars = [
-    {
-      id: "Albert_public_3",
-      name: "Vikram",
-      gender: "male",
-      style: "Professional Male",
-      preview_image_url: "https://files2.heygen.ai/avatar/v3/db0a30cd42d640a6b24e693c94c6aac3_62570/preview_target.webp"
-    },
+  const fallbackAvatars: AvatarOption[] = [
     {
       id: "Adrian_public_3_20240312",
       name: "Aditya K",
       gender: "male",
-      style: "Professional Male",
-      preview_image_url: "https://files2.heygen.ai/avatar/v3/696e5afe51ee4794aa232753fa703fea_14947/preview_talk_2.webp"
+      category: "Professional Male",
+      previewImageUrl: "https://files2.heygen.ai/avatar/v3/696e5afe51ee4794aa232753fa703fea_14947/preview_talk_2.webp",
+      isPremium: false,
+      raw: {}
     }
   ];
 
@@ -97,9 +92,9 @@ export function StepAvatar({
     const targetGender = filter.toLowerCase();
 
     // Explicit overrides for known avatars that might be missing gender metadata
-    if (avatar.id === "d322b0d77e004f348318ee3345467075") return targetGender === "female";
-    if (avatar.id === "83a2a157f5474b8a9c16e6a617d979ce") return targetGender === "male";
-    if (avatar.id === "0874e3967d6e4a12aab0f8bde2d500dd") return targetGender === "male";
+    if (avatar.id === "c56120f1c7564d20b1f87416a6b8d0d1") return targetGender === "female";
+    if (avatar.id === "932371fea0eb462ea9beccff656d4823") return targetGender === "male";
+    if (avatar.id === "2311cba09f374de6b971ea5fa23ff993") return targetGender === "male";
 
     // Strict gender match based on selected filter
     if (!avatar.gender || avatar.gender.toLowerCase() !== targetGender) return false;
@@ -117,10 +112,9 @@ export function StepAvatar({
       if (isMale) {
         if (name.includes("aditya")) return 1;
         if (name.includes("arjun")) return 2;
-        if (name.includes("vikram")) return 3;
-        if (name.includes("mahesh")) return 4;
-        if (name.includes("rahul")) return 5;
-        if (name.includes("rohan")) return 6;
+        if (name.includes("mahesh")) return 3;
+        if (name.includes("rahul")) return 4;
+        if (name.includes("rohan")) return 5;
         return 99;
       } else {
         if (name.includes("kavya")) return 1;
