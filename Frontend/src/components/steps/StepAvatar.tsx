@@ -66,8 +66,34 @@ export function StepAvatar({
            avatar.category === "Lead Avatar" ||
            avatar.category === "Talking Photo";
   };
+  const uniqueAvatarNames = new Set<string>();
 
-  const filteredAvatars = avatars.filter((avatar) => {
+  // Ensure missing Indian male and female avatars are explicitly injected if the API falls short, guaranteeing 5 options
+  const fallbackAvatars = [
+    {
+      id: "Albert_public_3",
+      name: "Vikram",
+      gender: "male",
+      style: "Professional Male",
+      preview_image_url: "https://files2.heygen.ai/avatar/v3/db0a30cd42d640a6b24e693c94c6aac3_62570/preview_target.webp"
+    },
+    {
+      id: "Adrian_public_3_20240312",
+      name: "Aditya K",
+      gender: "male",
+      style: "Professional Male",
+      preview_image_url: "https://files2.heygen.ai/avatar/v3/696e5afe51ee4794aa232753fa703fea_14947/preview_talk_2.webp"
+    }
+  ];
+
+  const fullAvatars = [...avatars, ...fallbackAvatars];
+
+  const filteredAvatars = fullAvatars.map(avatar => {
+    if ((avatar.name || "").toLowerCase().includes("sanjay")) {
+      return { ...avatar, name: "Aditya K" };
+    }
+    return avatar;
+  }).filter((avatar) => {
     const targetGender = filter.toLowerCase();
 
     // Explicit overrides for known avatars that might be missing gender metadata
@@ -76,23 +102,55 @@ export function StepAvatar({
     if (avatar.id === "0874e3967d6e4a12aab0f8bde2d500dd") return targetGender === "male";
 
     // Strict gender match based on selected filter
-    return avatar.gender && avatar.gender.toLowerCase() === targetGender;
+    if (!avatar.gender || avatar.gender.toLowerCase() !== targetGender) return false;
+
+    const n = (avatar.name || "").toLowerCase().trim();
+    if (uniqueAvatarNames.has(n)) return false;
+    uniqueAvatarNames.add(n);
+
+    return true;
   }).sort((a, b) => {
+    const getRank = (avatar: any) => {
+      const name = (avatar.name || "").toLowerCase();
+      const isMale = avatar.gender && avatar.gender.toLowerCase() === "male";
+      
+      if (isMale) {
+        if (name.includes("aditya")) return 1;
+        if (name.includes("arjun")) return 2;
+        if (name.includes("vikram")) return 3;
+        if (name.includes("mahesh")) return 4;
+        if (name.includes("rahul")) return 5;
+        if (name.includes("rohan")) return 6;
+        return 99;
+      } else {
+        if (name.includes("kavya")) return 1;
+        if (name.includes("adv. aditi")) return 2;
+        if (name.includes("priya")) return 3;
+        if (name.includes("shruti")) return 4;
+        if (name.includes("sneha")) return 5;
+        if (name.includes("riya")) return 6;
+        return 99;
+      }
+    };
+
+    const rankA = getRank(a);
+    const rankB = getRank(b);
+
+    if (rankA !== rankB) return rankA - rankB;
+
     const aCustom = isCustomOrRequested(a);
     const bCustom = isCustomOrRequested(b);
     if (aCustom && !bCustom) return -1;
     if (!aCustom && bCustom) return 1;
 
-    const aIndian = isIndianAvatar(a);
-    const bIndian = isIndianAvatar(b);
-    if (aIndian && !bIndian) return -1;
-    if (!aIndian && bIndian) return 1;
     return 0;
   });
 
   const INDIAN_LANGUAGES = ["Hindi", "Marathi", "Tamil", "Telugu", "Kannada", "Bengali", "Gujarati", "Malayalam", "Punjabi"];
 
   const effectiveGenderFilter = filter.toLowerCase();
+
+  const uniqueVoiceNames = new Set<string>();
 
   const filteredVoices = voices
     .filter(
@@ -102,7 +160,30 @@ export function StepAvatar({
             return false;
         }
 
+        const vName = voice.name.toLowerCase();
+        // Deduplicate voices by exact name (like Manu)
+        if (uniqueVoiceNames.has(vName)) return false;
+        
         const voiceGen = (voice.gender || "").toLowerCase();
+
+        // Specific allowlists for Hindi voices
+        if (language === "Hindi") {
+          if (voiceGen === "male") {
+            const allowedMales = ["aaditya k", "caremelo la rosa", "manu", "niraj", "raju", "ranbir m", "ranga", "rick", "viraj"];
+            if (!allowedMales.some(allowed => vName.includes(allowed))) {
+              return false;
+            }
+          } else if (voiceGen === "female") {
+            // "anika" explicitly removed as requested
+            const allowedFemales = ["adv. aditi mehra", "devi", "kanika", "monika sogam", "muskaan", "saira"];
+            if (!allowedFemales.some(allowed => vName.includes(allowed.toLowerCase()))) {
+              return false;
+            }
+          }
+        }
+
+        uniqueVoiceNames.add(vName);
+
         if (effectiveGenderFilter === "female") return voiceGen === "female";
         if (effectiveGenderFilter === "male") return voiceGen === "male";
         
