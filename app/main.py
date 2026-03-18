@@ -206,12 +206,12 @@ def handle_timeout_error(_request: Request, exc: TimeoutError) -> JSONResponse:
     return JSONResponse(status_code=504, content={'detail': str(exc)})
 
 
-@app.get('/api/health')
+@app.get('/health')
 def health() -> dict:
     return {'status': 'ok', 'output_dir': str(settings.output_dir.resolve())}
 
 
-@app.get('/api/meta/avatars')
+@app.get('/meta/avatars')
 async def list_avatars() -> dict:
     avatars_resp = client.list_avatars()
     try:
@@ -311,12 +311,12 @@ async def list_avatars() -> dict:
     }
 
 
-@app.get('/api/meta/voices')
+@app.get('/meta/voices')
 def list_voices() -> dict:
     return client.list_voices()
 
 
-@app.get('/api/meta/config')
+@app.get('/meta/config')
 def get_config() -> dict:
     return {
         "default_avatar_id": settings.heygen_avatar_id,
@@ -326,7 +326,7 @@ def get_config() -> dict:
     }
 
 
-@app.get('/api/proxy-audio')
+@app.get('/proxy-audio')
 async def proxy_audio(url: str):
     import httpx
     from fastapi.responses import StreamingResponse
@@ -346,19 +346,19 @@ async def proxy_audio(url: str):
     return StreamingResponse(stream_audio(), media_type="audio/mpeg")
 
 
-@app.get('/api/meta/templates')
+@app.get('/meta/templates')
 def list_templates(current_user: str = Depends(get_current_user)) -> dict:
     return client.list_templates()
 
 
-@app.get('/api/meta/template/{template_id}')
+@app.get('/meta/template/{template_id}')
 def get_template_details(template_id: str, version: str = 'v3', current_user: str = Depends(get_current_user)) -> dict:
     return client.get_template_details(template_id, version=version)
 
 
 # --- Authentication Endpoints ---
 
-@app.post("/api/auth/signup", response_model=dict)
+@app.post("/auth/signup", response_model=dict)
 async def signup(user: UserCreate):
     normalized_email = str(user.email).strip().lower()
     display_name = (user.full_name or normalized_email.split("@", 1)[0]).strip()
@@ -381,7 +381,7 @@ async def signup(user: UserCreate):
     print(f"DEBUG: User {normalized_email} successfully registered")
     return {"message": "User created successfully"}
 
-@app.post("/api/auth/login", response_model=Token)
+@app.post("/auth/login", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     login_identifier = form_data.username.strip()
     normalized_identifier = login_identifier.lower()
@@ -416,7 +416,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
 # --- Video Generation Endpoints ---
 
-@app.post('/api/generate/direct')
+@app.post('/generate/direct')
 async def generate_direct(request: DirectVideoRequest, wait: bool = True, current_user: str = Depends(get_current_user)):
     result = service.generate_direct(request, wait=wait)
     
@@ -434,7 +434,7 @@ async def generate_direct(request: DirectVideoRequest, wait: bool = True, curren
     return result
 
 
-@app.get('/api/videos/{video_id}/status')
+@app.get('/videos/{video_id}/status')
 async def get_video_status(
     video_id: str,
     request_mode: Literal['direct', 'template'] = 'direct',
@@ -445,7 +445,7 @@ async def get_video_status(
     return result
 
 
-@app.post('/api/videos/{video_id}/stylize', response_model=StyledVideoResult)
+@app.post('/videos/{video_id}/stylize', response_model=StyledVideoResult)
 async def stylize_video(
     video_id: str,
     request: Request,
@@ -503,7 +503,7 @@ async def stylize_video(
     return result
 
 
-@app.post('/api/generate/template')
+@app.post('/generate/template')
 async def generate_template(request: TemplateVideoRequest, wait: bool = True, current_user: str = Depends(get_current_user)):
     print(f"DEBUG: Template generation request by {current_user}")
     result = service.generate_from_template(request, wait=wait)
@@ -522,7 +522,7 @@ async def generate_template(request: TemplateVideoRequest, wait: bool = True, cu
     return result
 
 
-@app.post('/api/generate/remotion', response_model=VideoJobResult)
+@app.post('/generate/remotion', response_model=VideoJobResult)
 async def generate_remotion(request: Request, current_user: str = Depends(get_current_user)):
     payload = await _parse_remotion_payload(request)
 
@@ -564,7 +564,7 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
     
     return job_result
 
-@app.get('/api/my-videos')
+@app.get('/my-videos')
 async def get_my_videos(current_user: str = Depends(get_current_user)):
     print(f"DEBUG: Fetching videos for {current_user}")
     cursor = videos_collection.find({"user_email": current_user}).sort("created_at", -1)
@@ -596,11 +596,11 @@ async def get_my_videos(current_user: str = Depends(get_current_user)):
         video["_id"] = str(video["_id"])
     return videos
 
-@app.get('/api/ping')
+@app.get('/ping')
 async def ping():
     return {"status": "ok"}
 
-@app.post('/api/preview/voice')
+@app.post('/preview/voice')
 async def preview_voice(
     language: str = Form(...),
     gender: str = Form(...),
@@ -699,7 +699,7 @@ async def preview_voice(
             pass
         raise HTTPException(status_code=500, detail=str(exc))
 
-@app.delete('/api/videos/{video_id}')
+@app.delete('/videos/{video_id}')
 async def delete_video(video_id: str, current_user: str = Depends(get_current_user)):
     print(f"DEBUG: Delete request for video {video_id} by {current_user}")
     result = await videos_collection.delete_one({"video_id": video_id, "user_email": current_user})
@@ -707,7 +707,7 @@ async def delete_video(video_id: str, current_user: str = Depends(get_current_us
         raise HTTPException(status_code=404, detail="Video not found")
     return {"status": "success", "message": "Video deleted successfully"}
 
-@app.post('/api/drafts/save')
+@app.post('/drafts/save')
 async def save_draft(draft: dict, current_user: str = Depends(get_current_user)):
     print(f"DEBUG: Saving draft for {current_user}")
     now = datetime.utcnow()
@@ -725,7 +725,7 @@ async def save_draft(draft: dict, current_user: str = Depends(get_current_user))
     draft_id = str(draft_doc["_id"]) if draft_doc else str(result.upserted_id or "latest")
     return {"status": "success", "draft_id": draft_id}
 
-@app.get('/api/drafts')
+@app.get('/drafts')
 async def get_drafts(current_user: str = Depends(get_current_user)):
     print(f"DEBUG: Fetching drafts for {current_user}")
     cursor = drafts_collection.find({"user_email": current_user}).sort("updated_at", -1)
