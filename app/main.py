@@ -276,6 +276,7 @@ async def _parse_remotion_payload(request: Request) -> RemotionVideoRequest:
     }
 
     try:
+        logger.info(f"Remotion video payload started: {payload}")
         return RemotionVideoRequest.model_validate(payload)
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=exc.errors()) from exc
@@ -925,7 +926,7 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
     import hashlib
     import json
     payload = await _parse_remotion_payload(request)
-
+    logger.info(f"Remotion video payload ended:")
     # 1. Create a deterministic hash of the entire configuration payload
     payload_dict = payload.model_dump(exclude_none=True)
     if 'logo_bytes' in payload_dict and payload_dict['logo_bytes']:
@@ -937,6 +938,7 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
     payload_hash = hashlib.sha256(payload_str.encode('utf-8')).hexdigest()
 
     # 2. Check Database for an identical completed video globally
+    logger.info(f"Remotion video Check Database:")
     cached_record = await videos_collection.find_one({
         "request_mode": "remotion",
         "status": "completed",
@@ -952,17 +954,20 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         return VideoJobResult(**job_data)
 
     try:
+        logger.info(f"Remotion video generate_video:")
         result = await remotion_service.generate_video(payload)
+        logger.info(f"Remotion video generate_video ended:")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     relative_video_path = result['video_path'].relative_to(settings.output_dir).as_posix()
     video_url = f"/api/artifacts/{relative_video_path}"
     
+    logger.info(f"Remotion video upload_video:")
     s3_url = s3_service.upload_video(result['video_path'], f"videos/{result['job_id']}.mp4")
     if s3_url:
         video_url = s3_url
-    
+    logger.info(f"Remotion video upload_video: {video_url}")
     job_result = VideoJobResult(
         request_mode='remotion',
         video_id=result['job_id'],
