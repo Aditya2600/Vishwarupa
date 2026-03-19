@@ -702,6 +702,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 @app.post('/jobs/avatar', response_model=AvatarJobAck)
 async def create_avatar_job(request: DirectVideoRequest, current_user: str = Depends(get_current_user)):
     if not sqs_service.is_configured():
+        print("DEBUG: SQS queue is not configured")
         raise HTTPException(
             status_code=503,
             detail='Avatar async queue is not configured. Set SQS_QUEUE_URL and retry.',
