@@ -373,11 +373,14 @@ class RemotionService:
         if os.name == 'nt' and npx_bin == 'npx':
             npx_bin = 'npx.cmd'
 
+        props_path = self.remotion_path / f"props_{job_id}.json"
+        props_path.write_text(json.dumps({"leadId": job_id}, ensure_ascii=False), encoding='utf-8')
+
         # Ensure we specify the entry point 'src/index.jsx' and the composition ID 'main'
         command = [
             npx_bin, "remotion", "render", "src/index.jsx", "main",
             str(output_path),
-            "--props", json.dumps({"leadId": job_id}),
+            f"--props={str(props_path).replace(os.sep, '/')}",
             "--overwrite"
         ]
         
@@ -386,7 +389,7 @@ class RemotionService:
         
         def run_render():
             import subprocess
-            # Use shell=True to handle npx and potential path issues on Windows
+            # Remove shell=True because command is a list; otherwise npx hangs on Windows
             return subprocess.run(command, cwd=str(self.remotion_path), capture_output=True, text=True)
 
         try:
