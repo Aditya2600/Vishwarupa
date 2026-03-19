@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import time
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Literal
 
@@ -13,8 +15,12 @@ from app.utils.validation import require_non_null
 
 
 class VideoService:
+    VOICE_CACHE_TTL_SECONDS = 300
+
     def __init__(self, client: HeyGenClient | None = None) -> None:
         self.client = client or HeyGenClient()
+        self._voice_cache: list[dict[str, Any]] | None = None
+        self._voice_cache_ts: float = 0.0
         settings.output_dir.mkdir(parents=True, exist_ok=True)
 
     @staticmethod
@@ -38,6 +44,118 @@ class VideoService:
         title = data.get('title') or status_response.get('title')
         return video_url, thumbnail_url, title
 
+    @staticmethod
+    def _parse_bool(value: Any) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return value != 0
+        if isinstance(value, str):
+            return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+        return bool(value)
+
+    @staticmethod
+    def _extract_voice_id(voice: dict[str, Any]) -> str | None:
+        for key in ('voice_id', 'id', 'voiceId'):
+            value = voice.get(key)
+            if value:
+                return str(value)
+        return None
+
+    @staticmethod
+    def _extract_voice_gender(voice: dict[str, Any]) -> str | None:
+        for key in ('gender', 'sex', 'speaker_gender'):
+            value = voice.get(key)
+            if value:
+                lowered = str(value).strip().lower()
+                if lowered in {'male', 'female'}:
+                    return lowered
+        return None
+
+    @staticmethod
+    def _is_voice_available(voice: dict[str, Any]) -> bool:
+        for bool_key, unavailable_value in (
+            ('is_available', False),
+            ('available', False),
+            ('enabled', False),
+            ('is_enabled', False),
+            ('disabled', True),
+            ('is_disabled', True),
+        ):
+            if bool_key in voice and VideoService._parse_bool(voice.get(bool_key)) == unavailable_value:
+                return False
+
+        status_value = voice.get('status') or voice.get('voice_status') or voice.get('state')
+        status = str(status_value or '').strip().lower()
+        if not status:
+            return True
+        if status in {'failed', 'error', 'inactive', 'disabled', 'unavailable', 'deleted'}:
+            return False
+        return all(fragment not in status for fragment in ('fail', 'error', 'inactive', 'disabled', 'unavailable'))
+
+    def _get_available_voices(self) -> list[dict[str, Any]]:
+        list_voices = getattr(self.client, 'list_voices', None)
+        if not callable(list_voices):
+            return []
+
+        now = time.time()
+        if self._voice_cache is not None and (now - self._voice_cache_ts) < self.VOICE_CACHE_TTL_SECONDS:
+            return self._voice_cache
+
+        try:
+            response = list_voices()
+        except Exception:
+            return self._voice_cache or []
+
+        voices_root = response.get('data') if isinstance(response, dict) else {}
+        voices = voices_root.get('voices') if isinstance(voices_root, dict) else None
+        if not isinstance(voices, list):
+            voices = []
+
+        parsed_voices = [voice for voice in voices if isinstance(voice, dict)]
+        self._voice_cache = parsed_voices
+        self._voice_cache_ts = now
+        return parsed_voices
+
+    def _resolve_voice_id(self, requested_voice_id: str | None, *, preferred_gender: str | None) -> str | None:
+        initial_candidate = (requested_voice_id or settings.heygen_voice_id or '').strip() or None
+        if not initial_candidate:
+            return None
+
+        voices = self._get_available_voices()
+        if not voices:
+            return initial_candidate
+
+        voice_by_id = {
+            voice_id: voice
+            for voice in voices
+            for voice_id in [self._extract_voice_id(voice)]
+            if voice_id
+        }
+        available_voices = [voice for voice in voices if self._is_voice_available(voice)]
+
+        current = voice_by_id.get(initial_candidate)
+        if current and self._is_voice_available(current):
+            return initial_candidate
+        # If the selected voice is missing or unavailable, prefer a same-gender replacement.
+        if not preferred_gender and current:
+            preferred_gender = self._extract_voice_gender(current)
+
+        normalized_gender = (preferred_gender or '').strip().lower()
+        if normalized_gender in {'male', 'female'}:
+            for voice in available_voices:
+                if self._extract_voice_gender(voice) == normalized_gender:
+                    replacement_id = self._extract_voice_id(voice)
+                    if replacement_id:
+                        return replacement_id
+
+        for voice in available_voices:
+            replacement_id = self._extract_voice_id(voice)
+            if replacement_id:
+                return replacement_id
+
+        return None
+
     def _build_direct_payload(self, request: DirectVideoRequest) -> dict[str, Any]:
         avatar_id = request.avatar_id or settings.heygen_avatar_id
         require_non_null(avatar_id, field_name='avatar_id')
@@ -46,7 +164,7 @@ class VideoService:
         background_color = request.background_color or settings.default_background_color
         width = request.video_width or settings.default_video_width
         height = request.video_height or settings.default_video_height
-        voice_id = request.voice_id or settings.heygen_voice_id
+        voice_id = self._resolve_voice_id(request.voice_id, preferred_gender=request.voice_gender)
 
         if request.language == "Hindi":
             script_text = normalize_hindi_numbers(script_text)
@@ -93,6 +211,31 @@ class VideoService:
             payload['folder_id'] = request.folder
         return payload
 
+    @staticmethod
+    def _is_voice_unavailable_error(error: Exception | str) -> bool:
+        lowered = str(error).lower()
+        return (
+            'voice is not available' in lowered
+            or 'voice not available' in lowered
+            or 'voice unavailable' in lowered
+            or 'selected voice is unavailable' in lowered
+        )
+
+    @staticmethod
+    def _drop_voice_id(payload: dict[str, Any]) -> dict[str, Any]:
+        fallback_payload = deepcopy(payload)
+        inputs = fallback_payload.get('video_inputs')
+        if isinstance(inputs, list) and inputs:
+            first_input = inputs[0] if isinstance(inputs[0], dict) else None
+            if first_input:
+                voice_block = first_input.get('voice') if isinstance(first_input.get('voice'), dict) else None
+                if voice_block:
+                    voice_block.pop('voice_id', None)
+                    text_block = voice_block.get('text') if isinstance(voice_block.get('text'), dict) else None
+                    if text_block:
+                        text_block.pop('voice_id', None)
+        return fallback_payload
+
     def _build_template_payload(self, request: TemplateVideoRequest) -> tuple[str, dict[str, Any]]:
         template_id = request.template_id or settings.heygen_template_id
         require_non_null(template_id, field_name='template_id')
@@ -135,7 +278,14 @@ class VideoService:
 
     def generate_direct(self, request: DirectVideoRequest, *, wait: bool = True) -> VideoJobResult:
         create_payload = self._build_direct_payload(request)
-        create_response = self.client.generate_video_direct(create_payload)
+        try:
+            create_response = self.client.generate_video_direct(create_payload)
+        except RuntimeError as exc:
+            # Rare race: voice status can flip after we fetched the catalog.
+            if not self._is_voice_unavailable_error(exc):
+                raise
+            retry_payload = self._drop_voice_id(create_payload)
+            create_response = self.client.generate_video_direct(retry_payload)
         video_id = self._extract_video_id(create_response)
         final_response = self.client.wait_for_video(video_id) if wait else create_response
         status = str(final_response.get('status') or final_response.get('data', {}).get('status') or 'submitted')

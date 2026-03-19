@@ -101,6 +101,9 @@ export interface AppConfig {
 }
 
 export const API_BASE_URL = "/api";
+const GENERATION_FAILED_MESSAGE = "We couldn't generate the video right now. Please try again.";
+const GENERATION_TIMEOUT_MESSAGE = "The video is taking longer than expected. Please try again in a moment.";
+const SERVER_UNREACHABLE_MESSAGE = "Could not reach the server. Check that the backend is running and try again.";
 
 const LANGUAGE_CODE_TO_NAME: Record<string, string> = {
   en: "English",
@@ -305,6 +308,14 @@ function dedupeStrings(values: string[]): string[] {
   }
 
   return uniqueValues;
+}
+
+function normalizeVoiceNameKey(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function extractStrings(value: unknown): string[] {
@@ -530,16 +541,46 @@ function extractErrorMessage(payload: unknown): string | null {
   );
 }
 
+function isGenerationRequest(path: string): boolean {
+  const normalizedPath = path.split("?")[0] ?? path;
+  return (
+    normalizedPath.startsWith("/generate/") ||
+    /^\/videos\/[^/]+\/status$/.test(normalizedPath) ||
+    /^\/videos\/[^/]+\/stylize$/.test(normalizedPath)
+  );
+}
+
+function toSafeErrorMessage(path: string, payload: unknown, status: number): string {
+  const extracted = extractErrorMessage(payload)?.trim();
+  const lowered = extracted?.toLowerCase() ?? "";
+  const isGenerationFlow = isGenerationRequest(path);
+
+  if (isGenerationFlow) {
+    if (/insufficient credit/i.test(lowered)) {
+      return "You don't have enough credits to generate this video.";
+    }
+    if (/voice(\s|_|-)?id|voice is not available|voice not available|voice unavailable/i.test(lowered)) {
+      return "The selected voice is unavailable right now. Please choose another voice and try again.";
+    }
+    if (/timed out|timeout|longer than expected/i.test(lowered) || status === 504) {
+      return GENERATION_TIMEOUT_MESSAGE;
+    }
+    return GENERATION_FAILED_MESSAGE;
+  }
+
+  return extracted ?? `Request failed with status ${status}`;
+}
+
 function normalizeNetworkError(error: unknown): Error {
   if (error instanceof Error) {
     const message = error.message.trim();
     if (/failed to fetch|networkerror|load failed/i.test(message)) {
-      return new Error("Could not reach the server. Check that the backend is running and try again.");
+      return new Error(SERVER_UNREACHABLE_MESSAGE);
     }
     return error;
   }
 
-  return new Error("Could not reach the server. Check that the backend is running and try again.");
+  return new Error(SERVER_UNREACHABLE_MESSAGE);
 }
 
 export async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
@@ -576,20 +617,17 @@ export async function requestJson<T>(path: string, init?: RequestInit): Promise<
       }
     }
 
-    const isRemotionGenerate = path.startsWith("/generate/remotion");
-    if (isRemotionGenerate && response.status >= 500) {
-      throw new Error("Text video generation failed. Please try again in a moment.");
+    if (typeof payload === "string" && payload.trim().startsWith("<")) {
+      if (isGenerationRequest(path) && response.status === 504) {
+        throw new Error(GENERATION_TIMEOUT_MESSAGE);
+      }
+      if (isGenerationRequest(path)) {
+        throw new Error(GENERATION_FAILED_MESSAGE);
+      }
+      throw new Error("The server returned an unexpected response. Please try again.");
     }
 
-    if (typeof payload === "string" && payload.trim().startsWith("<")) {
-      if (response.status === 504) {
-        throw new Error("The render is taking longer than the frontend proxy timeout. Rebuild the frontend container with the updated timeout and try again.");
-      }
-      throw new Error(
-        "The server returned an unexpected HTML response instead of JSON. Check that the backend is running and the /api proxy is configured correctly.",
-      );
-    }
-    throw new Error(extractErrorMessage(payload) ?? `Request failed with status ${response.status}`);
+    throw new Error(toSafeErrorMessage(path, payload, response.status));
   }
 
   return payload as T;
@@ -707,7 +745,7 @@ function normalizeAvatar(rawAvatar: Record<string, unknown>): AvatarOption | nul
   let finalCategory = category;
   let finalIsPremium = asBoolean(rawAvatar.is_premium) || asBoolean(rawAvatar.premium);
 
-  if (id === "2311cba09f374de6b971ea5fa23ff993" || id === "c56120f1c7564d20b1f87416a6b8d0d1" || id === "932371fea0eb462ea9beccff656d4823" || id === "4490a2a1374c437c9f936c6b26742479") {
+  if (id === "2311cba09f374de6b971ea5fa23ff993" || id === "c56120f1c7564d20b1f87416a6b8d0d1" || id === "932371fea0eb462ea9beccff656d4823" || id === "5308daadb44345149c419def8575b3fd") {
     finalCategory = "Avatar";
     finalIsPremium = false;
   }
@@ -745,6 +783,50 @@ function extractVoiceArray(payload: unknown): Record<string, unknown>[] {
     .filter((item) => Object.keys(item).length > 0);
 }
 
+function isVoiceUnavailable(rawVoice: Record<string, unknown>): boolean {
+  const nestedVoice = asRecord(rawVoice.voice);
+  const status =
+    asString(rawVoice.status) ??
+    asString(rawVoice.voice_status) ??
+    asString(rawVoice.state) ??
+    asString(nestedVoice.status) ??
+    asString(nestedVoice.voice_status) ??
+    asString(nestedVoice.state);
+
+  const normalizedStatus = status?.trim().toLowerCase() ?? "";
+  if (normalizedStatus) {
+    if (
+      /fail|error|inactive|disabled|unavailable|deleted/.test(normalizedStatus)
+    ) {
+      return true;
+    }
+  }
+
+  const disabled =
+    asBoolean(rawVoice.disabled) ||
+    asBoolean(rawVoice.is_disabled) ||
+    asBoolean(nestedVoice.disabled) ||
+    asBoolean(nestedVoice.is_disabled);
+  if (disabled) {
+    return true;
+  }
+
+  if ("is_available" in rawVoice && !asBoolean(rawVoice.is_available)) {
+    return true;
+  }
+  if ("available" in rawVoice && !asBoolean(rawVoice.available)) {
+    return true;
+  }
+  if ("is_available" in nestedVoice && !asBoolean(nestedVoice.is_available)) {
+    return true;
+  }
+  if ("available" in nestedVoice && !asBoolean(nestedVoice.available)) {
+    return true;
+  }
+
+  return false;
+}
+
 function normalizeVoice(rawVoice: Record<string, unknown>): VoiceOption | null {
   const id =
     asString(rawVoice.voice_id) ??
@@ -752,6 +834,10 @@ function normalizeVoice(rawVoice: Record<string, unknown>): VoiceOption | null {
     asString(rawVoice.voiceId);
 
   if (!id) {
+    return null;
+  }
+
+  if (isVoiceUnavailable(rawVoice)) {
     return null;
   }
 
@@ -917,13 +1003,23 @@ export async function fetchVoices(): Promise<VoiceOption[]> {
     .filter((voice): voice is VoiceOption => voice !== null);
 
   const seenIds = new Set<string>();
+  const seenNameKeys = new Set<string>();
   const uniqueVoices: VoiceOption[] = [];
 
   for (const voice of parsedVoices) {
-    if (!seenIds.has(voice.id)) {
-      seenIds.add(voice.id);
-      uniqueVoices.push(voice);
+    const nameKey = normalizeVoiceNameKey(voice.name);
+    if (seenIds.has(voice.id)) {
+      continue;
     }
+    if (nameKey && seenNameKeys.has(nameKey)) {
+      continue;
+    }
+
+    seenIds.add(voice.id);
+    if (nameKey) {
+      seenNameKeys.add(nameKey);
+    }
+    uniqueVoices.push(voice);
   }
 
   return uniqueVoices.sort((left, right) =>

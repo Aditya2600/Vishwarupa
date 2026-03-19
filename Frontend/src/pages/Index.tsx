@@ -58,12 +58,12 @@ const getStepMeta = (step: number, videoType: "avatar" | "remotion") => {
     {
       title: "Add Transcript",
       subtitle: "Customize your script and lead details.",
-      next: "Next: Subtitle & Logo →",
+      next: videoType === "avatar" ? "Generate Video ✨" : "Next: Subtitle & Logo →",
     },
     {
-      title: "Subtitles & Branding",
-      subtitle: "Configure captions and logo placement.",
-      next: "Next: Preview →",
+      title: videoType === "avatar" ? "Preview Video" : "Subtitles & Branding",
+      subtitle: videoType === "avatar" ? "Review your finished output." : "Configure captions and logo placement.",
+      next: videoType === "avatar" ? "Next: Share →" : "Next: Preview →",
     },
     {
       title: "Preview Video",
@@ -76,7 +76,7 @@ const getStepMeta = (step: number, videoType: "avatar" | "remotion") => {
       next: "",
     },
   ];
-  return meta[step];
+  return meta[step] ?? meta[0];
 };
 
 const ASPECT_RATIO_DIMENSIONS: Record<string, { width: number; height: number }> = {
@@ -150,6 +150,7 @@ const Index = () => {
   const meta = getStepMeta(step, state.videoType);
   const activeTranscript = state.videoType === "remotion" ? state.remotionTranscript : state.transcript;
   const isProcessing = state.generationStatus === "submitting" || state.generationStatus === "styling";
+  const shouldGenerateOnCurrentStep = state.videoType === "avatar" ? step === 2 : step === 3;
   const requestedMode = searchParams.get("mode");
   const requestedFreshDraft = searchParams.get("fresh") === "1";
 
@@ -329,6 +330,18 @@ const Index = () => {
   }, [selectedVoice, state.voiceGender, state.voiceName, update]);
 
   useEffect(() => {
+    if (!state.voiceId || selectedVoice || voicesQuery.isLoading || voicesQuery.isError || voices.length === 0) {
+      return;
+    }
+
+    update({
+      ...EMPTY_VOICE_SELECTION,
+      ...RESET_GENERATION_STATE,
+    });
+    toast.info("Your previously selected voice is no longer available, so we cleared it.");
+  }, [selectedVoice, state.voiceId, update, voices.length, voicesQuery.isError, voicesQuery.isLoading]);
+
+  useEffect(() => {
     if (
       state.videoType !== "avatar" ||
       !selectedVoice ||
@@ -403,17 +416,12 @@ const Index = () => {
     if (["completed", "done", "success"].includes(nextStatus)) {
       statusPollingWarningShownRef.current = false;
       update({ generatedVideo: statusQuery.data, generationError: "" });
-      if (state.videoType === "avatar" && (state.includeCaptions || logoFile) && !stylingRequestedRef.current) {
-        stylingRequestedRef.current = true;
-        stylizeVideoMutation.mutate(statusQuery.data.video_id);
-      } else {
-        update({
-          generationStatus: "completed",
-          generationError: "",
-        });
-        toast.success("Video generated successfully.");
-        goToStep(5);
-      }
+      update({
+        generationStatus: "completed",
+        generationError: "",
+      });
+      toast.success("Video generated successfully.");
+      goToStep(5);
       return;
     }
 
@@ -422,13 +430,10 @@ const Index = () => {
     });
   }, [
     goToStep,
-    logoFile,
     state.generatedVideo?.video_id,
     state.generationStatus,
-    state.includeCaptions,
     state.videoType,
     statusQuery.data,
-    stylizeVideoMutation,
     update,
   ]);
 
@@ -451,6 +456,16 @@ const Index = () => {
     });
     toast.error(statusQuery.error instanceof Error ? statusQuery.error.message : "Unexpected error while checking video status.");
   }, [state.generationStatus, statusQuery.error, update]);
+
+  useEffect(() => {
+    if (state.videoType === "avatar" && step === 3) {
+      goToStep(2);
+      return;
+    }
+    if (state.videoType === "remotion" && step === 1) {
+      goToStep(2);
+    }
+  }, [goToStep, state.videoType, step]);
 
   useEffect(() => {
     if (requestedMode !== "avatar" && requestedMode !== "remotion") {
@@ -718,7 +733,7 @@ const Index = () => {
       }
     }
 
-    if (!logoFile && !continueWithoutLogoRef.current) {
+    if (state.videoType === "remotion" && !logoFile && !continueWithoutLogoRef.current) {
       setShowLogoWarning(true);
       return;
     }
@@ -738,7 +753,7 @@ const Index = () => {
       language: state.language,
       script_text: activeTranscript.trim() || undefined,
       background_color: state.backgroundColor,
-      include_captions: state.includeCaptions,
+      include_captions: state.videoType === "remotion" ? state.includeCaptions : false,
       title_prefix: state.videoType === "avatar" ? state.titlePrefix.trim() || undefined : undefined,
       video_width: dimensions.width,
       video_height: dimensions.height,
@@ -763,7 +778,7 @@ const Index = () => {
   };
 
   const handleNextPrimary = () => {
-    if (step === 3) {
+    if (shouldGenerateOnCurrentStep) {
       handleGenerate();
       return;
     }
@@ -777,6 +792,10 @@ const Index = () => {
     }
 
     if (state.videoType === "remotion" && targetStep === 1) {
+      goToStep(2);
+      return;
+    }
+    if (state.videoType === "avatar" && targetStep === 3) {
       goToStep(2);
       return;
     }
@@ -864,7 +883,10 @@ const Index = () => {
       case 2:
         return <StepTranscript state={state} update={update} voices={voices} />;
       case 3:
-        return <StepSubtitle state={state} update={update} onLogoSelected={setLogoFile} />;
+        if (state.videoType === "remotion") {
+          return <StepSubtitle state={state} update={update} onLogoSelected={setLogoFile} />;
+        }
+        return <StepPreview state={state} update={update} />;
       case 4:
         return <StepPreview state={state} update={update} />;
       case 5:
@@ -881,11 +903,12 @@ const Index = () => {
         <WorkflowSidebar currentStep={step} onStepClick={handleWorkflowStepClick} videoType={state.videoType} />
         <StepLayout
           step={step}
+          videoType={state.videoType}
           title={meta.title}
           subtitle={meta.subtitle}
           onNext={handleNextPrimary}
           onBack={prevStep}
-          nextLabel={step === 3 ? "Generate Video ✨" : meta.next}
+          nextLabel={shouldGenerateOnCurrentStep ? "Generate Video ✨" : meta.next}
           canProceed={canProceed()}
           isLast={step === STEPS.length - 1}
           lastLabel="Finish"
@@ -907,55 +930,59 @@ const Index = () => {
         </StepLayout>
       </div>
 
-      <AlertDialog open={showLogoWarning} onOpenChange={setShowLogoWarning}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Missing Logo</AlertDialogTitle>
-            <AlertDialogDescription>
-              Logo not uploaded. Do you want to continue without logo?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel
-              onClick={(e) => {
-                e.preventDefault();
-                setShowLogoWarning(false);
-                setTimeout(() => {
-                  logoInputRef.current?.click();
-                }, 100);
-              }}
-            >
-              Upload Logo
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                setShowLogoWarning(false);
-                continueWithoutLogoRef.current = true;
-                handleGenerate();
-              }}
-            >
-              Continue Without Logo
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {state.videoType === "remotion" ? (
+        <>
+          <AlertDialog open={showLogoWarning} onOpenChange={setShowLogoWarning}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Missing Logo</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Logo not uploaded. Do you want to continue without logo?
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setShowLogoWarning(false);
+                    setTimeout(() => {
+                      logoInputRef.current?.click();
+                    }, 100);
+                  }}
+                >
+                  Upload Logo
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => {
+                    setShowLogoWarning(false);
+                    continueWithoutLogoRef.current = true;
+                    handleGenerate();
+                  }}
+                >
+                  Continue Without Logo
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
 
-      <input
-        type="file"
-        ref={logoInputRef}
-        className="hidden"
-        accept="image/png, image/jpeg, image/webp"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) {
-            setLogoFile(file);
-            toast.success("Logo uploaded.");
-          }
-          if (logoInputRef.current) {
-            logoInputRef.current.value = "";
-          }
-        }}
-      />
+          <input
+            type="file"
+            ref={logoInputRef}
+            className="hidden"
+            accept="image/png, image/jpeg, image/webp"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                setLogoFile(file);
+                toast.success("Logo uploaded.");
+              }
+              if (logoInputRef.current) {
+                logoInputRef.current.value = "";
+              }
+            }}
+          />
+        </>
+      ) : null}
     </div>
   );
 };

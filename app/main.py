@@ -64,6 +64,18 @@ styling_service = MediaStylingService(client=client)
 remotion_service = RemotionService()
 s3_service = S3Service()
 
+GENERIC_RUNTIME_ERROR = 'Something went wrong while processing your request. Please try again.'
+GENERIC_GENERATION_ERROR = "We couldn't generate the video right now. Please try again in a moment."
+GENERIC_GENERATION_TIMEOUT_ERROR = 'Video generation is taking longer than expected. Please try again shortly.'
+
+
+def _is_generation_route(path: str) -> bool:
+    return (
+        path.startswith('/generate/')
+        or (path.startswith('/videos/') and path.endswith('/status'))
+        or (path.startswith('/videos/') and path.endswith('/stylize'))
+    )
+
 
 def _normalize_video_status(status_value: str | None) -> str:
     normalized = (status_value or "processing").strip().lower()
@@ -200,13 +212,19 @@ async def _parse_remotion_payload(request: Request) -> RemotionVideoRequest:
 
 
 @app.exception_handler(RuntimeError)
-def handle_runtime_error(_request: Request, exc: RuntimeError) -> JSONResponse:
-    return JSONResponse(status_code=502, content={'detail': str(exc)})
+def handle_runtime_error(request: Request, exc: RuntimeError) -> JSONResponse:
+    path = request.url.path
+    print(f'ERROR: RuntimeError at {path}: {exc}')
+    detail = GENERIC_GENERATION_ERROR if _is_generation_route(path) else GENERIC_RUNTIME_ERROR
+    return JSONResponse(status_code=502, content={'detail': detail})
 
 
 @app.exception_handler(TimeoutError)
-def handle_timeout_error(_request: Request, exc: TimeoutError) -> JSONResponse:
-    return JSONResponse(status_code=504, content={'detail': str(exc)})
+def handle_timeout_error(request: Request, exc: TimeoutError) -> JSONResponse:
+    path = request.url.path
+    print(f'ERROR: TimeoutError at {path}: {exc}')
+    detail = GENERIC_GENERATION_TIMEOUT_ERROR if _is_generation_route(path) else GENERIC_RUNTIME_ERROR
+    return JSONResponse(status_code=504, content={'detail': detail})
 
 
 @app.get('/health')
@@ -250,7 +268,7 @@ async def list_avatars() -> dict:
     
     # Force specific avatars to be present and have correct gender/name
     male_target_ids = [settings.avatar_id_rahul, settings.avatar_id_mahesh]
-    female_target_ids = ["4490a2a1374c437c9f936c6b26742479", settings.avatar_id_priya]
+    female_target_ids = [settings.avatar_id_adv_aditi_mehra, settings.avatar_id_priya]
     
     updated_avatars = []
     target_male_avatars = {}
@@ -310,7 +328,7 @@ async def list_avatars() -> dict:
                 "preview_image_url": image_override
             })
         
-    for fid in ["4490a2a1374c437c9f936c6b26742479", settings.avatar_id_priya]:
+    for fid in [settings.avatar_id_adv_aditi_mehra, settings.avatar_id_priya]:
         if fid in target_female_avatars:
             top_avatars.append(target_female_avatars[fid])
         else:
@@ -477,7 +495,8 @@ def list_voices() -> dict:
     raw_result = client.list_voices()
     voices = raw_result.get("data", {}).get("voices", [])
     
-    # Filter out explicitly removed voices (generic Aditi) but keep Adv. Aditi Mehra
+    # Filter out explicitly removed voices (generic Aditi) but keep Adv. Aditi Mehra.
+    # Then de-duplicate near-identical name variants so users see only one useful entry.
     filtered_voices = []
     for v in voices:
         v_name = v.get("name", "").lower()
@@ -485,9 +504,40 @@ def list_voices() -> dict:
         if "aditi" in v_name and not ("adv" in v_name or "mehra" in v_name):
             continue
         filtered_voices.append(v)
+
+    def _voice_name_key(voice: dict) -> str:
+        raw_name = str(voice.get("name") or voice.get("voice_name") or "").lower()
+        normalized = "".join(char if (char.isalnum() or char.isspace()) else " " for char in raw_name)
+        return " ".join(normalized.split())
+
+    def _has_preview_audio(voice: dict) -> bool:
+        return bool(
+            voice.get("preview_audio")
+            or voice.get("preview_audio_url")
+            or voice.get("preview_url")
+            or voice.get("audio_preview_url")
+        )
+
+    deduped_voices: list[dict] = []
+    name_to_index: dict[str, int] = {}
+    for voice in filtered_voices:
+        key = _voice_name_key(voice)
+        if not key:
+            deduped_voices.append(voice)
+            continue
+
+        existing_index = name_to_index.get(key)
+        if existing_index is None:
+            name_to_index[key] = len(deduped_voices)
+            deduped_voices.append(voice)
+            continue
+
+        existing_voice = deduped_voices[existing_index]
+        if _has_preview_audio(voice) and not _has_preview_audio(existing_voice):
+            deduped_voices[existing_index] = voice
     
     if "data" in raw_result and "voices" in raw_result["data"]:
-        raw_result["data"]["voices"] = filtered_voices
+        raw_result["data"]["voices"] = deduped_voices
 
     _voices_cache["data"] = raw_result
     _voices_cache["ts"] = time.time()

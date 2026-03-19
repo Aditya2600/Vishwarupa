@@ -164,8 +164,14 @@ export function StepShare({ state, update }: StepShareProps) {
         <div className="flex items-center gap-3 p-4 rounded-xl bg-primary/10 border border-primary/30">
           <LoaderCircle className="h-6 w-6 text-primary shrink-0 animate-spin" />
           <div>
-            <p className="text-sm font-semibold text-foreground">Applying subtitles and logo</p>
-            <p className="text-xs text-muted-foreground">We are adding the final presentation touches to your video now.</p>
+            <p className="text-sm font-semibold text-foreground">
+              {state.videoType === "remotion" ? "Applying subtitles and logo" : "Finalizing video"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {state.videoType === "remotion"
+                ? "We are adding the final presentation touches to your video now."
+                : "We are finalizing your generated video now."}
+            </p>
           </div>
         </div>
       ) : state.generationStatus === "failed" ? (
@@ -253,7 +259,7 @@ export function StepShare({ state, update }: StepShareProps) {
           {state.videoType === "avatar" ? <Meta label="Avatar" value={avatarName} /> : null}
           <Meta label="Status" value={statusText} />
           <Meta label="Video ID" value={generatedVideo?.video_id ?? "Pending"} />
-          <Meta label="Logo" value={state.logoFileName || "None"} />
+          {state.videoType === "remotion" ? <Meta label="Logo" value={state.logoFileName || "None"} /> : null}
           <HighlightedOutputLink
             href={videoUrl}
             onCopy={() => void handleCopyShareLink()}
