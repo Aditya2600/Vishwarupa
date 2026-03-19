@@ -1,7 +1,13 @@
 from pathlib import Path
-from typing import Literal
-from datetime import datetime
-from pydantic import BaseModel, Field, ValidationInfo, field_validator, EmailStr
+from typing import Any, Callable, Dict, Optional, Union, Literal
+from datetime import datetime, timezone, timedelta
+from pydantic import BaseModel, Field, EmailStr, ValidationInfo, field_validator, model_validator
+
+
+def get_ist_time() -> datetime:
+    """Returns the current naive timestamp representing Indian Standard Time (IST).
+    Stored naively so MongoDB doesn't forcibly convert it to UTC for display."""
+    return datetime.utcnow() + timedelta(hours=5, minutes=30)
 
 
 class User(BaseModel):
@@ -39,15 +45,15 @@ class VideoRecord(BaseModel):
     title: str | None = None
     video_url: str | None = None
     request_mode: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=get_ist_time)
     job_data: dict | None = None
 
 
 class Draft(BaseModel):
     user_email: str
     content: dict
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=get_ist_time)
+    updated_at: datetime = Field(default_factory=get_ist_time)
 
 
 class LeadRecord(BaseModel):

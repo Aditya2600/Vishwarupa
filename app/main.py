@@ -23,7 +23,7 @@ from app.services.media_styling_service import MediaStylingService, StyleRequest
 from app.services.remotion_service import RemotionService
 from app.services.video_service import VideoService
 from app.services.s3_service import S3Service
-from app.database import users_collection, videos_collection, drafts_collection
+from app.database import users_collection, videos_collection, drafts_collection, custom_avatars_collection
 from app.auth import get_password_hash, verify_password, create_access_token, get_current_user
 
 app = FastAPI(title='Personalized Video Generator', version='1.0.0')
@@ -50,6 +50,7 @@ async def startup_db_client():
     try:
         # The ping command is cheap and does not require auth.
         await users_collection.database.command("ping")
+        
         print("\n" + "="*50)
         print("SUCCESS: Connected to MongoDB Cluster successfully!")
         print("="*50 + "\n")
@@ -232,17 +233,23 @@ def health() -> dict:
     return {'status': 'ok', 'output_dir': str(settings.output_dir.resolve())}
 
 
-# Simple in-memory cache to avoid slow HeyGen API calls on every page load
-_avatars_cache: dict = {"data": None, "ts": 0.0}
-_voices_cache: dict = {"data": None, "ts": 0.0}
-CACHE_TTL = 600  # 10 minutes
+from aiocache import Cache
 
+# Construct the global Cache object
+api_cache = Cache(Cache.MEMORY)
 
 @app.get('/meta/avatars')
 async def list_avatars() -> dict:
-    # Return cached result if fresh
-    if _avatars_cache["data"] is not None and (time.time() - _avatars_cache["ts"]) < CACHE_TTL:
-        return _avatars_cache["data"]
+    import time
+    start = time.time()
+    
+    cached_data = await api_cache.get("avatars")
+    if cached_data is not None:
+        ms = (time.time() - start) * 1000
+        print(f"\n⚡ [AVATAR CACHE HIT] Served directly from Cache Class in {ms:.3f} ms")
+        return cached_data
+
+    print("\n⏳ [AVATAR CACHE EMPTY] Fetching data directly from HeyGen API...")
 
     avatars_resp = client.list_avatars()
     try:
@@ -266,13 +273,21 @@ async def list_avatars() -> dict:
     
     all_avatars = list(avatars_data or []) + list(talking_photos_data or [])
     
-    # Force specific avatars to be present and have correct gender/name
-    male_target_ids = [settings.avatar_id_rahul, settings.avatar_id_mahesh]
-    female_target_ids = [settings.avatar_id_adv_aditi_mehra, settings.avatar_id_priya]
+    # Fetch dynamically from MongoDB
+    db_avatars_cursor = custom_avatars_collection.find({})
+    db_avatars_list = await db_avatars_cursor.to_list(length=100)
     
+    db_target_ids = []
+    db_avatars_map = {}
+    
+    for db_av in db_avatars_list:
+        aid = db_av.get("avatar_id")
+        if aid:
+            db_target_ids.append(aid)
+            db_avatars_map[aid] = db_av
+
     updated_avatars = []
-    target_male_avatars = {}
-    target_female_avatars = {}
+    target_avatars_found = {}
     
     for a in all_avatars:
         aid = a.get("avatar_id")
@@ -285,62 +300,33 @@ async def list_avatars() -> dict:
             elif "male" in name or "man" in name:
                 a["gender"] = "male"
         
-        if aid in male_target_ids:
-            if aid == settings.avatar_id_rahul:
-                a["avatar_name"] = "Rahul"
-                a["preview_image_url"] = "/rahul.jpg"
-            elif aid == settings.avatar_id_mahesh:
-                a["avatar_name"] = "Mahesh"
-                a["preview_image_url"] = "/mahesh.png"
-            a["gender"] = "male"
-            a["is_premium"] = False
-            a["style"] = "Lead Avatar"
-            target_male_avatars[aid] = a
-        elif aid in female_target_ids:
-            if aid == settings.avatar_id_priya:
-                a["avatar_name"] = "Priya"
-                a["preview_image_url"] = "/priya.png"
-            else:
-                a["avatar_name"] = "Adv. Aditi Mehra"
-                a["preview_image_url"] = "/Adv_ Aditi_Mehra.png"  # Aditi uses local confirmed image
-            a["gender"] = "female"
-            a["is_premium"] = False
-            a["style"] = "Lead Avatar"  # Keep Aditi at the top
-            target_female_avatars[aid] = a
+        if aid in db_target_ids:
+            # Override HeyGen's raw data with our precise Database Definitions
+            db_def = db_avatars_map[aid]
+            a["avatar_name"] = db_def.get("avatar_name", a.get("avatar_name"))
+            a["preview_image_url"] = db_def.get("preview_image_url", a.get("preview_image_url"))
+            a["gender"] = db_def.get("gender", a.get("gender"))
+            a["is_premium"] = db_def.get("is_premium", False)
+            a["style"] = db_def.get("style", "Lead Avatar")
+            target_avatars_found[aid] = a
         else:
             updated_avatars.append(a)
             
     top_avatars = []
     
-    # Use the found ones or create new ones if missing
-    for mid in male_target_ids:
-        if mid in target_male_avatars:
-            top_avatars.append(target_male_avatars[mid])
+    # Ensure all requested DB avatars are placed at the very top, even if HeyGen API dropped them
+    for aid in db_target_ids:
+        if aid in target_avatars_found:
+            top_avatars.append(target_avatars_found[aid])
         else:
-            name_override = "Rahul" if mid == settings.avatar_id_rahul else "Mahesh"
-            image_override = "/rahul.jpg" if mid == settings.avatar_id_rahul else "/mahesh.png"
+            db_def = db_avatars_map[aid]
             top_avatars.append({
-                "avatar_id": mid,
-                "avatar_name": name_override,
-                "style": "Lead Avatar",
-                "gender": "male",
-                "is_premium": False,
-                "preview_image_url": image_override
-            })
-        
-    for fid in [settings.avatar_id_adv_aditi_mehra, settings.avatar_id_priya]:
-        if fid in target_female_avatars:
-            top_avatars.append(target_female_avatars[fid])
-        else:
-            name_override = "Priya" if fid == settings.avatar_id_priya else "Adv. Aditi Mehra"
-            image_override = "/priya.png" if fid == settings.avatar_id_priya else "/Adv_ Aditi_Mehra.png"
-            top_avatars.append({
-                "avatar_id": fid,
-                "avatar_name": name_override,
-                "style": "Lead Avatar",
-                "gender": "female",
-                "is_premium": False,
-                "preview_image_url": image_override
+                "avatar_id": aid,
+                "avatar_name": db_def.get("avatar_name", "Custom Avatar"),
+                "style": db_def.get("style", "Lead Avatar"),
+                "gender": db_def.get("gender", "unknown"),
+                "is_premium": db_def.get("is_premium", False),
+                "preview_image_url": db_def.get("preview_image_url", "")
             })
     indian_name_hints = ["aahana", "abhishek", "aditi", "aditya", "ankit", "arjun", "aryan", "diya", "ishita", "kabir", "karan", "kavya", "kishore", "maya", "mohan", "rahul", "rohan", "sanjay", "shruti", "sneha", "aakash", "ananya", "neha", "amit", "vikram"]
     unprofessional_hints = ["outdoor", "sport", "casual", "t-shirt", "tshirt", "t shirt"]
@@ -481,17 +467,27 @@ async def list_avatars() -> dict:
             "avatars": final_list
         }
     }
-    # Cache for next requests
-    _avatars_cache["data"] = result
-    _avatars_cache["ts"] = time.time()
+    
+    await api_cache.set("avatars", result, ttl=7200)
+    ms = (time.time() - start) * 1000
+    print(f"✅ [AVATAR CACHE SAVED] Fetched from HeyGen and wrote to aiocache in {ms:.3f} ms")
+    
     return result
 
 
 @app.get('/meta/voices')
-def list_voices() -> dict:
-    if _voices_cache["data"] is not None and (time.time() - _voices_cache["ts"]) < CACHE_TTL:
-        return _voices_cache["data"]
+async def list_voices() -> dict:
+    import time
+    start = time.time()
     
+    cached_data = await api_cache.get("voices")
+    if cached_data is not None:
+        ms = (time.time() - start) * 1000
+        print(f"\n⚡ [VOICE CACHE HIT] Served directly from Cache Class in {ms:.3f} ms")
+        return cached_data
+
+    print("\n⏳ [VOICE CACHE EMPTY] Fetching data directly from HeyGen API...")
+
     raw_result = client.list_voices()
     voices = raw_result.get("data", {}).get("voices", [])
     
@@ -542,12 +538,14 @@ def list_voices() -> dict:
         existing_voice = deduped_voices[existing_index]
         if _has_preview_audio(voice) and not _has_preview_audio(existing_voice):
             deduped_voices[existing_index] = voice
-    
+
     if "data" in raw_result and "voices" in raw_result["data"]:
         raw_result["data"]["voices"] = deduped_voices
 
-    _voices_cache["data"] = raw_result
-    _voices_cache["ts"] = time.time()
+    await api_cache.set("voices", raw_result, ttl=7200)
+    ms = (time.time() - start) * 1000
+    print(f"✅ [VOICE CACHE SAVED] Fetched from HeyGen and wrote to aiocache in {ms:.3f} ms")
+    
     return raw_result
 
 
@@ -662,7 +660,7 @@ async def generate_direct(request: DirectVideoRequest, wait: bool = True, curren
     result = service.generate_direct(request, wait=wait)
     
     if wait and result.saved_to:
-        s3_url = s3_service.upload_video(result.saved_to, f"videos/direct_{result.video_id}.mp4")
+        s3_url = s3_service.upload_video(result.saved_to, f"videos/{result.video_id}.mp4")
         if s3_url:
             result.video_url = s3_url
     
@@ -726,7 +724,7 @@ async def stylize_video(
     final_relative = artifact.final_video_path.relative_to(settings.output_dir).as_posix()
     video_url = f"/api/artifacts/{final_relative}"
     
-    s3_url = s3_service.upload_video(artifact.final_video_path, f"videos/styled_{video_id}.mp4")
+    s3_url = s3_service.upload_video(artifact.final_video_path, f"videos/{video_id}.mp4")
     if s3_url:
         video_url = s3_url
 
@@ -761,7 +759,7 @@ async def generate_template(request: TemplateVideoRequest, wait: bool = True, cu
     result = service.generate_from_template(request, wait=wait)
     
     if wait and result.saved_to:
-        s3_url = s3_service.upload_video(result.saved_to, f"videos/template_{result.video_id}.mp4")
+        s3_url = s3_service.upload_video(result.saved_to, f"videos/{result.video_id}.mp4")
         if s3_url:
             result.video_url = s3_url
     
@@ -781,7 +779,34 @@ async def generate_template(request: TemplateVideoRequest, wait: bool = True, cu
 
 @app.post('/generate/remotion', response_model=VideoJobResult)
 async def generate_remotion(request: Request, current_user: str = Depends(get_current_user)):
+    import hashlib
+    import json
     payload = await _parse_remotion_payload(request)
+
+    # 1. Create a deterministic hash of the entire configuration payload
+    payload_dict = payload.model_dump(exclude_none=True)
+    if 'logo_bytes' in payload_dict and payload_dict['logo_bytes']:
+        # Don't natively hash raw bytes directly; hash their length/presence instead if needed, 
+        # but to be perfectly safe we can drop them from the string buffer 
+        payload_dict['logo_bytes'] = str(len(payload_dict['logo_bytes']))
+    
+    payload_str = json.dumps(payload_dict, sort_keys=True, ensure_ascii=False)
+    payload_hash = hashlib.sha256(payload_str.encode('utf-8')).hexdigest()
+
+    # 2. Check Database for an identical completed video globally
+    cached_record = await videos_collection.find_one({
+        "request_mode": "remotion",
+        "status": "completed",
+        "job_data.payload_hash": payload_hash
+    })
+
+    if cached_record and cached_record.get('job_data'):
+        print(f"DEBUG: Returning cached Text-to-Video generation for payload hash {payload_hash}")
+        # Reconstruct the VideoJobResult from the stored dataset directly
+        job_data = cached_record['job_data'].copy()
+        job_data.pop('payload_hash', None)
+        # Avoid overriding the new unique video_id but serve the exact same URL and metadata
+        return VideoJobResult(**job_data)
 
     try:
         result = await remotion_service.generate_video(payload)
@@ -791,7 +816,7 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
     relative_video_path = result['video_path'].relative_to(settings.output_dir).as_posix()
     video_url = f"/api/artifacts/{relative_video_path}"
     
-    s3_url = s3_service.upload_video(result['video_path'], f"videos/remotion_{result['job_id']}.mp4")
+    s3_url = s3_service.upload_video(result['video_path'], f"videos/{result['job_id']}.mp4")
     if s3_url:
         video_url = s3_url
     
@@ -812,7 +837,10 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         audio_path=str(result['audio_path']),
     )
 
-    # Save to MongoDB
+    # 3. Save to MongoDB with the embedded payload hash flag for future queries
+    embeddable_job_data = _to_mongo_safe(job_result)
+    embeddable_job_data['payload_hash'] = payload_hash
+
     video_record = VideoRecord(
         user_email=current_user,
         video_id=job_result.video_id,
@@ -820,7 +848,7 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         title=job_result.title,
         video_url=job_result.video_url,
         request_mode="remotion",
-        job_data=_to_mongo_safe(job_result)
+        job_data=embeddable_job_data
     )
     await videos_collection.insert_one(_to_mongo_safe(video_record))
     

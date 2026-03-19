@@ -38,7 +38,7 @@ function getPreviewPosition(position: string): string {
     case "Center":
       return "items-center";
     default:
-      return "items-end pb-8";
+      return "items-end pb-3"; // Shifted down
   }
 }
 
@@ -97,7 +97,7 @@ export function StepSubtitle({ state, update, onLogoSelected }: StepSubtitleProp
               : "text-foreground";
 
   return (
-    <div className="grid grid-cols-2 gap-8 max-w-5xl">
+    <div className="grid grid-cols-2 gap-8 max-w-5xl mt-6">
       {/* Left – preview + subtitle controls */}
       <div className="space-y-6">
         <div className="rounded-xl bg-background border border-border aspect-video flex justify-center p-6 relative overflow-hidden">
