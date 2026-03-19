@@ -55,7 +55,11 @@ interface StepShareProps {
 
 export function StepShare({ state, update }: StepShareProps) {
   const generatedVideo = state.generatedVideo;
-  const videoUrl = state.styledVideoUrl || generatedVideo?.video_url || "";
+  let videoUrl = state.styledVideoUrl || generatedVideo?.video_url || "";
+  
+  if (videoUrl.startsWith("/api/artifacts/")) {
+    videoUrl = videoUrl.replace("/api/artifacts/", "https://vishvarupa.s3.ap-south-1.amazonaws.com/");
+  }
   const avatarName =
     state.videoType === "remotion"
       ? "Text to Video"

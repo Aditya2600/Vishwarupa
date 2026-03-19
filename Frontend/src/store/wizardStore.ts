@@ -73,7 +73,7 @@ const defaultState: WizardState = {
   voiceName: "",
   voiceGender: null,
   transcript: getDefaultAvatarScript("Hindi", "female"),
-  remotionTranscript: getDefaultRemotionTranscript("Hindi", "universal"),
+  remotionTranscript: getDefaultRemotionTranscript("Hindi", "personalized"),
   avatarTranscriptCustomized: false,
   remotionTranscriptCustomized: false,
   subtitleColor: "White",

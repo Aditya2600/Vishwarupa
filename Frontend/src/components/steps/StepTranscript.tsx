@@ -161,48 +161,77 @@ export function StepTranscript({ state, update, voices = [] }: StepTranscriptPro
   const importInputRef = useRef<HTMLInputElement>(null);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const stopVoicePreview = () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-      audioRef.current.onended = null;
-      audioRef.current.onerror = null;
-    }
-    setIsPlayingPreview(false);
-    setIsPlaying(false);
-  };
-
-  const playVoicePreview = () => {
-    const vId = state.voiceId;
-    if (!vId || !voices.length) return;
-
-    const voice = voices.find((v) => v.id === vId);
-    if (!voice?.previewUrl) return;
-
-    stopVoicePreview();
-
-    const proxyUrl = `/api/proxy-audio?url=${encodeURIComponent(voice.previewUrl)}`;
-    
-    if (!audioRef.current) {
-      audioRef.current = new Audio();
-    }
-    
-    audioRef.current.src = proxyUrl;
-    audioRef.current.onended = () => setIsPlayingPreview(false);
-    audioRef.current.onerror = () => {
-      setIsPlayingPreview(false);
-      toast.error("Voice preview unavailable");
-    };
-    audioRef.current.play().catch(console.error);
-    setIsPlayingPreview(true);
-  };
-
-  useEffect(() => stopVoicePreview, []);
-
   const isRemotion = state.videoType === "remotion";
+
+  const handleVoicePreview = async (overrideText?: string) => {
+    if (isPreviewing) return;
+
+    if (isPlaying && audioRef.current) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+      return;
+    }
+
+    // If we're not forcefully regenerating with overrideText, and we have paused audio, just resume
+    if (!overrideText && !isPlaying && audioRef.current && audioRef.current.src && !isRemotion) {
+      audioRef.current.play();
+      setIsPlaying(true);
+      return;
+    }
+
+    setIsPreviewing(true);
+    try {
+      const formData = new FormData();
+      formData.set("language", state.language);
+      formData.set("gender", state.voiceGender || "female");
+      
+      const textToPlay = overrideText || (isRemotion ? state.remotionTranscript : state.transcript);
+      formData.set("text", textToPlay.slice(0, 800));
+
+      if (state.voiceId) {
+        formData.set("voice_id", state.voiceId);
+      }
+
+      const response = await fetch("/api/preview/voice", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error("Voice preview failed");
+
+      const blob = await response.blob();
+      const audioUrl = URL.createObjectURL(blob);
+      
+      if (!audioRef.current) {
+        audioRef.current = new Audio();
+      }
+
+      audioRef.current.pause();
+      audioRef.current.src = audioUrl;
+      audioRef.current.load();
+      
+      audioRef.current.onended = () => setIsPlaying(false);
+      audioRef.current.onerror = () => setIsPlaying(false);
+      
+      const playPromise = audioRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(error => {
+          setIsPlaying(false);
+        });
+      }
+      setIsPlaying(true);
+    } catch (error) {
+      toast.error("Unable to play voice preview.");
+    } finally {
+      setIsPreviewing(false);
+    }
+  };
+
   const transcript = isRemotion ? state.remotionTranscript : state.transcript;
   const wordCount = transcript.trim() ? transcript.trim().split(/\s+/).length : 0;
   const duration = Math.max(1, Math.round(wordCount / 130));
@@ -319,75 +348,6 @@ export function StepTranscript({ state, update, voices = [] }: StepTranscriptPro
     toast.success(`Transcript reset to ${state.language} default.`);
   };
 
-  const handleVoicePreview = async () => {
-    if (isPreviewing) return;
-
-    // If playing, pause
-    if (isPlaying && audioRef.current) {
-      audioRef.current.pause();
-      setIsPlaying(false);
-      return;
-    }
-
-    // If paused but has source, resume
-    if (!isPlaying && audioRef.current && audioRef.current.src && !isRemotion) {
-      // Only for avatar we can reliably resume without regeneration if source is set
-      // For remotion, transcript might change, so we usually want fresh preview 
-      // unless we track if transcript changed.
-      // Let's simplify: if we have a source and we're not generated, just play.
-      audioRef.current.play();
-      setIsPlaying(true);
-      return;
-    }
-
-    setIsPreviewing(true);
-    try {
-      // Unified voice preview using backend endpoint for both Avatar and Remotion
-      // This ensures scripts with variables and Hindi number normalization are previewed correctly
-      const formData = new FormData();
-      formData.set("language", state.language);
-      formData.set("gender", state.voiceGender || "female");
-      formData.set("text", transcript.slice(0, 800)); // Increased limit for detailed scripts
-
-      // Pass the actual selected voiceId if it exists (for HeyGen matched previews)
-      if (state.voiceId) {
-        formData.set("voice_id", state.voiceId);
-      }
-
-      const response = await fetch("/api/preview/voice", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: formData,
-      });
-
-      if (!response.ok) throw new Error("Voice preview failed");
-
-      const blob = await response.blob();
-      const audioUrl = URL.createObjectURL(blob);
-      
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.src = audioUrl;
-        audioRef.current.load(); // Explicitly load the new source
-        
-        const playPromise = audioRef.current.play();
-        if (playPromise !== undefined) {
-          playPromise.catch(error => {
-            console.error("Playback failed:", error);
-            setIsPlaying(false);
-          });
-        }
-        setIsPlaying(true);
-      }
-    } catch (error) {
-      console.error("Voice preview error:", error);
-      toast.error("Unable to play voice preview.");
-    } finally {
-      setIsPreviewing(false);
-    }
-  };
 
 const handleImport = async (event: ChangeEvent<HTMLInputElement>) => {
   const file = event.target.files?.[0];
@@ -479,10 +439,6 @@ return (
 
           update(updatePayload);
 
-          // Play audio preview when switching variety as requested
-          setTimeout(() => {
-            playVoicePreview();
-          }, 100);
         }}
         className="w-full max-w-md"
       >
@@ -544,30 +500,25 @@ return (
         <ClipboardPaste className="mr-1.5 h-4 w-4" />
         Paste Script
       </Button>
-      <Button
-        size="sm"
-        type="button"
-        variant="outline"
-        onClick={() => void handleVoicePreview()}
-        disabled={isPreviewing}
-        className={isRemotion ? "border-primary/50 text-primary hover:bg-primary/5" : ""}
-      >
-        {isPreviewing ? (
-          <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-        ) : isPlaying ? (
-          <Pause className="mr-1.5 h-4 w-4" />
-        ) : (
-          <Play className="mr-1.5 h-4 w-4" />
-        )}
-        {isPlaying ? "Stop Voice" : "Preview Voice"}
-      </Button>
-      <audio
-        ref={audioRef}
-        className="hidden"
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-        onEnded={() => setIsPlaying(false)}
-      />
+      {isRemotion && (
+        <Button
+          size="sm"
+          type="button"
+          variant="outline"
+          onClick={() => void handleVoicePreview()}
+          disabled={isPreviewing}
+          className="border-primary/50 text-primary hover:bg-primary/5"
+        >
+          {isPreviewing ? (
+            <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+          ) : isPlaying ? (
+            <Pause className="mr-1.5 h-4 w-4" />
+          ) : (
+            <Play className="mr-1.5 h-4 w-4" />
+          )}
+          {isPlaying ? "Stop Voice" : "Preview Voice"}
+        </Button>
+      )}
       <Button
         size="sm"
         type="button"
@@ -590,7 +541,6 @@ return (
         type="button"
         variant="outline"
         onClick={handleResetToDefault}
-        className="border-primary/30 text-primary hover:bg-primary/5"
       >
         <RotateCcw className="mr-1.5 h-4 w-4" />
         Reset to {state.language} Default
@@ -603,7 +553,7 @@ return (
         className="border-border text-muted-foreground hover:text-destructive"
       >
         <Trash2 className="mr-1.5 h-4 w-4" />
-        Clear
+        Delete
       </Button>
     </div>
 

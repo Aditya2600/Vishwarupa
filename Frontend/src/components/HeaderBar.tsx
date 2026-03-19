@@ -28,7 +28,7 @@ export function HeaderBar({ onCreateVideo, primaryLabel = "Create Video" }: Head
   const isTemplatesPage = location.pathname === "/templates";
 
   const launchCreate = (mode: CreateMode) => {
-    navigate(`/create?mode=${mode}&fresh=1`);
+    window.location.assign(`/create?mode=${mode}&fresh=1`);
     onCreateVideo?.(mode);
   };
 
@@ -38,7 +38,7 @@ export function HeaderBar({ onCreateVideo, primaryLabel = "Create Video" }: Head
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5, type: "spring" }}
-        onClick={() => navigate("/")}
+        onClick={() => window.location.assign("/")}
         className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity select-none"
       >
         {/* Product wordmark */}
@@ -60,7 +60,7 @@ export function HeaderBar({ onCreateVideo, primaryLabel = "Create Video" }: Head
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => navigate("/templates")}
+          onClick={() => window.location.assign("/templates")}
           className={isTemplatesPage ? "text-foreground bg-secondary" : "text-muted-foreground hover:bg-primary hover:text-white"}
         >
           <LayoutTemplate className="md:mr-2 h-4 w-4" />
@@ -69,7 +69,7 @@ export function HeaderBar({ onCreateVideo, primaryLabel = "Create Video" }: Head
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => navigate("/")}
+          onClick={() => window.location.assign("/")}
           className={
             isVideosPage
               ? "text-foreground bg-secondary hover:bg-primary hover:text-white"

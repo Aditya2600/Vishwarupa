@@ -13,3 +13,4 @@ users_collection = db.users
 videos_collection = db.videos
 video_jobs_collection = db.video_jobs
 drafts_collection = db.drafts
+custom_avatars_collection = db.custom_avatars
