@@ -8,6 +8,7 @@ from typing import Literal, Optional
 from datetime import datetime
 import time
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,13 +18,27 @@ from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, ValidationError
 
 from app.config import settings
-from app.models import DirectVideoRequest, RemotionVideoRequest, StyledVideoResult, TemplateVideoRequest, VideoJobResult, UserCreate, Token, UserInDB, VideoRecord
+from app.models import (
+    AvatarJobAck,
+    AvatarJobStatusResponse,
+    DirectVideoRequest,
+    RemotionVideoRequest,
+    StyledVideoResult,
+    TemplateVideoRequest,
+    VideoJobRecord,
+    VideoJobResult,
+    UserCreate,
+    Token,
+    UserInDB,
+    VideoRecord,
+)
 from app.services.heygen_client import HeyGenClient
 from app.services.media_styling_service import MediaStylingService, StyleRequest
 from app.services.remotion_service import RemotionService
+from app.services.sqs_service import SQSService
 from app.services.video_service import VideoService
 from app.services.s3_service import S3Service
-from app.database import users_collection, videos_collection, drafts_collection, custom_avatars_collection
+from app.database import users_collection, videos_collection, drafts_collection, video_jobs_collection, custom_avatars_collection
 from app.auth import get_password_hash, verify_password, create_access_token, get_current_user
 
 app = FastAPI(title='Personalized Video Generator', version='1.0.0')
@@ -64,6 +79,7 @@ client = HeyGenClient()
 styling_service = MediaStylingService(client=client)
 remotion_service = RemotionService()
 s3_service = S3Service()
+sqs_service = SQSService()
 
 GENERIC_RUNTIME_ERROR = 'Something went wrong while processing your request. Please try again.'
 GENERIC_GENERATION_ERROR = "We couldn't generate the video right now. Please try again in a moment."
@@ -73,6 +89,7 @@ GENERIC_GENERATION_TIMEOUT_ERROR = 'Video generation is taking longer than expec
 def _is_generation_route(path: str) -> bool:
     return (
         path.startswith('/generate/')
+        or path.startswith('/jobs/')
         or (path.startswith('/videos/') and path.endswith('/status'))
         or (path.startswith('/videos/') and path.endswith('/stylize'))
     )
@@ -128,6 +145,33 @@ async def _mark_video_failed(current_user: str, video_id: str, detail: str) -> N
             "status": "failed",
             "job_data": {"detail": detail},
         }},
+    )
+
+
+def _normalize_avatar_job_status(status_value: str | None) -> Literal['queued', 'processing', 'completed', 'failed']:
+    normalized = (status_value or 'queued').strip().lower()
+    if normalized in {'processing', 'running', 'started'}:
+        return 'processing'
+    if normalized in {'completed', 'done', 'success', 'styled'}:
+        return 'completed'
+    if normalized in {'failed', 'error'}:
+        return 'failed'
+    return 'queued'
+
+
+def _build_avatar_job_status_response(job: dict) -> AvatarJobStatusResponse:
+    status_value = _normalize_avatar_job_status(str(job.get('status') or 'queued'))
+    result_payload = job.get('result_payload') if isinstance(job.get('result_payload'), dict) else {}
+    raw_error = job.get('error')
+    error = str(raw_error).strip() if isinstance(raw_error, str) and raw_error.strip() else None
+    return AvatarJobStatusResponse(
+        job_id=str(job.get('job_id')),
+        status=status_value,
+        video_id=str(result_payload.get('video_id')) if result_payload.get('video_id') else None,
+        video_url=str(result_payload.get('video_url')) if result_payload.get('video_url') else None,
+        thumbnail_url=str(result_payload.get('thumbnail_url')) if result_payload.get('thumbnail_url') else None,
+        title=str(result_payload.get('title')) if result_payload.get('title') else None,
+        error=error,
     )
 
 
@@ -654,6 +698,79 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
 
 # --- Video Generation Endpoints ---
+
+@app.post('/jobs/avatar', response_model=AvatarJobAck)
+async def create_avatar_job(request: DirectVideoRequest, current_user: str = Depends(get_current_user)):
+    if not sqs_service.is_configured():
+        raise HTTPException(
+            status_code=503,
+            detail='Avatar async queue is not configured. Set SQS_QUEUE_URL and retry.',
+        )
+
+    job_record: VideoJobRecord | None = None
+    try:
+        now = datetime.utcnow()
+        job_record = VideoJobRecord(
+            job_id=uuid4().hex,
+            user_email=current_user,
+            status='queued',
+            request_payload=_to_mongo_safe(request.model_dump(mode='python')),
+            created_at=now,
+            updated_at=now,
+        )
+        await video_jobs_collection.insert_one(_to_mongo_safe(job_record))
+        await videos_collection.insert_one(_to_mongo_safe(
+            VideoRecord(
+                user_email=current_user,
+                video_id=job_record.job_id,
+                status='queued',
+                title=f"{request.title_prefix} - {request.customer_name}",
+                request_mode='avatar_async',
+                job_data={
+                    'job_id': job_record.job_id,
+                    'request_mode': 'avatar',
+                    'status': 'queued',
+                },
+            )
+        ))
+        sqs_service.send_job(job_record.job_id)
+        return AvatarJobAck(job_id=job_record.job_id, status='queued')
+    except HTTPException:
+        raise
+    except Exception as exc:
+        if not job_record:
+            raise HTTPException(status_code=502, detail=GENERIC_GENERATION_ERROR) from exc
+        failed_at = datetime.utcnow()
+        await video_jobs_collection.update_one(
+            {'job_id': job_record.job_id, 'user_email': current_user},
+            {'$set': {
+                'status': 'failed',
+                'error': str(exc),
+                'updated_at': failed_at,
+                'completed_at': failed_at,
+            }},
+        )
+        await videos_collection.update_one(
+            {'video_id': job_record.job_id, 'user_email': current_user},
+            {'$set': {
+                'status': 'failed',
+                'job_data': {
+                    'job_id': job_record.job_id,
+                    'request_mode': 'avatar',
+                    'status': 'failed',
+                    'error': str(exc),
+                },
+            }},
+        )
+        raise HTTPException(status_code=502, detail=GENERIC_GENERATION_ERROR) from exc
+
+
+@app.get('/jobs/{job_id}', response_model=AvatarJobStatusResponse)
+async def get_avatar_job_status(job_id: str, current_user: str = Depends(get_current_user)):
+    job = await video_jobs_collection.find_one({'job_id': job_id, 'user_email': current_user})
+    if not job:
+        raise HTTPException(status_code=404, detail='Job not found.')
+    return _build_avatar_job_status_response(job)
 
 @app.post('/generate/direct')
 async def generate_direct(request: DirectVideoRequest, wait: bool = True, current_user: str = Depends(get_current_user)):
