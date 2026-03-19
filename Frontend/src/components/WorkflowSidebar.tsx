@@ -9,7 +9,8 @@ interface WorkflowSidebarProps {
 
 export function WorkflowSidebar({ currentStep, onStepClick, videoType }: WorkflowSidebarProps) {
   const filteredSteps = STEPS.map((step, i) => ({ ...step, originalIndex: i }))
-    .filter((step) => !(videoType === "remotion" && step.key === "avatar"));
+    .filter((step) => !(videoType === "remotion" && step.key === "avatar"))
+    .filter((step) => !(videoType === "avatar" && step.key === "subtitle"));
 
   return (
     <aside className="w-56 shrink-0 border-r border-border bg-sidebar hidden md:flex flex-col h-full">

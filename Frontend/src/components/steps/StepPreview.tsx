@@ -184,11 +184,13 @@ export function StepPreview({ state, update }: StepPreviewProps) {
           {state.videoType === "avatar" ? <SummaryRow label="Avatar" value={avatarName} /> : null}
           {state.videoType === "avatar" && state.voiceName ? <SummaryRow label="Voice" value={state.voiceName} /> : null}
           <SummaryRow label="Duration" value={duration} />
-          <SummaryRow
-            label="Subtitles"
-            value={state.includeCaptions ? `${state.subtitleColor} · ${state.subtitlePosition}` : "Disabled"}
-          />
-          <SummaryRow label="Logo" value={state.logoFileName || "None"} />
+          {state.videoType === "remotion" ? (
+            <SummaryRow
+              label="Subtitles"
+              value={state.includeCaptions ? `${state.subtitleColor} · ${state.subtitlePosition}` : "Disabled"}
+            />
+          ) : null}
+          {state.videoType === "remotion" ? <SummaryRow label="Logo" value={state.logoFileName || "None"} /> : null}
           <SummaryRow label="Aspect Ratio" value={state.aspectRatio} />
           <SummaryRow label="Status" value={statusLabel} />
           {state.styledVideoUrl ? <SummaryRow label="Styled Output" value={state.subtitleSource} /> : null}

@@ -6,6 +6,7 @@ import { ChevronLeft } from "lucide-react";
 
 interface StepLayoutProps {
   step: number;
+  videoType: "avatar" | "remotion";
   title: string;
   subtitle: string;
   children: ReactNode;
@@ -24,6 +25,7 @@ interface StepLayoutProps {
 
 export function StepLayout({
   step,
+  videoType,
   title,
   subtitle,
   children,
@@ -39,6 +41,12 @@ export function StepLayout({
   primaryBusyLabel = "Working...",
   onCancel,
 }: StepLayoutProps) {
+  const visibleSteps = STEPS.map((stepItem, index) => ({ ...stepItem, originalIndex: index }))
+    .filter((stepItem) => !(videoType === "remotion" && stepItem.key === "avatar"))
+    .filter((stepItem) => !(videoType === "avatar" && stepItem.key === "subtitle"));
+  const visibleStepIndex = visibleSteps.findIndex((stepItem) => stepItem.originalIndex === step);
+  const currentVisibleStep = visibleSteps[Math.max(0, visibleStepIndex)] ?? visibleSteps[0];
+
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-background">
       <div className="flex-1 overflow-y-auto p-4 sm:p-8">
@@ -70,7 +78,7 @@ export function StepLayout({
         </Button>
 
         <p className="text-xs text-muted-foreground hidden sm:block">
-          Step {step + 1} of {STEPS.length} — {STEPS[step].label}
+          Step {Math.max(0, visibleStepIndex) + 1} of {visibleSteps.length} — {currentVisibleStep?.label ?? "Workflow"}
         </p>
 
         <div className="flex gap-2 w-full sm:w-auto mt-2 sm:mt-0">

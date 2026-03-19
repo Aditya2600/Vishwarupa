@@ -105,6 +105,16 @@ const defaultState: WizardState = {
 };
 
 function restoreSavedState(savedState: Partial<WizardState>): WizardState {
+  const rawStep = Number(savedState.currentStep ?? defaultState.currentStep);
+  const safeStep = Number.isFinite(rawStep) ? Math.max(0, Math.min(Math.floor(rawStep), 5)) : 0;
+  const savedVideoType = savedState.videoType ?? defaultState.videoType;
+  const normalizedStep =
+    savedVideoType === "remotion" && safeStep === 1
+      ? 2
+      : savedVideoType === "avatar" && safeStep === 3
+        ? 2
+        : safeStep;
+
   const savedAvatarGender = savedState.avatarGender ?? null;
   const savedVoiceGender = savedState.voiceGender ?? null;
   const defaultAvatarTranscript = getDefaultAvatarScript(
@@ -116,6 +126,7 @@ function restoreSavedState(savedState: Partial<WizardState>): WizardState {
   const restored = {
     ...defaultState,
     ...savedState,
+    currentStep: normalizedStep,
     avatarGender: savedAvatarGender,
     voiceGender: savedVoiceGender,
     avatarTranscriptCustomized:
@@ -197,6 +208,9 @@ export function useWizardStore() {
       if (next === 1 && prev.videoType === "remotion") {
         return { ...prev, currentStep: 2 };
       }
+      if (next === 3 && prev.videoType === "avatar") {
+        return { ...prev, currentStep: 4 };
+      }
       return { ...prev, currentStep: Math.min(next, STEPS.length - 1) };
     });
   }, []);
@@ -204,6 +218,9 @@ export function useWizardStore() {
   const prevStep = useCallback(() => {
     setState((prev) => {
       const previous = prev.currentStep - 1;
+      if (previous === 3 && prev.videoType === "avatar") {
+        return { ...prev, currentStep: 2 };
+      }
       if (previous === 1 && prev.videoType === "remotion") {
         return { ...prev, currentStep: 0 };
       }

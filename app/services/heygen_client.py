@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import time
 from pathlib import Path
 from typing import Any
@@ -23,38 +22,94 @@ class HeyGenClient:
         return f'{self.base_url}{path}'
 
     @staticmethod
+    def _normalize_error_text(raw_text: str | None) -> str | None:
+        normalized = ' '.join((raw_text or '').split()).strip()
+        if not normalized:
+            return None
+        if normalized.lower() in {'success', 'ok'}:
+            return None
+        # Keep logs readable even when providers return verbose payload snippets.
+        return normalized[:300]
+
+    @staticmethod
+    def _friendly_provider_message(raw_message: str | None) -> str | None:
+        normalized = HeyGenClient._normalize_error_text(raw_message)
+        if not normalized:
+            return None
+
+        lowered = normalized.lower()
+        if 'insufficient credit' in lowered:
+            return "You don't have enough credits to generate this video."
+        if 'voice is not available' in lowered or 'voice not available' in lowered or 'voice unavailable' in lowered:
+            return 'The selected voice is unavailable right now. Please choose another voice and try again.'
+        if 'timed out' in lowered or 'timeout' in lowered:
+            return 'Video generation is taking longer than expected. Please try again shortly.'
+        return None
+
+    @staticmethod
     def summarize_provider_error(payload: dict[str, Any] | str) -> str:
+        default_message = 'Video generation failed. Please try again in a moment.'
+
         if isinstance(payload, str):
-            normalized = payload.strip()
-            return normalized or 'Video generation failed. Please try again in a moment.'
+            return (
+                HeyGenClient._friendly_provider_message(payload)
+                or HeyGenClient._normalize_error_text(payload)
+                or default_message
+            )
 
         data = payload.get('data') if isinstance(payload.get('data'), dict) else {}
-        error = data.get('error') if isinstance(data.get('error'), dict) else {}
+        nested_error = data.get('error')
+        root_error = payload.get('error')
+        error = nested_error if isinstance(nested_error, dict) else (root_error if isinstance(root_error, dict) else {})
 
         code = str(error.get('code') or '').strip()
-        detail = str(error.get('detail') or '').strip()
-        message = str(error.get('message') or payload.get('message') or '').strip()
+        detail = HeyGenClient._normalize_error_text(str(error.get('detail') or payload.get('detail') or ''))
+        message = HeyGenClient._normalize_error_text(
+            str(error.get('message') or payload.get('message') or data.get('message') or '')
+        )
+        error_text = HeyGenClient._normalize_error_text(
+            str(nested_error if isinstance(nested_error, str) else root_error if isinstance(root_error, str) else '')
+        )
 
-        if code == 'MOVIO_PAYMENT_INSUFFICIENT_CREDIT' or 'insufficient credit' in detail.lower():
+        lowered_detail = detail.lower() if detail else ''
+        lowered_message = message.lower() if message else ''
+        if (
+            code == 'MOVIO_PAYMENT_INSUFFICIENT_CREDIT'
+            or 'insufficient credit' in lowered_detail
+            or 'insufficient credit' in lowered_message
+        ):
             return "You don't have enough credits to generate this video."
 
-        if detail:
-            return detail
-        if message and message.lower() != 'success':
-            return message
+        fallback: str | None = None
+        for candidate in (detail, message, error_text):
+            if not candidate:
+                continue
+            friendly = HeyGenClient._friendly_provider_message(candidate)
+            if friendly:
+                return friendly
+            if not fallback:
+                fallback = candidate
 
-        return 'Video generation failed. Please try again in a moment.'
+        if fallback:
+            normalized_code = code.strip()
+            if normalized_code and normalized_code.lower() not in {'success', 'ok'}:
+                return f'{fallback} (code: {normalized_code})'
+            return fallback
+
+        if code and code.lower() not in {'success', 'ok'}:
+            return f'Provider request failed with code: {code}'
+
+        return default_message
 
     def _raise_for_status(self, response: httpx.Response) -> None:
         try:
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            detail = ''
             try:
-                detail = json.dumps(response.json(), ensure_ascii=False)
+                payload: dict[str, Any] | str = response.json()
             except Exception:
-                detail = response.text
-            raise RuntimeError(f'Video provider API error {response.status_code}: {detail}') from exc
+                payload = response.text
+            raise RuntimeError(self.summarize_provider_error(payload)) from exc
 
     def generate_video_direct(self, payload: dict[str, Any]) -> dict[str, Any]:
         with httpx.Client(timeout=120.0) as client:
