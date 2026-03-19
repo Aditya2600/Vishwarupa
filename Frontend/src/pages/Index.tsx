@@ -29,16 +29,17 @@ import {
 import {
   type AvatarOption,
   compareVoicesForLanguage,
+  createAvatarJob,
   type DirectVideoPayload,
+  fetchAvatarJobStatus,
   type RemotionVideoPayload,
   fetchAvatars,
-  fetchVideoStatus,
   fetchVoices,
-  generateDirectVideo,
   generateRemotionVideo,
   isVoiceCompatibleWithLanguage,
   saveDraft,
   stylizeVideo,
+  type VideoJobResult,
   type VoiceOption,
 } from "@/lib/api";
 import { STEPS, useWizardStore } from "@/store/wizardStore";
@@ -86,6 +87,7 @@ const ASPECT_RATIO_DIMENSIONS: Record<string, { width: number; height: number }>
 };
 
 const RESET_GENERATION_STATE = {
+  avatarJobId: "",
   generatedVideo: null,
   styledVideoUrl: "",
   styledVideoPath: "",
@@ -135,6 +137,27 @@ function buildAvatarDefaultTranscript(
   return getDefaultAvatarScript(language, resolveNarratorGender(voiceGender ?? avatarGender));
 }
 
+function mapAvatarJobToVideoResult(job: {
+  job_id: string;
+  status: string;
+  video_id?: string | null;
+  video_url?: string | null;
+  thumbnail_url?: string | null;
+  title?: string | null;
+}): VideoJobResult {
+  const videoId = (job.video_id ?? "").trim() || job.job_id;
+  return {
+    request_mode: "direct",
+    video_id: videoId,
+    status: job.status,
+    video_url: job.video_url ?? null,
+    thumbnail_url: job.thumbnail_url ?? null,
+    title: job.title ?? null,
+    raw_response: { job_id: job.job_id, status: job.status },
+    saved_to: null,
+  };
+}
+
 const Index = () => {
   const { state, update, nextStep, prevStep, goToStep, reset, canProceed } = useWizardStore();
   const navigate = useNavigate();
@@ -171,22 +194,21 @@ const Index = () => {
   const selectedAvatar = findAvatarById(avatars, state.avatarId);
   const selectedVoice = findVoiceById(voices, state.voiceId);
 
-  const statusQuery = useQuery({
-    queryKey: ["video-status", state.generatedVideo?.video_id],
-    queryFn: () => fetchVideoStatus(state.generatedVideo!.video_id, state.generatedVideo?.request_mode ?? "direct"),
-    enabled:
-      Boolean(state.generatedVideo?.video_id) &&
-      state.generatedVideo?.request_mode !== "remotion" &&
-      state.generationStatus === "submitting",
+  const avatarJobStatusQuery = useQuery({
+    queryKey: ["avatar-job-status", state.avatarJobId],
+    queryFn: () => fetchAvatarJobStatus(state.avatarJobId),
+    enabled: state.videoType === "avatar" && Boolean(state.avatarJobId) && state.generationStatus === "submitting",
     refetchInterval: 5000,
   });
 
   const generateVideoMutation = useMutation({
-    mutationFn: (payload: DirectVideoPayload) => generateDirectVideo(payload, false),
+    mutationFn: (payload: DirectVideoPayload) => createAvatarJob(payload),
     onMutate: () => {
       stylingRequestedRef.current = false;
       statusPollingWarningShownRef.current = false;
       update({
+        avatarJobId: "",
+        generatedVideo: null,
         generationStatus: "submitting",
         generationError: "",
         styledVideoUrl: "",
@@ -197,7 +219,7 @@ const Index = () => {
     onSuccess: (result) => {
       statusPollingWarningShownRef.current = false;
       update({
-        generatedVideo: result,
+        avatarJobId: result.job_id,
         generationStatus: "submitting",
         generationError: "",
       });
@@ -221,6 +243,7 @@ const Index = () => {
       stylingRequestedRef.current = false;
       statusPollingWarningShownRef.current = false;
       update({
+        avatarJobId: "",
         generationStatus: "submitting",
         generationError: "",
         styledVideoUrl: "",
@@ -404,19 +427,16 @@ const Index = () => {
   }, [saveDraftMutation, state, step]);
 
   useEffect(() => {
-    if (!statusQuery.data || state.generationStatus !== "submitting") {
+    if (!avatarJobStatusQuery.data || state.generationStatus !== "submitting" || state.videoType !== "avatar") {
       return;
     }
 
-    if (state.generatedVideo?.video_id !== statusQuery.data.video_id) {
-      return;
-    }
-
-    const nextStatus = statusQuery.data.status.toLowerCase();
-    if (["completed", "done", "success"].includes(nextStatus)) {
+    const nextStatus = avatarJobStatusQuery.data.status.toLowerCase();
+    if (nextStatus === "completed") {
       statusPollingWarningShownRef.current = false;
-      update({ generatedVideo: statusQuery.data, generationError: "" });
       update({
+        avatarJobId: "",
+        generatedVideo: mapAvatarJobToVideoResult(avatarJobStatusQuery.data),
         generationStatus: "completed",
         generationError: "",
       });
@@ -425,24 +445,24 @@ const Index = () => {
       return;
     }
 
-    update({
-      generatedVideo: statusQuery.data,
-    });
-  }, [
-    goToStep,
-    state.generatedVideo?.video_id,
-    state.generationStatus,
-    state.videoType,
-    statusQuery.data,
-    update,
-  ]);
+    if (nextStatus === "failed") {
+      statusPollingWarningShownRef.current = false;
+      const errorMessage = avatarJobStatusQuery.data.error || "Unexpected error while generating the video.";
+      update({
+        avatarJobId: "",
+        generationStatus: "failed",
+        generationError: errorMessage,
+      });
+      toast.error(errorMessage);
+    }
+  }, [avatarJobStatusQuery.data, goToStep, state.generationStatus, state.videoType, update]);
 
   useEffect(() => {
-    if (!statusQuery.error || state.generationStatus !== "submitting") {
+    if (!avatarJobStatusQuery.error || state.generationStatus !== "submitting" || state.videoType !== "avatar") {
       return;
     }
 
-    if (isConnectivityError(statusQuery.error)) {
+    if (isConnectivityError(avatarJobStatusQuery.error)) {
       if (!statusPollingWarningShownRef.current) {
         statusPollingWarningShownRef.current = true;
         toast.info("Connection lost while checking video status. We'll keep your draft and resume polling when the server is reachable again.");
@@ -450,12 +470,17 @@ const Index = () => {
       return;
     }
 
+    const errorMessage =
+      avatarJobStatusQuery.error instanceof Error
+        ? avatarJobStatusQuery.error.message
+        : "Unexpected error while checking video status.";
     update({
+      avatarJobId: "",
       generationStatus: "failed",
-      generationError: statusQuery.error instanceof Error ? statusQuery.error.message : "Unexpected error while checking video status.",
+      generationError: errorMessage,
     });
-    toast.error(statusQuery.error instanceof Error ? statusQuery.error.message : "Unexpected error while checking video status.");
-  }, [state.generationStatus, statusQuery.error, update]);
+    toast.error(errorMessage);
+  }, [avatarJobStatusQuery.error, state.generationStatus, state.videoType, update]);
 
   useEffect(() => {
     if (state.videoType === "avatar" && step === 3) {
@@ -564,6 +589,7 @@ const Index = () => {
     stylizeVideoMutation.reset();
     continueWithoutLogoRef.current = false;
     update({
+      avatarJobId: "",
       generationStatus: "idle",
       generationError: "",
     });

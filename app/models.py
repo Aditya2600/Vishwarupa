@@ -43,6 +43,36 @@ class VideoRecord(BaseModel):
     job_data: dict | None = None
 
 
+class VideoJobRecord(BaseModel):
+    job_id: str
+    user_email: str
+    status: Literal['queued', 'processing', 'completed', 'failed']
+    request_mode: Literal['avatar'] = 'avatar'
+    request_payload: dict
+    result_payload: dict | None = None
+    error: str | None = None
+    attempts: int = 0
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
+class AvatarJobAck(BaseModel):
+    job_id: str
+    status: Literal['queued']
+
+
+class AvatarJobStatusResponse(BaseModel):
+    job_id: str
+    status: Literal['queued', 'processing', 'completed', 'failed']
+    video_id: str | None = None
+    video_url: str | None = None
+    thumbnail_url: str | None = None
+    title: str | None = None
+    error: str | None = None
+
+
 class Draft(BaseModel):
     user_email: str
     content: dict

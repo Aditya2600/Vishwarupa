@@ -48,6 +48,7 @@ export interface WizardState {
   productType: string;
   videoType: "avatar" | "remotion";
   videoVariety: "personalized" | "universal";
+  avatarJobId: string;
   generatedVideo: VideoJobResult | null;
   styledVideoUrl: string;
   styledVideoPath: string;
@@ -96,6 +97,7 @@ const defaultState: WizardState = {
   productType: "loan",
   videoType: "avatar",
   videoVariety: "universal",
+  avatarJobId: "",
   generatedVideo: null,
   styledVideoUrl: "",
   styledVideoPath: "",
@@ -161,7 +163,11 @@ function restoreSavedState(savedState: Partial<WizardState>): WizardState {
     }
   }
 
-  if (restored.generationStatus === "submitting" && !restored.generatedVideo?.video_id) {
+  if (
+    restored.generationStatus === "submitting" &&
+    !restored.generatedVideo?.video_id &&
+    !(restored.videoType === "avatar" && restored.avatarJobId.trim())
+  ) {
     restored.generationStatus = "failed";
     restored.generationError =
       restored.generationError ||

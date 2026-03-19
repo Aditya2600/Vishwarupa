@@ -48,6 +48,21 @@ export interface DirectVideoPayload {
   voice_gender?: "male" | "female";
 }
 
+export interface AvatarJobAck {
+  job_id: string;
+  status: "queued";
+}
+
+export interface AvatarJobStatus {
+  job_id: string;
+  status: "queued" | "processing" | "completed" | "failed";
+  video_id?: string | null;
+  video_url?: string | null;
+  thumbnail_url?: string | null;
+  title?: string | null;
+  error?: string | null;
+}
+
 export interface VideoJobResult {
   request_mode: "direct" | "template" | "remotion";
   video_id: string;
@@ -545,6 +560,8 @@ function isGenerationRequest(path: string): boolean {
   const normalizedPath = path.split("?")[0] ?? path;
   return (
     normalizedPath.startsWith("/generate/") ||
+    normalizedPath === "/jobs/avatar" ||
+    /^\/jobs\/[^/]+$/.test(normalizedPath) ||
     /^\/videos\/[^/]+\/status$/.test(normalizedPath) ||
     /^\/videos\/[^/]+\/stylize$/.test(normalizedPath)
   );
@@ -1039,6 +1056,17 @@ export async function fetchTemplates(): Promise<TemplateOption[]> {
 
 export async function fetchConfig(): Promise<AppConfig> {
   return requestJson<AppConfig>("/meta/config");
+}
+
+export async function createAvatarJob(payload: DirectVideoPayload): Promise<AvatarJobAck> {
+  return requestJson<AvatarJobAck>("/jobs/avatar", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchAvatarJobStatus(jobId: string): Promise<AvatarJobStatus> {
+  return requestJson<AvatarJobStatus>(`/jobs/${jobId}`);
 }
 
 export async function generateDirectVideo(payload: DirectVideoPayload, wait = true): Promise<VideoJobResult> {
