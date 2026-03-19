@@ -498,11 +498,18 @@ def list_voices() -> dict:
     # Filter out explicitly removed voices (generic Aditi) but keep Adv. Aditi Mehra.
     # Then de-duplicate near-identical name variants so users see only one useful entry.
     filtered_voices = []
+    seen_adv_aditi = False
     for v in voices:
         v_name = v.get("name", "").lower()
         # Exclude if it's the generic Aditi (starts with aditi) and not the custom advocate voice
-        if "aditi" in v_name and not ("adv" in v_name or "mehra" in v_name):
-            continue
+        if "aditi" in v_name or "mehra" in v_name:
+            if "adv" in v_name or "mehra" in v_name:
+                if seen_adv_aditi:
+                    continue
+                seen_adv_aditi = True
+            else:
+                continue
+                
         filtered_voices.append(v)
 
     def _voice_name_key(voice: dict) -> str:
@@ -554,98 +561,7 @@ def get_config() -> dict:
     }
 
 
-@app.post('/preview/voice')
-async def preview_voice(
-    request: Request,
-    language: str = Form(default="Hindi"),
-    gender: str = Form(default="female"),
-    text: str = Form(default=""),
-    voice_id: str = Form(default=""),
-):
-    """Generate a TTS audio preview using the provided transcript text and voice."""
-    import httpx
-    from fastapi.responses import StreamingResponse, Response
 
-    preview_text = text.strip()[:800]
-    
-    if not preview_text:
-        # Fallback demo sentences per language
-        fallbacks = {
-            "hindi": "नमस्ते, यह आवाज़ का एक नमूना है। कृपया इसे सुनें।",
-            "telugu": "నమస్కారం, ఇది ఒక వాయిస్ శాంపిల్.",
-            "tamil": "வணக்கம், இது ஒரு குரல் மாதிரி.",
-            "english": "Hello, this is a voice sample preview.",
-        }
-        lang_key = language.lower()
-        preview_text = fallbacks.get(lang_key, fallbacks["english"])
-
-    # Replace common demo placeholders with sample values so the TTS sounds natural
-    sample_values = {
-        "customer_name": "Ramesh Kumar",
-        "customer": "Ramesh Kumar",
-        "lan": "LAN12345",
-        "account_number": "LAN12345",
-        "client_name": "ABC Finance",
-        "client": "ABC Finance",
-        "tos": "38,450",
-        "balance": "38,450",
-        "outstanding": "38,450",
-        "loan_amount": "1,20,000",
-        "loan_amt": "1,20,000",
-        "amt": "1,20,000",
-        "contact_details": "1800-555-999",
-        "helpline": "1800-555-999",
-        "contact": "1800-555-999",
-        "product_type": "loan",
-        "product": "loan",
-    }
-    import re
-    def replace_placeholder(m: re.Match) -> str:
-        key = m.group(1).strip().lower()
-        return sample_values.get(key, m.group(0))
-    preview_text = re.sub(r'\{\{?\s*(\w+)\s*\}?\}', replace_placeholder, preview_text)
-
-    # Pick best voice id — use provided one, else pick first matching gender from voices cache
-    chosen_voice_id = voice_id.strip()
-    if not chosen_voice_id:
-        voices_data = _voices_cache.get("data") or {}
-        voices_list = voices_data.get("data", {}).get("voices", [])
-        for v in voices_list:
-            if (v.get("gender") or "").lower() == gender.lower():
-                chosen_voice_id = v.get("voice_id") or v.get("id") or ""
-                if chosen_voice_id:
-                    break
-
-    if not chosen_voice_id:
-        return Response(status_code=400, content="No voice available for TTS preview")
-
-    voices_data = _voices_cache.get("data") or {}
-    voices_list = voices_data.get("data", {}).get("voices", [])
-    
-    # Fallback to static proxy audio since HeyGen TTS generation API path is 404ing
-    audio_url = None
-    for v in voices_list:
-        v_id = v.get("voice_id") or v.get("id")
-        if v_id == chosen_voice_id:
-            audio_url = v.get("preview_audio")
-            break
-            
-    if not audio_url:
-        return Response(status_code=502, content="Voice has no audio preview available")
-
-    # Stream the audio bytes back to the frontend
-    async def stream_tts():
-        hdrs = {
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "audio/*,*/*",
-        }
-        async with httpx.AsyncClient(follow_redirects=True, headers=hdrs, timeout=30.0) as hc:
-            async with hc.stream("GET", audio_url) as r:
-                async for chunk in r.aiter_bytes():
-                    yield chunk
-
-    return StreamingResponse(stream_tts(), media_type="audio/wav")
-    return StreamingResponse(stream_tts(), media_type="audio/wav")
 
 
 @app.get('/proxy-audio')
