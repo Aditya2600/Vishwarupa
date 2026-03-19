@@ -51,9 +51,6 @@ async def startup_db_client():
         # The ping command is cheap and does not require auth.
         await users_collection.database.command("ping")
         
-        # Enforce globally unique videos so identical requests never render twice
-        await videos_collection.create_index("job_data.payload_hash", unique=True, sparse=True)
-        
         print("\n" + "="*50)
         print("SUCCESS: Connected to MongoDB Cluster successfully!")
         print("="*50 + "\n")
