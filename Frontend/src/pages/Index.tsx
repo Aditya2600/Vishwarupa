@@ -401,7 +401,7 @@ const Index = () => {
       }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [saveDraftMutation, state, step]);
+  }, [saveDraftMutation.mutate, state, step]);
 
   useEffect(() => {
     if (!statusQuery.data || state.generationStatus !== "submitting") {

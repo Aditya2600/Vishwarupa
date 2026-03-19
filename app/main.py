@@ -232,36 +232,24 @@ def health() -> dict:
     return {'status': 'ok', 'output_dir': str(settings.output_dir.resolve())}
 
 
-from functools import lru_cache, wraps
-import time
+from aiocache import Cache
 
-def timed_lru_cache(seconds: int, maxsize: int = 128):
-    def wrapper_cache(func):
-        cached_func = lru_cache(maxsize=maxsize)(func)
-        cached_func.expiration = time.time() + seconds
-
-        @wraps(func)
-        def wrapped_func(*args, **kwargs):
-            if time.time() >= cached_func.expiration:
-                cached_func.cache_clear()
-                cached_func.expiration = time.time() + seconds
-                
-            start = time.time()
-            res = cached_func(*args, **kwargs)
-            ms = (time.time() - start) * 1000
-            
-            if ms < 5.0:
-                print(f"⚡ [CACHE HIT] Loaded instantly from LRU cache in {ms:.3f} ms")
-            else:
-                print(f"⏳ [CACHE MISS] Fetched from API and built LRU cache in {ms:.3f} ms")
-                
-            return res
-        return wrapped_func
-    return wrapper_cache
+# Construct the global Cache object
+api_cache = Cache(Cache.MEMORY)
 
 @app.get('/meta/avatars')
-@timed_lru_cache(seconds=7200)
-def list_avatars() -> dict:
+async def list_avatars() -> dict:
+    import time
+    start = time.time()
+    
+    cached_data = await api_cache.get("avatars")
+    if cached_data is not None:
+        ms = (time.time() - start) * 1000
+        print(f"\n⚡ [AVATAR CACHE HIT] Served directly from Cache Class in {ms:.3f} ms")
+        return cached_data
+
+    print("\n⏳ [AVATAR CACHE EMPTY] Fetching data directly from HeyGen API...")
+
     avatars_resp = client.list_avatars()
     try:
         talking_photos_resp = client.list_talking_photos()
@@ -499,12 +487,27 @@ def list_avatars() -> dict:
             "avatars": final_list
         }
     }
+    
+    await api_cache.set("avatars", result, ttl=7200)
+    ms = (time.time() - start) * 1000
+    print(f"✅ [AVATAR CACHE SAVED] Fetched from HeyGen and wrote to aiocache in {ms:.3f} ms")
+    
     return result
 
 
 @app.get('/meta/voices')
-@timed_lru_cache(seconds=7200)
-def list_voices() -> dict:
+async def list_voices() -> dict:
+    import time
+    start = time.time()
+    
+    cached_data = await api_cache.get("voices")
+    if cached_data is not None:
+        ms = (time.time() - start) * 1000
+        print(f"\n⚡ [VOICE CACHE HIT] Served directly from Cache Class in {ms:.3f} ms")
+        return cached_data
+
+    print("\n⏳ [VOICE CACHE EMPTY] Fetching data directly from HeyGen API...")
+
     raw_result = client.list_voices()
     voices = raw_result.get("data", {}).get("voices", [])
     
@@ -555,6 +558,13 @@ def list_voices() -> dict:
         existing_voice = deduped_voices[existing_index]
         if _has_preview_audio(voice) and not _has_preview_audio(existing_voice):
             deduped_voices[existing_index] = voice
+
+    if "data" in raw_result and "voices" in raw_result["data"]:
+        raw_result["data"]["voices"] = deduped_voices
+
+    await api_cache.set("voices", raw_result, ttl=7200)
+    ms = (time.time() - start) * 1000
+    print(f"✅ [VOICE CACHE SAVED] Fetched from HeyGen and wrote to aiocache in {ms:.3f} ms")
     
     return raw_result
 

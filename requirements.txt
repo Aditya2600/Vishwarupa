@@ -19,3 +19,4 @@ python-jose[cryptography]==3.5.0
 watchfiles==1.0.4
 pyyaml==6.0.2
 boto3==1.36.0
+aiocache==0.12.3
