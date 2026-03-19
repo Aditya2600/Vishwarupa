@@ -40,6 +40,14 @@ from app.services.video_service import VideoService
 from app.services.s3_service import S3Service
 from app.database import users_collection, videos_collection, drafts_collection, video_jobs_collection, custom_avatars_collection
 from app.auth import get_password_hash, verify_password, create_access_token, get_current_user
+import logging
+
+logger = logging.getLogger("app")
+logger.setLevel(logging.INFO)
+
+formatter = logging.Formatter(
+    "%(asctime)s | %(levelname)s | %(message)s"
+)
 
 app = FastAPI(title='Personalized Video Generator', version='1.0.0')
 settings.output_dir.mkdir(parents=True, exist_ok=True)

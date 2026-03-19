@@ -7,6 +7,15 @@ import boto3
 
 from app.config import settings
 from app.constants import SQS_QUEUE_URL
+import logging
+
+logger = logging.getLogger("app")
+logger.setLevel(logging.INFO)
+
+formatter = logging.Formatter(
+    "%(asctime)s | %(levelname)s | %(message)s"
+)
+
 
 class SQSService:
     _instance = None
