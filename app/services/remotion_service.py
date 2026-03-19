@@ -190,6 +190,7 @@ class RemotionService:
                 'closing_eyebrow': 'Resolution',
                 'closing_headline': 'A timely response helps avoid further escalation',
                 'closing_body': 'Our team is ready to assist you with a suitable resolution.',
+                'ui': {'formalNotice': 'Formal Notice', 'accountStatus': 'Account Status', 'financialHighlights': 'Financial Highlights', 'immediateNextStep': 'Next Step', 'resolutionStillPossible': 'Possible Solution', 'customerLabel': 'Customer', 'clientLabel': 'Client', 'productLabel': 'Product', 'outstandingLabel': 'Outstanding', 'finalSummary': 'Summary', 'contactLabel': 'Contact'}
             },
             'Hindi': {
                 'notice': 'औपचारिक सूचना',
@@ -214,6 +215,7 @@ class RemotionService:
                 'closing_eyebrow': 'समाधान',
                 'closing_headline': 'समय पर प्रतिक्रिया आगे की कार्रवाई से बचने में मदद करती है',
                 'closing_body': 'हमारी टीम उचित समाधान में आपकी सहायता के लिए तैयार है।',
+                'ui': {'formalNotice': 'औपचारिक सूचना', 'accountStatus': 'खाता स्थिति', 'financialHighlights': 'वित्तीय मुख्य बिंदु', 'immediateNextStep': 'तत्काल अगला कदम', 'resolutionStillPossible': 'समाधान अभी भी संभव है', 'customerLabel': 'ग्राहक', 'clientLabel': 'बैंक', 'productLabel': 'उत्पाद', 'outstandingLabel': 'कुल बकाया', 'finalSummary': 'अंतिम सारांश', 'contactLabel': 'संपर्क'}
             },
         }
         lang = request.language if request.language in t else 'English'
@@ -228,6 +230,7 @@ class RemotionService:
             'closing': {'eyebrow': s['closing_eyebrow'], 'headline': s['closing_headline'], 'body': s['closing_body']},
             'headline_text': s['headline'],
             'cta_text': s['action_body'],
+            'ui_copy': s.get('ui', t['English']['ui'])
         }
 
     def build_scene_payload(self, request: RemotionVideoRequest, outstanding_value: str, loan_value: str, urgency_level: str) -> dict[str, Any]:
@@ -322,17 +325,18 @@ class RemotionService:
 
     def build_render_payload(self, request: RemotionVideoRequest, job_id: str, script_text: str, audio_path: str, vtt_path: Path, scene_payload: dict[str, Any]) -> dict[str, Any]:
         subtitles = self.parse_vtt(vtt_path)
+        is_universal = (request.video_variety or "personalized") == "universal"
         return {
             "id": job_id,
             "language": request.language,
             "video_variety": request.video_variety or "personalized",
             "audio_url": audio_path,
             "subtitles": subtitles,
-            # For universal mode, preserve customer_name etc. as empty so Remotion
-            # scene cards display generic text (built from scene_payload).
-            "customer_name": request.customer_name if (request.video_variety or "personalized") == "personalized" else "",
-            "lan": request.lan if (request.video_variety or "personalized") == "personalized" else "",
-            "client_name": request.client_name if (request.video_variety or "personalized") == "personalized" else "",
+            "customer_name": "" if is_universal else request.customer_name,
+            "lan": "" if is_universal else request.lan,
+            "client_name": "" if is_universal else request.client_name,
+            "tos": "" if is_universal else (request.tos or ""),
+            "loan_amount": "" if is_universal else (request.loan_amount or ""),
             "scene_payload": scene_payload,
             "branding": {
                 "logo": {

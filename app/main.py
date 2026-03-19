@@ -232,18 +232,36 @@ def health() -> dict:
     return {'status': 'ok', 'output_dir': str(settings.output_dir.resolve())}
 
 
-# Simple in-memory cache to avoid slow HeyGen API calls on every page load
-_avatars_cache: dict = {"data": None, "ts": 0.0}
-_voices_cache: dict = {"data": None, "ts": 0.0}
-CACHE_TTL = 600  # 10 minutes
+from functools import lru_cache, wraps
+import time
 
+def timed_lru_cache(seconds: int, maxsize: int = 128):
+    def wrapper_cache(func):
+        cached_func = lru_cache(maxsize=maxsize)(func)
+        cached_func.expiration = time.time() + seconds
+
+        @wraps(func)
+        def wrapped_func(*args, **kwargs):
+            if time.time() >= cached_func.expiration:
+                cached_func.cache_clear()
+                cached_func.expiration = time.time() + seconds
+                
+            start = time.time()
+            res = cached_func(*args, **kwargs)
+            ms = (time.time() - start) * 1000
+            
+            if ms < 5.0:
+                print(f"⚡ [CACHE HIT] Loaded instantly from LRU cache in {ms:.3f} ms")
+            else:
+                print(f"⏳ [CACHE MISS] Fetched from API and built LRU cache in {ms:.3f} ms")
+                
+            return res
+        return wrapped_func
+    return wrapper_cache
 
 @app.get('/meta/avatars')
-async def list_avatars() -> dict:
-    # Return cached result if fresh
-    if _avatars_cache["data"] is not None and (time.time() - _avatars_cache["ts"]) < CACHE_TTL:
-        return _avatars_cache["data"]
-
+@timed_lru_cache(seconds=7200)
+def list_avatars() -> dict:
     avatars_resp = client.list_avatars()
     try:
         talking_photos_resp = client.list_talking_photos()
@@ -481,17 +499,12 @@ async def list_avatars() -> dict:
             "avatars": final_list
         }
     }
-    # Cache for next requests
-    _avatars_cache["data"] = result
-    _avatars_cache["ts"] = time.time()
     return result
 
 
 @app.get('/meta/voices')
+@timed_lru_cache(seconds=7200)
 def list_voices() -> dict:
-    if _voices_cache["data"] is not None and (time.time() - _voices_cache["ts"]) < CACHE_TTL:
-        return _voices_cache["data"]
-    
     raw_result = client.list_voices()
     voices = raw_result.get("data", {}).get("voices", [])
     
@@ -543,11 +556,6 @@ def list_voices() -> dict:
         if _has_preview_audio(voice) and not _has_preview_audio(existing_voice):
             deduped_voices[existing_index] = voice
     
-    if "data" in raw_result and "voices" in raw_result["data"]:
-        raw_result["data"]["voices"] = deduped_voices
-
-    _voices_cache["data"] = raw_result
-    _voices_cache["ts"] = time.time()
     return raw_result
 
 
@@ -662,7 +670,7 @@ async def generate_direct(request: DirectVideoRequest, wait: bool = True, curren
     result = service.generate_direct(request, wait=wait)
     
     if wait and result.saved_to:
-        s3_url = s3_service.upload_video(result.saved_to, f"videos/direct_{result.video_id}.mp4")
+        s3_url = s3_service.upload_video(result.saved_to, f"videos/{result.video_id}.mp4")
         if s3_url:
             result.video_url = s3_url
     
@@ -726,7 +734,7 @@ async def stylize_video(
     final_relative = artifact.final_video_path.relative_to(settings.output_dir).as_posix()
     video_url = f"/api/artifacts/{final_relative}"
     
-    s3_url = s3_service.upload_video(artifact.final_video_path, f"videos/styled_{video_id}.mp4")
+    s3_url = s3_service.upload_video(artifact.final_video_path, f"videos/{video_id}.mp4")
     if s3_url:
         video_url = s3_url
 
@@ -761,7 +769,7 @@ async def generate_template(request: TemplateVideoRequest, wait: bool = True, cu
     result = service.generate_from_template(request, wait=wait)
     
     if wait and result.saved_to:
-        s3_url = s3_service.upload_video(result.saved_to, f"videos/template_{result.video_id}.mp4")
+        s3_url = s3_service.upload_video(result.saved_to, f"videos/{result.video_id}.mp4")
         if s3_url:
             result.video_url = s3_url
     
@@ -781,7 +789,35 @@ async def generate_template(request: TemplateVideoRequest, wait: bool = True, cu
 
 @app.post('/generate/remotion', response_model=VideoJobResult)
 async def generate_remotion(request: Request, current_user: str = Depends(get_current_user)):
+    import hashlib
+    import json
     payload = await _parse_remotion_payload(request)
+
+    # 1. Create a deterministic hash of the entire configuration payload
+    payload_dict = payload.model_dump(exclude_none=True)
+    if 'logo_bytes' in payload_dict and payload_dict['logo_bytes']:
+        # Don't natively hash raw bytes directly; hash their length/presence instead if needed, 
+        # but to be perfectly safe we can drop them from the string buffer 
+        payload_dict['logo_bytes'] = str(len(payload_dict['logo_bytes']))
+    
+    payload_str = json.dumps(payload_dict, sort_keys=True, ensure_ascii=False)
+    payload_hash = hashlib.sha256(payload_str.encode('utf-8')).hexdigest()
+
+    # 2. Check Database for an identical completed video by the current user
+    cached_record = await videos_collection.find_one({
+        "user_email": current_user,
+        "request_mode": "remotion",
+        "status": "completed",
+        "job_data.payload_hash": payload_hash
+    })
+
+    if cached_record and cached_record.get('job_data'):
+        print(f"DEBUG: Returning cached Text-to-Video generation for payload hash {payload_hash}")
+        # Reconstruct the VideoJobResult from the stored dataset directly
+        job_data = cached_record['job_data'].copy()
+        job_data.pop('payload_hash', None)
+        # Avoid overriding the new unique video_id but serve the exact same URL and metadata
+        return VideoJobResult(**job_data)
 
     try:
         result = await remotion_service.generate_video(payload)
@@ -791,7 +827,7 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
     relative_video_path = result['video_path'].relative_to(settings.output_dir).as_posix()
     video_url = f"/api/artifacts/{relative_video_path}"
     
-    s3_url = s3_service.upload_video(result['video_path'], f"videos/remotion_{result['job_id']}.mp4")
+    s3_url = s3_service.upload_video(result['video_path'], f"videos/{result['job_id']}.mp4")
     if s3_url:
         video_url = s3_url
     
@@ -812,7 +848,10 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         audio_path=str(result['audio_path']),
     )
 
-    # Save to MongoDB
+    # 3. Save to MongoDB with the embedded payload hash flag for future queries
+    embeddable_job_data = _to_mongo_safe(job_result)
+    embeddable_job_data['payload_hash'] = payload_hash
+
     video_record = VideoRecord(
         user_email=current_user,
         video_id=job_result.video_id,
@@ -820,7 +859,7 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         title=job_result.title,
         video_url=job_result.video_url,
         request_mode="remotion",
-        job_data=_to_mongo_safe(job_result)
+        job_data=embeddable_job_data
     )
     await videos_collection.insert_one(_to_mongo_safe(video_record))
     
