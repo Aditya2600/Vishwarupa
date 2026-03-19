@@ -40,6 +40,8 @@ from app.services.video_service import VideoService
 from app.services.s3_service import S3Service
 from app.database import users_collection, videos_collection, drafts_collection, video_jobs_collection, custom_avatars_collection
 from app.auth import get_password_hash, verify_password, create_access_token, get_current_user
+from app.workers.avatar_job_worker import AvatarJobWorker
+
 import logging
 
 logger = logging.getLogger("app")
@@ -61,8 +63,19 @@ app.add_middleware(
     allow_headers=['*'],
 )
 
+
+async def poll_sqs():
+    while True:
+        print("Polling...")
+        AvatarJobWorker().run_forever()
+        await asyncio.sleep(5)
+
+
 @app.on_event("startup")
 async def startup_db_client():
+    # Start the worker also while starting up
+    asyncio.create_task(poll_sqs())
+
     if sys.platform == 'win32':
         try:
             asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
@@ -81,6 +94,9 @@ async def startup_db_client():
         print("\n" + "!"*50)
         print(f"ERROR: Failed to connect to MongoDB: {e}")
         print("!"*50 + "\n")
+
+
+
 app.mount('/artifacts', StaticFiles(directory=settings.output_dir), name='artifacts')
 service = VideoService()
 client = HeyGenClient()

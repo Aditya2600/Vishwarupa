@@ -85,10 +85,12 @@ class AvatarJobWorker:
 
     async def run_forever(self) -> None:
         if not self.sqs_service.is_configured():
+            logger.error("SQS not setup")
             raise RuntimeError('SQS queue is not configured. Set SQS_QUEUE_URL before starting the worker.')
 
         logger.info('Avatar job worker started. Polling queue...')
         while True:
+            logger.info('Avatar111 job worker started. Polling queue...')
             try:
                 messages = await asyncio.to_thread(self.sqs_service.receive_jobs, 5)
             except Exception:
