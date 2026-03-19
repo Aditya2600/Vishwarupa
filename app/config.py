@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     avatar_id_mahesh: str = "2311cba09f374de6b971ea5fa23ff993"
     avatar_id_rahul: str = "932371fea0eb462ea9beccff656d4823"
     avatar_id_priya: str = "c56120f1c7564d20b1f87416a6b8d0d1"
-    avatar_id_adv_aditi_mehra: str = "5b4a09a4d3ce495da1ff15e42432ff62"
+    avatar_id_adv_aditi_mehra: str = "b8d00c953a114b299792b6197a80cc70"
     default_video_width: int = 1280
     default_video_height: int = 720
     default_background_color: str = '#F4F4F4'
