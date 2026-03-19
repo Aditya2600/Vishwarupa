@@ -65,10 +65,11 @@ app.add_middleware(
 
 
 async def poll_sqs():
-    while True:
-        print("Polling...")
-        AvatarJobWorker().run_forever()
-        await asyncio.sleep(5)
+    print("Starting SQS Worker...")
+    try:
+        await AvatarJobWorker().run_forever()
+    except Exception as e:
+        logger.error(f"SQS Worker crashed: {e}")
 
 
 @app.on_event("startup")
