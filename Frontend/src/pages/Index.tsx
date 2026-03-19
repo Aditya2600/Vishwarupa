@@ -312,6 +312,21 @@ const Index = () => {
   });
 
   useEffect(() => {
+    if (requestedFreshDraft) {
+      // 1. Clear any stuck state from localStorage
+      reset();
+      
+      // 2. Apply the specific pipeline they asked for
+      update({ videoType: requestedMode === "remotion" ? "remotion" : "avatar" });
+      
+      // 3. Silently scrub '?fresh=1' from the URL so it doesn't trigger again on normal re-renders
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete("fresh");
+      setSearchParams(newParams, { replace: true });
+    }
+  }, [requestedFreshDraft, requestedMode, reset, update, searchParams, setSearchParams]);
+
+  useEffect(() => {
     if (selectedAvatar && (state.avatarName !== selectedAvatar.name || state.avatarGender !== selectedAvatar.gender)) {
       update({
         avatarName: selectedAvatar.name,
@@ -525,24 +540,10 @@ const Index = () => {
 
     setSearchParams({}, { replace: true });
   }, [
-    generateRemotionMutation,
-    generateVideoMutation,
     requestedFreshDraft,
     requestedMode,
     reset,
     setSearchParams,
-    state.avatarGender,
-    state.avatarId,
-    state.avatarName,
-    state.avatarTranscriptCustomized,
-    state.language,
-    state.remotionTranscript,
-    state.remotionTranscriptCustomized,
-    state.transcript,
-    state.voiceGender,
-    state.voiceId,
-    state.voiceName,
-    stylizeVideoMutation,
     update,
   ]);
 

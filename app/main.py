@@ -50,6 +50,10 @@ async def startup_db_client():
     try:
         # The ping command is cheap and does not require auth.
         await users_collection.database.command("ping")
+        
+        # Enforce globally unique videos so identical requests never render twice
+        await videos_collection.create_index("job_data.payload_hash", unique=True, sparse=True)
+        
         print("\n" + "="*50)
         print("SUCCESS: Connected to MongoDB Cluster successfully!")
         print("="*50 + "\n")
@@ -792,9 +796,8 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
     payload_str = json.dumps(payload_dict, sort_keys=True, ensure_ascii=False)
     payload_hash = hashlib.sha256(payload_str.encode('utf-8')).hexdigest()
 
-    # 2. Check Database for an identical completed video by the current user
+    # 2. Check Database for an identical completed video globally
     cached_record = await videos_collection.find_one({
-        "user_email": current_user,
         "request_mode": "remotion",
         "status": "completed",
         "job_data.payload_hash": payload_hash
