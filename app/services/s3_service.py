@@ -1,6 +1,7 @@
 import boto3
 from pathlib import Path
 from app.config import settings
+from app.constants import S3_BUCKET_NAME
 import logging
 
 logger = logging.getLogger(__name__)
@@ -13,7 +14,7 @@ class S3Service:
             aws_secret_access_key=settings.aws_secret_access_key,
             region_name=settings.aws_region
         ) if settings.aws_access_key_id and settings.aws_secret_access_key else None
-        self.bucket = settings.s3_bucket_name
+        self.bucket = S3_BUCKET_NAME
 
     def upload_video(self, local_path: Path, s3_key: str) -> str | None:
         """Uploads a video to S3 and returns the public URL. Returns None if S3 is not configured."""

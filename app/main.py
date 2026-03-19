@@ -709,20 +709,39 @@ async def create_avatar_job(request: DirectVideoRequest, current_user: str = Dep
             detail='Avatar async queue is not configured. Set SQS_QUEUE_URL and retry.',
         )
 
-    now = datetime.utcnow()
-    job_record = VideoJobRecord(
-        job_id=uuid4().hex,
-        user_email=current_user,
-        status='queued',
-        request_payload=_to_mongo_safe(request.model_dump(mode='python')),
-        created_at=now,
-        updated_at=now,
-    )
-    await video_jobs_collection.insert_one(_to_mongo_safe(job_record))
-
+    job_record: VideoJobRecord | None = None
     try:
-        sqs_service.send_avatar_job(job_record.job_id)
+        now = datetime.utcnow()
+        job_record = VideoJobRecord(
+            job_id=uuid4().hex,
+            user_email=current_user,
+            status='queued',
+            request_payload=_to_mongo_safe(request.model_dump(mode='python')),
+            created_at=now,
+            updated_at=now,
+        )
+        await video_jobs_collection.insert_one(_to_mongo_safe(job_record))
+        await videos_collection.insert_one(_to_mongo_safe(
+            VideoRecord(
+                user_email=current_user,
+                video_id=job_record.job_id,
+                status='queued',
+                title=f"{request.title_prefix} - {request.customer_name}",
+                request_mode='avatar_async',
+                job_data={
+                    'job_id': job_record.job_id,
+                    'request_mode': 'avatar',
+                    'status': 'queued',
+                },
+            )
+        ))
+        sqs_service.send_job(job_record.job_id)
+        return AvatarJobAck(job_id=job_record.job_id, status='queued')
+    except HTTPException:
+        raise
     except Exception as exc:
+        if not job_record:
+            raise HTTPException(status_code=502, detail=GENERIC_GENERATION_ERROR) from exc
         failed_at = datetime.utcnow()
         await video_jobs_collection.update_one(
             {'job_id': job_record.job_id, 'user_email': current_user},
@@ -733,9 +752,19 @@ async def create_avatar_job(request: DirectVideoRequest, current_user: str = Dep
                 'completed_at': failed_at,
             }},
         )
+        await videos_collection.update_one(
+            {'video_id': job_record.job_id, 'user_email': current_user},
+            {'$set': {
+                'status': 'failed',
+                'job_data': {
+                    'job_id': job_record.job_id,
+                    'request_mode': 'avatar',
+                    'status': 'failed',
+                    'error': str(exc),
+                },
+            }},
+        )
         raise HTTPException(status_code=502, detail=GENERIC_GENERATION_ERROR) from exc
-
-    return AvatarJobAck(job_id=job_record.job_id, status='queued')
 
 
 @app.get('/jobs/{job_id}', response_model=AvatarJobStatusResponse)

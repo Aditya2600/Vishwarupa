@@ -40,8 +40,6 @@ class Settings(BaseSettings):
     aws_access_key_id: str | None = None
     aws_secret_access_key: str | None = None
     aws_region: str = 'us-east-1'
-    s3_bucket_name: str | None = None
-    sqs_queue_url: str | None = None
     sqs_wait_time_seconds: int = 20
     sqs_visibility_timeout_seconds: int = 120
     sqs_max_receive_count: int = 3

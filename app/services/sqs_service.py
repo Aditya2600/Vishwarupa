@@ -6,21 +6,33 @@ from typing import Any
 import boto3
 
 from app.config import settings
-
+from app.constants import SQS_QUEUE_URL
 
 class SQSService:
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(SQSService, cls).__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+
     def __init__(self, queue_url: str | None = None) -> None:
-        self.queue_url = (queue_url or settings.sqs_queue_url or '').strip() or None
+        if self._initialized:
+            return
+            
+        self.queue_url = (queue_url or SQS_QUEUE_URL or '').strip() or None
         client_kwargs: dict[str, Any] = {'region_name': settings.aws_region}
         if settings.aws_access_key_id and settings.aws_secret_access_key:
             client_kwargs['aws_access_key_id'] = settings.aws_access_key_id
             client_kwargs['aws_secret_access_key'] = settings.aws_secret_access_key
         self.client = boto3.client('sqs', **client_kwargs)
+        self._initialized = True
 
     def is_configured(self) -> bool:
         return bool(self.queue_url)
 
-    def send_avatar_job(self, job_id: str) -> dict[str, Any]:
+    def send_job(self, job_id: str) -> dict[str, Any]:
         if not self.queue_url:
             raise RuntimeError('SQS queue is not configured. Set SQS_QUEUE_URL to enable avatar async jobs.')
         payload = {'job_id': job_id, 'request_mode': 'avatar'}

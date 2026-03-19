@@ -71,7 +71,7 @@ class FakeSQSForApi:
     def is_configured(self) -> bool:
         return True
 
-    def send_avatar_job(self, job_id: str) -> dict[str, str]:
+    def send_job(self, job_id: str) -> dict[str, str]:
         self.sent_job_ids.append(job_id)
         return {'MessageId': 'mid-1'}
 
@@ -137,20 +137,24 @@ def test_sqs_service_send_avatar_job_contains_only_metadata(monkeypatch: pytest.
             return {'MessageId': 'mid-123'}
 
     fake_client = _FakeBotoClient()
+    SQSService._instance = None
     monkeypatch.setattr('app.services.sqs_service.boto3.client', lambda *args, **kwargs: fake_client)
 
     service = SQSService(queue_url='https://sqs.us-east-1.amazonaws.com/12345/avatar-jobs')
-    service.send_avatar_job('job_123')
+    service.send_job('job_123')
 
     assert len(fake_client.calls) == 1
     payload = json.loads(fake_client.calls[0]['MessageBody'])
     assert payload == {'job_id': 'job_123', 'request_mode': 'avatar'}
+    SQSService._instance = None
 
 
 def test_post_jobs_avatar_creates_job_and_sends_sqs(monkeypatch: pytest.MonkeyPatch) -> None:
     jobs_collection = InMemoryCollection()
+    videos_collection = InMemoryCollection()
     sqs_service = FakeSQSForApi()
     monkeypatch.setattr(main_module, 'video_jobs_collection', jobs_collection)
+    monkeypatch.setattr(main_module, 'videos_collection', videos_collection)
     monkeypatch.setattr(main_module, 'sqs_service', sqs_service)
 
     response = asyncio.run(main_module.create_avatar_job(_build_direct_request(), current_user='user@example.com'))
@@ -163,6 +167,8 @@ def test_post_jobs_avatar_creates_job_and_sends_sqs(monkeypatch: pytest.MonkeyPa
     assert stored['status'] == 'queued'
     assert stored['request_payload']['customer_name'] == 'Aditi'
     assert stored['request_payload']['lan'] == 'LAN001'
+    assert response.job_id in videos_collection.docs
+    assert videos_collection.docs[response.job_id]['status'] == 'queued'
 
 
 def test_get_jobs_status_enforces_ownership(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -231,7 +237,7 @@ def test_worker_success_moves_job_to_completed() -> None:
     assert job['attempts'] == 1
     assert job['result_payload']['video_id'] == 'video_123'
     assert sqs_service.deleted == ['rh-success']
-    assert 'video_123' in videos_collection.docs
+    assert 'job_success' in videos_collection.docs
 
 
 def test_worker_retry_path_keeps_message_for_retry() -> None:

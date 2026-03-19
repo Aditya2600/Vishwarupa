@@ -146,9 +146,22 @@ class AvatarJobWorker:
             return
 
         claimed_job = await self.jobs_collection.find_one({'job_id': job_id})
+        user_email = str(claimed_job.get('user_email') or '').strip() if isinstance(claimed_job, dict) else ''
         request_payload = claimed_job.get('request_payload') if isinstance(claimed_job, dict) else {}
         if not isinstance(request_payload, dict):
             request_payload = {}
+        if user_email:
+            await self.videos_collection_ref.update_one(
+                {'video_id': job_id, 'user_email': user_email},
+                {'$set': {
+                    'status': 'processing',
+                    'job_data': {
+                        'job_id': job_id,
+                        'request_mode': 'avatar',
+                        'status': 'processing',
+                    },
+                }},
+            )
 
         try:
             request = DirectVideoRequest.model_validate(request_payload)
@@ -175,9 +188,8 @@ class AvatarJobWorker:
                 }},
             )
 
-            user_email = str(claimed_job.get('user_email') or '').strip() if isinstance(claimed_job, dict) else ''
             if user_email:
-                await self._upsert_video_record(user_email, request, result)
+                await self._upsert_video_record(user_email, job_id, request, result)
 
             if receipt_handle:
                 await asyncio.to_thread(self.sqs_service.delete_message, receipt_handle)
@@ -198,6 +210,19 @@ class AvatarJobWorker:
                         'completed_at': failed_at,
                     }},
                 )
+                if user_email:
+                    await self.videos_collection_ref.update_one(
+                        {'video_id': job_id, 'user_email': user_email},
+                        {'$set': {
+                            'status': 'failed',
+                            'job_data': {
+                                'job_id': job_id,
+                                'request_mode': 'avatar',
+                                'status': 'failed',
+                                'error': error_message,
+                            },
+                        }},
+                    )
                 if receipt_handle:
                     await asyncio.to_thread(self.sqs_service.delete_message, receipt_handle)
                 return
@@ -210,19 +235,35 @@ class AvatarJobWorker:
                     'updated_at': failed_at,
                 }},
             )
+            if user_email:
+                await self.videos_collection_ref.update_one(
+                    {'video_id': job_id, 'user_email': user_email},
+                    {'$set': {
+                        'status': 'queued',
+                        'job_data': {
+                            'job_id': job_id,
+                            'request_mode': 'avatar',
+                            'status': 'queued',
+                            'error': error_message,
+                        },
+                    }},
+                )
 
-    async def _upsert_video_record(self, user_email: str, request: DirectVideoRequest, result: Any) -> None:
+    async def _upsert_video_record(self, user_email: str, job_id: str, request: DirectVideoRequest, result: Any) -> None:
+        result_payload = _to_mongo_safe(result)
+        if isinstance(result_payload, dict):
+            result_payload['job_id'] = job_id
         video_record = VideoRecord(
             user_email=user_email,
-            video_id=str(result.video_id),
+            video_id=job_id,
             status='completed',
             title=result.title or f'{request.title_prefix} - {request.customer_name}',
             video_url=result.video_url,
-            request_mode='direct',
-            job_data=_to_mongo_safe(result),
+            request_mode='avatar_async',
+            job_data=result_payload,
         )
         await self.videos_collection_ref.update_one(
-            {'video_id': str(result.video_id), 'user_email': user_email},
+            {'video_id': job_id, 'user_email': user_email},
             {'$set': _to_mongo_safe(video_record)},
             upsert=True,
         )

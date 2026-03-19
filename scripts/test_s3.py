@@ -7,10 +7,11 @@ sys.path.append(str(project_root))
 
 from app.services.s3_service import S3Service
 from app.config import settings
+from app.constants import S3_BUCKET_NAME
 
 def test_s3_upload():
     print("--- S3 Upload Test ---")
-    print(f"Bucket: {settings.s3_bucket_name}")
+    print(f"Bucket: {S3_BUCKET_NAME}")
     print(f"Region: {settings.aws_region}")
     
     if not settings.aws_access_key_id or not settings.aws_secret_access_key:
