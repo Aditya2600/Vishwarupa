@@ -21,7 +21,7 @@ class SQSService:
         if self._initialized:
             return
             
-        self.queue_url = (queue_url or SQS_QUEUE_URL or '').strip() or None
+        self.queue_url = SQS_QUEUE_URL
         client_kwargs: dict[str, Any] = {'region_name': settings.aws_region}
         if settings.aws_access_key_id and settings.aws_secret_access_key:
             client_kwargs['aws_access_key_id'] = settings.aws_access_key_id
