@@ -44,7 +44,6 @@ class VideoRecord(BaseModel):
     title: str | None = None
     video_url: str | None = None
     request_mode: str
-    provider_video_id: str | None = None
     created_at: datetime = Field(default_factory=get_ist_time)
     job_data: dict | None = None
 
@@ -61,7 +60,6 @@ class AvatarJobStatusResponse(BaseModel):
 
     id: str = Field(alias='_id')
     status: Literal['queued', 'processing', 'completed', 'failed']
-    provider_video_id: str | None = None
     video_url: str | None = None
     thumbnail_url: str | None = None
     title: str | None = None

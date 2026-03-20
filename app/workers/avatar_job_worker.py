@@ -208,7 +208,6 @@ class AvatarJobWorker:
                 {'$set': {
                     'status': 'completed',
                     'result_payload': _to_mongo_safe(result),
-                    'provider_video_id': result.video_id,
                     'error': None,
                     'updated_at': completed_at,
                     'completed_at': completed_at,
@@ -283,7 +282,6 @@ class AvatarJobWorker:
             status='completed',
             title=result.title or f'{request.title_prefix} - {request.customer_name}',
             video_url=result.video_url,
-            provider_video_id=result.video_id,
             request_mode='avatar_async',
             job_data=result_payload,
         )
