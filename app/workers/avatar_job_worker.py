@@ -10,6 +10,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from app.config import settings
+from app.constants import SQS_QUEUE_URL
 from app.database import videos_collection
 from app.models import DirectVideoRequest, VideoRecord
 from app.services.s3_service import S3Service
@@ -53,8 +54,7 @@ def _extract_receive_count(message: dict[str, Any]) -> int:
 def _parse_video_id(message: dict[str, Any]) -> str | None:
     body = message.get('Body')
     if isinstance(body, dict):
-        candidate = body.get('video_id')
-        return str(candidate).strip() if candidate else None
+        return str(body.get('video_id')).strip() if body.get('video_id') else None
     if isinstance(body, str):
         try:
             payload = json.loads(body)
@@ -94,7 +94,7 @@ class AvatarJobWorker:
         return int(getattr(result, 'modified_count', 0))
 
     async def run_forever(self) -> None:
-        if not self.sqs_service.is_configured():
+        if not str(SQS_QUEUE_URL or '').strip():
             logger.error("SQS not setup")
             raise RuntimeError('SQS queue is not configured. Set SQS_QUEUE_URL before starting the worker.')
 

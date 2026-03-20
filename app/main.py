@@ -39,6 +39,7 @@ from app.services.video_service import VideoService
 from app.services.s3_service import S3Service
 from app.database import users_collection, videos_collection, drafts_collection, custom_avatars_collection
 from app.auth import get_password_hash, verify_password, create_access_token, get_current_user
+from app.constants import SQS_QUEUE_URL
 from app.workers.avatar_job_worker import AvatarJobWorker
 
 import logging
@@ -730,7 +731,8 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
 @app.post('/jobs/avatar', response_model=AvatarJobAck)
 async def create_avatar_job(request: DirectVideoRequest, current_user: str = Depends(get_current_user)):
-    if not sqs_service.is_configured():
+    queue_url = str(SQS_QUEUE_URL or '').strip()
+    if not queue_url:
         print("DEBUG: SQS queue is not configured")
         raise HTTPException(
             status_code=503,
@@ -770,7 +772,7 @@ async def create_avatar_job(request: DirectVideoRequest, current_user: str = Dep
         await videos_collection.insert_one(video_doc)
         sqs_service.send_job(
             payload={'video_id': video_id, 'request_mode': 'avatar'},
-            queue_url=getattr(sqs_service, 'queue_url', None),
+            queue_url=queue_url,
         )
         return AvatarJobAck(video_id=video_id, status='queued')
     except HTTPException:

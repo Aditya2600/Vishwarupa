@@ -26,11 +26,10 @@ class SQSService:
             cls._instance._initialized = False
         return cls._instance
 
-    def __init__(self, queue_url: str | None = None) -> None:
+    def __init__(self) -> None:
         if self._initialized:
             return
-            
-        self.queue_url = queue_url or SQS_QUEUE_URL
+
         client_kwargs: dict[str, Any] = {'region_name': settings.aws_region}
         if settings.aws_access_key_id and settings.aws_secret_access_key:
             client_kwargs['aws_access_key_id'] = settings.aws_access_key_id
@@ -38,25 +37,28 @@ class SQSService:
         self.client = boto3.client('sqs', **client_kwargs)
         self._initialized = True
 
-    def is_configured(self) -> bool:
-        return bool(self.queue_url)
+    @staticmethod
+    def _configured_queue_url() -> str:
+        queue_url = str(SQS_QUEUE_URL or '').strip()
+        if not queue_url:
+            raise RuntimeError('SQS queue is not configured. Set SQS_QUEUE_URL to enable avatar async jobs.')
+        return queue_url
 
-    def send_job(self, payload: dict[str, Any], queue_url: str | None = None) -> dict[str, Any]:
-        target_queue_url = (queue_url or self.queue_url or '').strip()
-        if not target_queue_url:
+    def send_job(self, payload: dict[str, Any], queue_url: str) -> dict[str, Any]:
+        queue_url = str(queue_url).strip()
+        if not queue_url:
             raise RuntimeError('SQS queue is not configured. Set SQS_QUEUE_URL to enable avatar async jobs.')
         if not isinstance(payload, dict) or not payload:
             raise ValueError('SQS payload must be a non-empty dictionary.')
         return self.client.send_message(
-            QueueUrl=target_queue_url,
+            QueueUrl=queue_url,
             MessageBody=json.dumps(payload),
         )
 
     def receive_jobs(self, max_messages: int = 1) -> list[dict[str, Any]]:
-        if not self.queue_url:
-            raise RuntimeError('SQS queue is not configured. Set SQS_QUEUE_URL to enable avatar async jobs.')
+        queue_url = self._configured_queue_url()
         response = self.client.receive_message(
-            QueueUrl=self.queue_url,
+            QueueUrl=queue_url,
             MaxNumberOfMessages=max(1, min(max_messages, 10)),
             WaitTimeSeconds=max(1, settings.sqs_wait_time_seconds),
             VisibilityTimeout=max(1, settings.sqs_visibility_timeout_seconds),
@@ -68,9 +70,8 @@ class SQSService:
         return [message for message in messages if isinstance(message, dict)]
 
     def delete_message(self, receipt_handle: str) -> None:
-        if not self.queue_url:
-            raise RuntimeError('SQS queue is not configured. Set SQS_QUEUE_URL to enable avatar async jobs.')
+        queue_url = self._configured_queue_url()
         self.client.delete_message(
-            QueueUrl=self.queue_url,
+            QueueUrl=queue_url,
             ReceiptHandle=receipt_handle,
         )

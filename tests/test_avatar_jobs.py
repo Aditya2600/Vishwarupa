@@ -66,10 +66,7 @@ class FakeSQSForApi:
     def __init__(self) -> None:
         self.sent_payloads: list[dict[str, Any]] = []
 
-    def is_configured(self) -> bool:
-        return True
-
-    def send_job(self, payload: dict[str, Any], queue_url: str | None = None) -> dict[str, str]:
+    def send_job(self, payload: dict[str, Any], queue_url: str) -> dict[str, str]:
         self.sent_payloads.append(copy.deepcopy(payload))
         return {'MessageId': 'mid-1'}
 
@@ -77,9 +74,6 @@ class FakeSQSForApi:
 class FakeSQSForWorker:
     def __init__(self) -> None:
         self.deleted: list[str] = []
-
-    def is_configured(self) -> bool:
-        return True
 
     def receive_jobs(self, max_messages: int = 1) -> list[dict[str, Any]]:  # pragma: no cover - not used in tests
         return []
@@ -138,7 +132,7 @@ def test_sqs_service_send_avatar_job_contains_only_metadata(monkeypatch: pytest.
     SQSService._instance = None
     monkeypatch.setattr('app.services.sqs_service.boto3.client', lambda *args, **kwargs: fake_client)
 
-    service = SQSService(queue_url='https://sqs.us-east-1.amazonaws.com/12345/avatar-jobs')
+    service = SQSService()
     service.send_job(
         payload={'video_id': 'video_123', 'request_mode': 'avatar'},
         queue_url='https://sqs.us-east-1.amazonaws.com/12345/avatar-jobs',
