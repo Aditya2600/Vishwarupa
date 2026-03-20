@@ -157,14 +157,14 @@ async def _persist_video_job_result(current_user: str, result: VideoJobResult) -
         update_fields["video_url"] = result.video_url
 
     await videos_collection.update_one(
-        {"video_id": result.video_id, "user_email": current_user},
+        {"video_id": result.video_id, "user_id": current_user},
         {"$set": update_fields},
     )
 
 
 async def _mark_video_failed(current_user: str, video_id: str, detail: str) -> None:
     await videos_collection.update_one(
-        {"video_id": video_id, "user_email": current_user},
+        {"video_id": video_id, "user_id": current_user},
         {"$set": {
             "status": "failed",
             "job_data": {"detail": detail},
@@ -194,9 +194,8 @@ def _build_avatar_job_status_response(job: dict) -> AvatarJobStatusResponse:
     raw_error = job.get('error') or job_data.get('error')
     error = str(raw_error).strip() if isinstance(raw_error, str) and raw_error.strip() else None
     return AvatarJobStatusResponse(
-        job_id=str(job.get('job_id') or job_data.get('job_id') or job.get('video_id')),
+        video_id=str(response_payload.get('video_id') or job.get('video_id')),
         status=status_value,
-        video_id=str(response_payload.get('video_id') or job.get('video_id')) if (response_payload.get('video_id') or job.get('video_id')) else None,
         video_url=str(response_payload.get('video_url') or job.get('video_url')) if (response_payload.get('video_url') or job.get('video_url')) else None,
         thumbnail_url=str(response_payload.get('thumbnail_url')) if response_payload.get('thumbnail_url') else None,
         title=str(response_payload.get('title') or job.get('title')) if (response_payload.get('title') or job.get('title')) else None,
@@ -718,7 +717,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         )
     
     print(f"DEBUG: Login successful for account: {login_identifier}")
-    access_token = create_access_token(data={"sub": user["email"]})
+    access_token = create_access_token(data={"sub": str(user["_id"]), "email": user["email"]})
     return {
         "access_token": access_token,
         "token_type": "bearer",
@@ -738,29 +737,28 @@ async def create_avatar_job(request: DirectVideoRequest, current_user: str = Dep
             detail='Avatar async queue is not configured. Set SQS_QUEUE_URL and retry.',
         )
 
-    job_id: str | None = None
+    video_id: str | None = None
     try:
-        job_id = uuid4().hex
+        video_id = uuid4().hex
         now = datetime.utcnow()
         request_payload = _to_mongo_safe(request.model_dump(mode='python'))
         video_record = VideoRecord(
-            user_email=current_user,
-            video_id=job_id,
+            user_id=current_user,
+            video_id=video_id,
             status='queued',
             title=f"{request.title_prefix} - {request.customer_name}",
             request_mode='avatar_async',
             job_data={
-                'job_id': job_id,
                 'request_mode': 'avatar',
                 'status': 'queued',
                 'attempts': 0,
+                'video_id': video_id,
                 'request_payload': request_payload,
             },
         )
         video_doc = _to_mongo_safe(video_record)
         if isinstance(video_doc, dict):
             video_doc.update({
-                'job_id': job_id,
                 'request_payload': request_payload,
                 'result_payload': None,
                 'error': None,
@@ -771,27 +769,27 @@ async def create_avatar_job(request: DirectVideoRequest, current_user: str = Dep
             })
         await videos_collection.insert_one(video_doc)
         sqs_service.send_job(
-            payload={'job_id': job_id, 'request_mode': 'avatar'},
+            payload={'video_id': video_id, 'request_mode': 'avatar'},
             queue_url=getattr(sqs_service, 'queue_url', None),
         )
-        return AvatarJobAck(job_id=job_id, status='queued')
+        return AvatarJobAck(video_id=video_id, status='queued')
     except HTTPException:
         raise
     except Exception as exc:
-        if not job_id:
+        if not video_id:
             raise HTTPException(status_code=502, detail=GENERIC_GENERATION_ERROR) from exc
         failed_at = datetime.utcnow()
         await videos_collection.update_one(
-            {'video_id': job_id, 'user_email': current_user},
+            {'video_id': video_id, 'user_id': current_user},
             {'$set': {
                 'status': 'failed',
                 'error': str(exc),
                 'updated_at': failed_at,
                 'completed_at': failed_at,
                 'job_data': {
-                    'job_id': job_id,
                     'request_mode': 'avatar',
                     'status': 'failed',
+                    'video_id': video_id,
                     'error': str(exc),
                 },
             }},
@@ -799,10 +797,10 @@ async def create_avatar_job(request: DirectVideoRequest, current_user: str = Dep
         raise HTTPException(status_code=502, detail=GENERIC_GENERATION_ERROR) from exc
 
 
-@app.get('/jobs/{job_id}', response_model=AvatarJobStatusResponse)
-async def get_avatar_job_status(job_id: str, current_user: str = Depends(get_current_user)):
+@app.get('/jobs/{video_id}', response_model=AvatarJobStatusResponse)
+async def get_avatar_job_status(video_id: str, current_user: str = Depends(get_current_user)):
     job = await videos_collection.find_one(
-        {'video_id': job_id, 'user_email': current_user, 'request_mode': 'avatar_async'}
+        {'video_id': video_id, 'user_id': current_user, 'request_mode': 'avatar_async'}
     )
     if not job:
         raise HTTPException(status_code=404, detail='Job not found.')
@@ -819,7 +817,7 @@ async def generate_direct(request: DirectVideoRequest, wait: bool = True, curren
     
     # Save to MongoDB
     video_record = VideoRecord(
-        user_email=current_user,
+        user_id=current_user,
         video_id=result.get("video_id") if isinstance(result, dict) else result.video_id,
         status="completed" if wait else "processing",
         title=f"{request.title_prefix} - {request.customer_name}",
@@ -918,7 +916,7 @@ async def generate_template(request: TemplateVideoRequest, wait: bool = True, cu
     
     # Save to MongoDB
     video_record = VideoRecord(
-        user_email=current_user,
+        user_id=current_user,
         video_id=result.get("video_id") if isinstance(result, dict) else result.video_id,
         status="completed" if wait else "processing",
         title=f"Template Video - {request.customer_name}",
@@ -969,23 +967,24 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    render_video_id = str(result['job_id'])
     relative_video_path = result['video_path'].relative_to(settings.output_dir).as_posix()
     video_url = f"/api/artifacts/{relative_video_path}"
     
     logger.info(f"Remotion video upload_video:")
-    s3_url = s3_service.upload_video(result['video_path'], f"videos/{result['job_id']}.mp4")
+    s3_url = s3_service.upload_video(result['video_path'], f"videos/{render_video_id}.mp4")
     if s3_url:
         video_url = s3_url
     logger.info(f"Remotion video upload_video: {video_url}")
     job_result = VideoJobResult(
         request_mode='remotion',
-        video_id=result['job_id'],
+        video_id=render_video_id,
         status='completed',
         video_url=video_url,
         thumbnail_url=None,
         title=f"{payload.title_prefix} - {payload.customer_name} - {payload.lan}",
         raw_response={
-            'job_id': result['job_id'],
+            'video_id': render_video_id,
             'audio_path': str(result['audio_path']),
             'text': result['text'],
         },
@@ -999,7 +998,7 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
     embeddable_job_data['payload_hash'] = payload_hash
 
     video_record = VideoRecord(
-        user_email=current_user,
+        user_id=current_user,
         video_id=job_result.video_id,
         status="completed",
         title=job_result.title,
@@ -1014,7 +1013,7 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
 @app.get('/my-videos')
 async def get_my_videos(current_user: str = Depends(get_current_user)):
     print(f"DEBUG: Fetching videos for {current_user}")
-    cursor = videos_collection.find({"user_email": current_user}).sort("created_at", -1)
+    cursor = videos_collection.find({"user_id": current_user}).sort("created_at", -1)
     videos = await cursor.to_list(length=100)
 
     for video in videos:
@@ -1156,7 +1155,7 @@ async def preview_voice(
 @app.delete('/videos/{video_id}')
 async def delete_video(video_id: str, current_user: str = Depends(get_current_user)):
     print(f"DEBUG: Delete request for video {video_id} by {current_user}")
-    result = await videos_collection.delete_one({"video_id": video_id, "user_email": current_user})
+    result = await videos_collection.delete_one({"video_id": video_id, "user_id": current_user})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Video not found")
     return {"status": "success", "message": "Video deleted successfully"}
@@ -1166,7 +1165,7 @@ async def save_draft(draft: dict, current_user: str = Depends(get_current_user))
     print(f"DEBUG: Saving draft for {current_user}")
     now = datetime.utcnow()
     result = await drafts_collection.update_one(
-        {"user_email": current_user},
+        {"user_id": current_user},
         {"$set": {
             "content": draft,
             "updated_at": now,
@@ -1175,14 +1174,14 @@ async def save_draft(draft: dict, current_user: str = Depends(get_current_user))
         }},
         upsert=True,
     )
-    draft_doc = await drafts_collection.find_one({"user_email": current_user}, sort=[("updated_at", -1)])
+    draft_doc = await drafts_collection.find_one({"user_id": current_user}, sort=[("updated_at", -1)])
     draft_id = str(draft_doc["_id"]) if draft_doc else str(result.upserted_id or "latest")
     return {"status": "success", "draft_id": draft_id}
 
 @app.get('/drafts')
 async def get_drafts(current_user: str = Depends(get_current_user)):
     print(f"DEBUG: Fetching drafts for {current_user}")
-    cursor = drafts_collection.find({"user_email": current_user}).sort("updated_at", -1)
+    cursor = drafts_collection.find({"user_id": current_user}).sort("updated_at", -1)
     drafts = await cursor.to_list(length=50)
     for d in drafts:
         d["_id"] = str(d["_id"])

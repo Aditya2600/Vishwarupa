@@ -49,14 +49,13 @@ export interface DirectVideoPayload {
 }
 
 export interface AvatarJobAck {
-  job_id: string;
+  video_id: string;
   status: "queued";
 }
 
 export interface AvatarJobStatus {
-  job_id: string;
+  video_id: string;
   status: "queued" | "processing" | "completed" | "failed";
-  video_id?: string | null;
   video_url?: string | null;
   thumbnail_url?: string | null;
   title?: string | null;
@@ -1065,8 +1064,8 @@ export async function createAvatarJob(payload: DirectVideoPayload): Promise<Avat
   });
 }
 
-export async function fetchAvatarJobStatus(jobId: string): Promise<AvatarJobStatus> {
-  return requestJson<AvatarJobStatus>(`/jobs/${jobId}`);
+export async function fetchAvatarJobStatus(videoId: string): Promise<AvatarJobStatus> {
+  return requestJson<AvatarJobStatus>(`/jobs/${videoId}`);
 }
 
 export async function generateDirectVideo(payload: DirectVideoPayload, wait = true): Promise<VideoJobResult> {
