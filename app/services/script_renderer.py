@@ -22,13 +22,20 @@ def _normalize_placeholder_syntax(text: str) -> str:
     return _SINGLE_BRACE_PATTERN.sub(r'{{\1}}', text)
 
 
+def _clean_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    return cleaned or None
+
+
 def build_context(lead: LeadRecord) -> dict:
     language = getattr(lead, 'language', None) or 'Hindi'
     
     # Safe defaults for all fields to support universal videos
-    customer_name = lead.customer_name.strip() if lead.customer_name and lead.customer_name.strip() else ('ग्राहक' if language == 'Hindi' else 'Valued Customer')
-    lan = lead.lan.strip() if lead.lan and lead.lan.strip() else 'N/A'
-    client_name = lead.client_name.strip() if lead.client_name and lead.client_name.strip() else ('बैंक' if language == 'Hindi' else 'the bank')
+    customer_name = _clean_text(lead.customer_name) or ('ग्राहक' if language == 'Hindi' else 'Valued Customer')
+    lan = _clean_text(lead.lan) or 'N/A'
+    client_name = _clean_text(lead.client_name) or ('बैंक' if language == 'Hindi' else 'the bank')
     
     loan_amount = parse_money(lead.loan_amount, field_name='loan_amount') if lead.loan_amount is not None else ''
     tos = parse_money(lead.tos, field_name='tos') or ('बकाया राशि' if language == 'Hindi' else 'outstanding amount')

@@ -6,7 +6,6 @@ from typing import Any
 import boto3
 
 from app.config import settings
-from app.constants import SQS_QUEUE_URL
 import logging
 
 logger = logging.getLogger("app")
@@ -37,15 +36,8 @@ class SQSService:
         self.client = boto3.client('sqs', **client_kwargs)
         self._initialized = True
 
-    @staticmethod
-    def _configured_queue_url() -> str:
-        queue_url = str(SQS_QUEUE_URL or '').strip()
-        if not queue_url:
-            raise RuntimeError('SQS queue is not configured. Set SQS_QUEUE_URL to enable avatar async jobs.')
-        return queue_url
-
     def send_job(self, payload: dict[str, Any], queue_url: str) -> dict[str, Any]:
-        queue_url = str(queue_url).strip()
+        queue_url = str(queue_url)
         if not queue_url:
             raise RuntimeError('SQS queue is not configured. Set SQS_QUEUE_URL to enable avatar async jobs.')
         if not isinstance(payload, dict) or not payload:
@@ -55,8 +47,10 @@ class SQSService:
             MessageBody=json.dumps(payload),
         )
 
-    def receive_jobs(self, max_messages: int = 1) -> list[dict[str, Any]]:
-        queue_url = self._configured_queue_url()
+    def receive_jobs(self, queue_url: str, max_messages: int = 1) -> list[dict[str, Any]]:
+        queue_url = str(queue_url)
+        if not queue_url:
+            raise RuntimeError('SQS queue is not configured. Set SQS_QUEUE_URL to enable avatar async jobs.')
         response = self.client.receive_message(
             QueueUrl=queue_url,
             MaxNumberOfMessages=max(1, min(max_messages, 10)),
@@ -69,8 +63,10 @@ class SQSService:
             return []
         return [message for message in messages if isinstance(message, dict)]
 
-    def delete_message(self, receipt_handle: str) -> None:
-        queue_url = self._configured_queue_url()
+    def delete_message(self, receipt_handle: str, queue_url: str) -> None:
+        queue_url = str(queue_url)
+        if not queue_url:
+            raise RuntimeError('SQS queue is not configured. Set SQS_QUEUE_URL to enable avatar async jobs.')
         self.client.delete_message(
             QueueUrl=queue_url,
             ReceiptHandle=receipt_handle,

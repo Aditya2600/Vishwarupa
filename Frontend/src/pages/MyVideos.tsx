@@ -19,7 +19,7 @@ const STATS = [
 ];
 
 interface VideoListItem {
-  video_id: string;
+  _id: string;
   title: string;
   status: string;
   request_mode: string;
@@ -103,7 +103,7 @@ function buildLocalDraftItem(): VideoListItem | null {
   const flowLabel = draft.videoType === "remotion" ? "Text video" : "Avatar video";
 
   return {
-    video_id: draft.generatedVideo?.video_id ?? `local-draft-${draft.videoType}`,
+    _id: draft.generatedVideo?.video_id ?? `local-draft-${draft.videoType}`,
     title: draft.generatedVideo?.title ?? `${draft.customerName.trim() || flowLabel} draft`,
     status,
     request_mode: `${draft.videoType} (local draft)`,
@@ -176,7 +176,7 @@ export default function MyVideos() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (videoId: string) => deleteVideo(videoId),
+    mutationFn: (id: string) => deleteVideo(id),
     onSuccess: () => {
       toast.success("Video deleted successfully.");
       void refetch();
@@ -196,7 +196,7 @@ export default function MyVideos() {
       return;
     }
 
-    deleteMutation.mutate(video.video_id);
+    deleteMutation.mutate(video._id);
   };
 
   const handleShare = async (video: VideoListItem) => {
@@ -285,7 +285,7 @@ export default function MyVideos() {
   };
 
   const mergedVideos: VideoListItem[] = [
-    ...(localDraft && !videos?.some((video: any) => video.video_id === localDraft.video_id) ? [localDraft] : []),
+    ...(localDraft && !videos?.some((video: any) => video._id === localDraft._id) ? [localDraft] : []),
     ...((videos ?? []) as VideoListItem[]),
   ];
 
@@ -445,7 +445,7 @@ export default function MyVideos() {
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {mergedVideos.map((video) => (
                 <motion.div
-                  key={video.video_id}
+                  key={video._id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="surface-card overflow-hidden group hover:border-primary/30 transition-all border border-border"

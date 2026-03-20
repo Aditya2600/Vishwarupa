@@ -4,11 +4,11 @@ import sys
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 from datetime import datetime
 import time
 from pathlib import Path
-from uuid import uuid4
+from bson import ObjectId
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -39,7 +39,6 @@ from app.services.video_service import VideoService
 from app.services.s3_service import S3Service
 from app.database import users_collection, videos_collection, drafts_collection, custom_avatars_collection
 from app.auth import get_password_hash, verify_password, create_access_token, get_current_user
-from app.constants import SQS_QUEUE_URL
 from app.workers.avatar_job_worker import AvatarJobWorker
 
 import logging
@@ -158,14 +157,26 @@ async def _persist_video_job_result(current_user: str, result: VideoJobResult) -
         update_fields["video_url"] = result.video_url
 
     await videos_collection.update_one(
-        {"video_id": result.video_id, "user_id": current_user},
+        {
+            "user_id": current_user,
+            "$or": [
+                {"provider_video_id": result.video_id},
+                {"video_id": result.video_id},
+            ],
+        },
         {"$set": update_fields},
     )
 
 
 async def _mark_video_failed(current_user: str, video_id: str, detail: str) -> None:
     await videos_collection.update_one(
-        {"video_id": video_id, "user_id": current_user},
+        {
+            "user_id": current_user,
+            "$or": [
+                {"provider_video_id": video_id},
+                {"video_id": video_id},
+            ],
+        },
         {"$set": {
             "status": "failed",
             "job_data": {"detail": detail},
@@ -193,14 +204,31 @@ def _build_avatar_job_status_response(job: dict) -> AvatarJobStatusResponse:
 
     response_payload = result_payload if result_payload else job_data
     raw_error = job.get('error') or job_data.get('error')
-    error = str(raw_error).strip() if isinstance(raw_error, str) and raw_error.strip() else None
+    cleaned_error = raw_error.strip() if isinstance(raw_error, str) else ''
+    error = cleaned_error or None
+    job_id = str(job.get('_id') or '')
+    provider_video_id = response_payload.get('video_id') or job.get('provider_video_id')
     return AvatarJobStatusResponse(
-        video_id=str(response_payload.get('video_id') or job.get('video_id')),
+        _id=job_id,
         status=status_value,
+        provider_video_id=str(provider_video_id) if provider_video_id else None,
         video_url=str(response_payload.get('video_url') or job.get('video_url')) if (response_payload.get('video_url') or job.get('video_url')) else None,
         thumbnail_url=str(response_payload.get('thumbnail_url')) if response_payload.get('thumbnail_url') else None,
         title=str(response_payload.get('title') or job.get('title')) if (response_payload.get('title') or job.get('title')) else None,
         error=error,
+    )
+
+
+def _mongo_id(value: str) -> ObjectId | str:
+    cleaned = str(value).strip()
+    if ObjectId.is_valid(cleaned):
+        return ObjectId(cleaned)
+    return cleaned
+
+
+async def _find_avatar_job(job_id: str, current_user: str) -> dict[str, Any] | None:
+    return await videos_collection.find_one(
+        {'_id': _mongo_id(job_id), 'user_id': current_user, 'request_mode': 'avatar_async'}
     )
 
 
@@ -731,22 +759,21 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
 @app.post('/jobs/avatar', response_model=AvatarJobAck)
 async def create_avatar_job(request: DirectVideoRequest, current_user: str = Depends(get_current_user)):
-    queue_url = str(SQS_QUEUE_URL or '').strip()
-    if not queue_url:
+    try:
+        queue_url = AvatarJobWorker.resolve_queue_url()
+    except RuntimeError as exc:
         print("DEBUG: SQS queue is not configured")
         raise HTTPException(
             status_code=503,
             detail='Avatar async queue is not configured. Set SQS_QUEUE_URL and retry.',
-        )
+        ) from exc
 
-    video_id: str | None = None
+    job_id: str | None = None
     try:
-        video_id = uuid4().hex
         now = datetime.utcnow()
         request_payload = _to_mongo_safe(request.model_dump(mode='python'))
         video_record = VideoRecord(
             user_id=current_user,
-            video_id=video_id,
             status='queued',
             title=f"{request.title_prefix} - {request.customer_name}",
             request_mode='avatar_async',
@@ -754,7 +781,6 @@ async def create_avatar_job(request: DirectVideoRequest, current_user: str = Dep
                 'request_mode': 'avatar',
                 'status': 'queued',
                 'attempts': 0,
-                'video_id': video_id,
                 'request_payload': request_payload,
             },
         )
@@ -769,20 +795,21 @@ async def create_avatar_job(request: DirectVideoRequest, current_user: str = Dep
                 'started_at': None,
                 'completed_at': None,
             })
-        await videos_collection.insert_one(video_doc)
+        insert_result = await videos_collection.insert_one(video_doc)
+        job_id = str(insert_result.inserted_id)
         sqs_service.send_job(
-            payload={'video_id': video_id, 'request_mode': 'avatar'},
+            payload={'_id': job_id, 'request_mode': 'avatar'},
             queue_url=queue_url,
         )
-        return AvatarJobAck(video_id=video_id, status='queued')
+        return AvatarJobAck(_id=job_id, status='queued')
     except HTTPException:
         raise
     except Exception as exc:
-        if not video_id:
+        if not job_id:
             raise HTTPException(status_code=502, detail=GENERIC_GENERATION_ERROR) from exc
         failed_at = datetime.utcnow()
         await videos_collection.update_one(
-            {'video_id': video_id, 'user_id': current_user},
+            {'_id': _mongo_id(job_id), 'user_id': current_user},
             {'$set': {
                 'status': 'failed',
                 'error': str(exc),
@@ -791,7 +818,6 @@ async def create_avatar_job(request: DirectVideoRequest, current_user: str = Dep
                 'job_data': {
                     'request_mode': 'avatar',
                     'status': 'failed',
-                    'video_id': video_id,
                     'error': str(exc),
                 },
             }},
@@ -799,11 +825,9 @@ async def create_avatar_job(request: DirectVideoRequest, current_user: str = Dep
         raise HTTPException(status_code=502, detail=GENERIC_GENERATION_ERROR) from exc
 
 
-@app.get('/jobs/{video_id}', response_model=AvatarJobStatusResponse)
-async def get_avatar_job_status(video_id: str, current_user: str = Depends(get_current_user)):
-    job = await videos_collection.find_one(
-        {'video_id': video_id, 'user_id': current_user, 'request_mode': 'avatar_async'}
-    )
+@app.get('/jobs/{job_id}', response_model=AvatarJobStatusResponse)
+async def get_avatar_job_status(job_id: str, current_user: str = Depends(get_current_user)):
+    job = await _find_avatar_job(job_id, current_user)
     if not job:
         raise HTTPException(status_code=404, detail='Job not found.')
     return _build_avatar_job_status_response(job)
@@ -820,9 +844,9 @@ async def generate_direct(request: DirectVideoRequest, wait: bool = True, curren
     # Save to MongoDB
     video_record = VideoRecord(
         user_id=current_user,
-        video_id=result.get("video_id") if isinstance(result, dict) else result.video_id,
         status="completed" if wait else "processing",
         title=f"{request.title_prefix} - {request.customer_name}",
+        provider_video_id=result.get("video_id") if isinstance(result, dict) else result.video_id,
         request_mode="direct",
         job_data=_to_mongo_safe(result)
     )
@@ -895,7 +919,13 @@ async def stylize_video(
 
     # Update MongoDB record
     await videos_collection.update_one(
-        {"video_id": video_id},
+        {
+            "user_id": current_user,
+            "$or": [
+                {"provider_video_id": video_id},
+                {"video_id": video_id},
+            ],
+        },
         {"$set": {
             "status": "styled",
             "video_url": result.final_video_url,
@@ -919,9 +949,9 @@ async def generate_template(request: TemplateVideoRequest, wait: bool = True, cu
     # Save to MongoDB
     video_record = VideoRecord(
         user_id=current_user,
-        video_id=result.get("video_id") if isinstance(result, dict) else result.video_id,
         status="completed" if wait else "processing",
         title=f"Template Video - {request.customer_name}",
+        provider_video_id=result.get("video_id") if isinstance(result, dict) else result.video_id,
         request_mode="template",
         job_data=_to_mongo_safe(result)
     )
@@ -1001,10 +1031,10 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
 
     video_record = VideoRecord(
         user_id=current_user,
-        video_id=job_result.video_id,
         status="completed",
         title=job_result.title,
         video_url=job_result.video_url,
+        provider_video_id=job_result.video_id,
         request_mode="remotion",
         job_data=embeddable_job_data
     )
@@ -1022,14 +1052,18 @@ async def get_my_videos(current_user: str = Depends(get_current_user)):
         if video.get("status") != "processing" or video.get("request_mode") not in {"direct", "template"}:
             continue
 
+        provider_video_id = str(video.get("provider_video_id") or video.get("video_id") or '')
+        if not provider_video_id:
+            continue
+
         try:
             refreshed = service.get_video_status_result(
-                str(video["video_id"]),
+                provider_video_id,
                 request_mode=str(video.get("request_mode") or "direct"),
             )
         except RuntimeError as exc:
             detail = str(exc)
-            await _mark_video_failed(current_user, str(video["video_id"]), detail)
+            await _mark_video_failed(current_user, provider_video_id, detail)
             video["status"] = "failed"
             video["job_data"] = {"detail": detail}
             continue
@@ -1154,10 +1188,10 @@ async def preview_voice(
             pass
         raise HTTPException(status_code=500, detail=str(exc))
 
-@app.delete('/videos/{video_id}')
-async def delete_video(video_id: str, current_user: str = Depends(get_current_user)):
-    print(f"DEBUG: Delete request for video {video_id} by {current_user}")
-    result = await videos_collection.delete_one({"video_id": video_id, "user_id": current_user})
+@app.delete('/videos/{job_id}')
+async def delete_video(job_id: str, current_user: str = Depends(get_current_user)):
+    print(f"DEBUG: Delete request for video {job_id} by {current_user}")
+    result = await videos_collection.delete_one({"_id": _mongo_id(job_id), "user_id": current_user})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Video not found")
     return {"status": "success", "message": "Video deleted successfully"}

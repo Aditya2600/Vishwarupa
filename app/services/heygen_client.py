@@ -23,7 +23,7 @@ class HeyGenClient:
 
     @staticmethod
     def _normalize_error_text(raw_text: str | None) -> str | None:
-        normalized = ' '.join((raw_text or '').split()).strip()
+        normalized = ' '.join((raw_text or '').split())
         if not normalized:
             return None
         if normalized.lower() in {'success', 'ok'}:
@@ -91,9 +91,8 @@ class HeyGenClient:
                 fallback = candidate
 
         if fallback:
-            normalized_code = code.strip()
-            if normalized_code and normalized_code.lower() not in {'success', 'ok'}:
-                return f'{fallback} (code: {normalized_code})'
+            if code and code.lower() not in {'success', 'ok'}:
+                return f'{fallback} (code: {code})'
             return fallback
 
         if code and code.lower() not in {'success', 'ok'}:

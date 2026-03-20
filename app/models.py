@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Union, Literal
 from datetime import datetime, timezone, timedelta
-from pydantic import BaseModel, Field, EmailStr, ValidationInfo, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, EmailStr, ValidationInfo, field_validator, model_validator
 
 
 def get_ist_time() -> datetime:
@@ -40,23 +40,28 @@ class TokenData(BaseModel):
 
 class VideoRecord(BaseModel):
     user_id: str
-    video_id: str
     status: str
     title: str | None = None
     video_url: str | None = None
     request_mode: str
+    provider_video_id: str | None = None
     created_at: datetime = Field(default_factory=get_ist_time)
     job_data: dict | None = None
 
 
 class AvatarJobAck(BaseModel):
-    video_id: str
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+
+    id: str = Field(alias='_id')
     status: Literal['queued']
 
 
 class AvatarJobStatusResponse(BaseModel):
-    video_id: str
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+
+    id: str = Field(alias='_id')
     status: Literal['queued', 'processing', 'completed', 'failed']
+    provider_video_id: str | None = None
     video_url: str | None = None
     thumbnail_url: str | None = None
     title: str | None = None

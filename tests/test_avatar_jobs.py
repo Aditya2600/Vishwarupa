@@ -21,38 +21,62 @@ class _UpdateResult:
         self.modified_count = modified_count
 
 
+class _InsertResult:
+    def __init__(self, inserted_id: str) -> None:
+        self.inserted_id = inserted_id
+
+
 class InMemoryCollection:
     def __init__(self) -> None:
         self.docs: dict[str, dict[str, Any]] = {}
+        self._next_id = 1
 
-    async def insert_one(self, doc: dict[str, Any]) -> None:
+    @staticmethod
+    def _matches(doc: dict[str, Any], query: dict[str, Any]) -> bool:
+        for key, value in query.items():
+            if key == '$or':
+                if not isinstance(value, list) or not any(InMemoryCollection._matches(doc, item) for item in value if isinstance(item, dict)):
+                    return False
+                continue
+            doc_value = doc.get(key)
+            if key.endswith('_id') or key == '_id':
+                if str(doc_value) != str(value):
+                    return False
+                continue
+            if doc_value != value:
+                return False
+        return True
+
+    async def insert_one(self, doc: dict[str, Any]) -> _InsertResult:
         document = copy.deepcopy(doc)
-        key = str(document.get('video_id'))
-        if not key:
-            raise AssertionError('Expected video_id in insert doc')
+        if not document.get('_id'):
+            document['_id'] = f'record_{self._next_id}'
+            self._next_id += 1
+        key = str(document.get('_id'))
         self.docs[key] = document
+        return _InsertResult(key)
 
     async def find_one(self, query: dict[str, Any]) -> dict[str, Any] | None:
         for doc in self.docs.values():
-            if all(doc.get(key) == value for key, value in query.items()):
+            if self._matches(doc, query):
                 return copy.deepcopy(doc)
         return None
 
     async def update_one(self, query: dict[str, Any], update: dict[str, Any], upsert: bool = False) -> _UpdateResult:
         target_key: str | None = None
         for key, doc in self.docs.items():
-            if all(doc.get(field) == value for field, value in query.items()):
+            if self._matches(doc, query):
                 target_key = key
                 break
 
         if target_key is None:
             if not upsert:
                 return _UpdateResult(0)
-            if query.get('video_id'):
-                target_key = str(query['video_id'])
+            if query.get('_id'):
+                target_key = str(query['_id'])
             else:
                 return _UpdateResult(0)
-            self.docs[target_key] = {'video_id': query.get('video_id')}
+            self.docs[target_key] = {'_id': target_key}
 
         doc = self.docs[target_key]
         for key, value in update.get('$set', {}).items():
@@ -75,10 +99,10 @@ class FakeSQSForWorker:
     def __init__(self) -> None:
         self.deleted: list[str] = []
 
-    def receive_jobs(self, max_messages: int = 1) -> list[dict[str, Any]]:  # pragma: no cover - not used in tests
+    def receive_jobs(self, queue_url: str, max_messages: int = 1) -> list[dict[str, Any]]:  # pragma: no cover - not used in tests
         return []
 
-    def delete_message(self, receipt_handle: str) -> None:
+    def delete_message(self, receipt_handle: str, queue_url: str) -> None:
         self.deleted.append(receipt_handle)
 
 
@@ -134,13 +158,13 @@ def test_sqs_service_send_avatar_job_contains_only_metadata(monkeypatch: pytest.
 
     service = SQSService()
     service.send_job(
-        payload={'video_id': 'video_123', 'request_mode': 'avatar'},
+        payload={'_id': 'record_123', 'request_mode': 'avatar'},
         queue_url='https://sqs.us-east-1.amazonaws.com/12345/avatar-jobs',
     )
 
     assert len(fake_client.calls) == 1
     payload = json.loads(fake_client.calls[0]['MessageBody'])
-    assert payload == {'video_id': 'video_123', 'request_mode': 'avatar'}
+    assert payload == {'_id': 'record_123', 'request_mode': 'avatar'}
     SQSService._instance = None
 
 
@@ -153,28 +177,29 @@ def test_post_jobs_avatar_creates_job_and_sends_sqs(monkeypatch: pytest.MonkeyPa
     response = asyncio.run(main_module.create_avatar_job(_build_direct_request(), current_user='user_001'))
 
     assert response.status == 'queued'
-    assert response.video_id
-    assert sqs_service.sent_payloads == [{'video_id': response.video_id, 'request_mode': 'avatar'}]
-    assert response.video_id in videos_collection.docs
-    stored = videos_collection.docs[response.video_id]
+    assert response.id
+    assert sqs_service.sent_payloads == [{'_id': response.id, 'request_mode': 'avatar'}]
+    assert response.id in videos_collection.docs
+    stored = videos_collection.docs[response.id]
     assert stored['status'] == 'queued'
     assert stored['request_payload']['customer_name'] == 'Aditi'
     assert stored['request_payload']['lan'] == 'LAN001'
-    assert stored['video_id'] == response.video_id
+    assert str(stored['_id']) == response.id
     assert stored['request_mode'] == 'avatar_async'
 
 
 def test_get_jobs_status_enforces_ownership(monkeypatch: pytest.MonkeyPatch) -> None:
     videos_collection = InMemoryCollection()
-    video_id = 'video_001'
-    videos_collection.docs[video_id] = {
-        'video_id': video_id,
+    job_id = 'record_001'
+    videos_collection.docs[job_id] = {
+        '_id': job_id,
+        'provider_video_id': 'video_001',
         'request_mode': 'avatar_async',
         'user_id': 'user_owner_001',
         'status': 'completed',
         'request_payload': {'customer_name': 'Aditi', 'lan': 'LAN001'},
         'result_payload': {
-            'video_id': 'video_001',
+            'video_id': 'provider_video_001',
             'video_url': 'https://example.com/video_001.mp4',
             'thumbnail_url': 'https://example.com/video_001.jpg',
             'title': 'Owner Video',
@@ -186,21 +211,22 @@ def test_get_jobs_status_enforces_ownership(monkeypatch: pytest.MonkeyPatch) -> 
     }
     monkeypatch.setattr(main_module, 'videos_collection', videos_collection)
 
-    status_ok = asyncio.run(main_module.get_avatar_job_status(video_id, current_user='user_owner_001'))
+    status_ok = asyncio.run(main_module.get_avatar_job_status(job_id, current_user='user_owner_001'))
     assert status_ok.status == 'completed'
-    assert status_ok.video_id == 'video_001'
+    assert status_ok.id == 'record_001'
+    assert status_ok.provider_video_id == 'provider_video_001'
     assert status_ok.video_url == 'https://example.com/video_001.mp4'
 
     with pytest.raises(HTTPException) as exc_info:
-        asyncio.run(main_module.get_avatar_job_status(video_id, current_user='user_other_001'))
+        asyncio.run(main_module.get_avatar_job_status(job_id, current_user='user_other_001'))
     assert exc_info.value.status_code == 404
 
 
 def test_worker_success_moves_job_to_completed() -> None:
     shared_collection = InMemoryCollection()
     sqs_service = FakeSQSForWorker()
-    shared_collection.docs['video_success'] = {
-        'video_id': 'video_success',
+    shared_collection.docs['record_success'] = {
+        '_id': 'record_success',
         'request_mode': 'avatar_async',
         'user_id': 'user_001',
         'status': 'queued',
@@ -221,24 +247,25 @@ def test_worker_success_moves_job_to_completed() -> None:
     )
 
     asyncio.run(worker.process_message({
-        'Body': json.dumps({'video_id': 'video_success', 'request_mode': 'avatar'}),
+        'Body': json.dumps({'_id': 'record_success', 'request_mode': 'avatar'}),
         'ReceiptHandle': 'rh-success',
         'Attributes': {'ApproximateReceiveCount': '1'},
     }))
 
-    job = shared_collection.docs['video_success']
+    job = shared_collection.docs['record_success']
     assert job['status'] == 'completed'
     assert job['attempts'] == 1
+    assert job['provider_video_id'] == 'video_123'
     assert job['result_payload']['video_id'] == 'video_123'
     assert sqs_service.deleted == ['rh-success']
-    assert 'video_success' in shared_collection.docs
+    assert 'record_success' in shared_collection.docs
 
 
 def test_worker_retry_path_keeps_message_for_retry() -> None:
     jobs_collection = InMemoryCollection()
     sqs_service = FakeSQSForWorker()
-    jobs_collection.docs['video_retry'] = {
-        'video_id': 'video_retry',
+    jobs_collection.docs['record_retry'] = {
+        '_id': 'record_retry',
         'request_mode': 'avatar_async',
         'user_id': 'user_001',
         'status': 'queued',
@@ -259,12 +286,12 @@ def test_worker_retry_path_keeps_message_for_retry() -> None:
     )
 
     asyncio.run(worker.process_message({
-        'Body': json.dumps({'video_id': 'video_retry', 'request_mode': 'avatar'}),
+        'Body': json.dumps({'_id': 'record_retry', 'request_mode': 'avatar'}),
         'ReceiptHandle': 'rh-retry',
         'Attributes': {'ApproximateReceiveCount': '1'},
     }))
 
-    job = jobs_collection.docs['video_retry']
+    job = jobs_collection.docs['record_retry']
     assert job['status'] == 'queued'
     assert job['attempts'] == 1
     assert 'provider failed' in (job.get('error') or '')
@@ -274,8 +301,8 @@ def test_worker_retry_path_keeps_message_for_retry() -> None:
 def test_worker_marks_failed_after_max_receive_count() -> None:
     jobs_collection = InMemoryCollection()
     sqs_service = FakeSQSForWorker()
-    jobs_collection.docs['video_fail'] = {
-        'video_id': 'video_fail',
+    jobs_collection.docs['record_fail'] = {
+        '_id': 'record_fail',
         'request_mode': 'avatar_async',
         'user_id': 'user_001',
         'status': 'queued',
@@ -296,12 +323,12 @@ def test_worker_marks_failed_after_max_receive_count() -> None:
     )
 
     asyncio.run(worker.process_message({
-        'Body': json.dumps({'video_id': 'video_fail', 'request_mode': 'avatar'}),
+        'Body': json.dumps({'_id': 'record_fail', 'request_mode': 'avatar'}),
         'ReceiptHandle': 'rh-fail',
         'Attributes': {'ApproximateReceiveCount': '3'},
     }))
 
-    job = jobs_collection.docs['video_fail']
+    job = jobs_collection.docs['record_fail']
     assert job['status'] == 'failed'
     assert job['attempts'] == 1
     assert 'provider failed' in (job.get('error') or '')
@@ -311,8 +338,8 @@ def test_worker_marks_failed_after_max_receive_count() -> None:
 def test_worker_idempotency_deletes_duplicate_messages() -> None:
     jobs_collection = InMemoryCollection()
     sqs_service = FakeSQSForWorker()
-    jobs_collection.docs['video_done'] = {
-        'video_id': 'video_done',
+    jobs_collection.docs['record_done'] = {
+        '_id': 'record_done',
         'request_mode': 'avatar_async',
         'user_id': 'user_001',
         'status': 'completed',
@@ -334,7 +361,7 @@ def test_worker_idempotency_deletes_duplicate_messages() -> None:
     )
 
     asyncio.run(worker.process_message({
-        'Body': json.dumps({'video_id': 'video_done', 'request_mode': 'avatar'}),
+        'Body': json.dumps({'_id': 'record_done', 'request_mode': 'avatar'}),
         'ReceiptHandle': 'rh-dup',
         'Attributes': {'ApproximateReceiveCount': '2'},
     }))

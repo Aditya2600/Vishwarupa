@@ -49,13 +49,14 @@ export interface DirectVideoPayload {
 }
 
 export interface AvatarJobAck {
-  video_id: string;
+  _id: string;
   status: "queued";
 }
 
 export interface AvatarJobStatus {
-  video_id: string;
+  _id: string;
   status: "queued" | "processing" | "completed" | "failed";
+  provider_video_id?: string | null;
   video_url?: string | null;
   thumbnail_url?: string | null;
   title?: string | null;
@@ -1064,8 +1065,8 @@ export async function createAvatarJob(payload: DirectVideoPayload): Promise<Avat
   });
 }
 
-export async function fetchAvatarJobStatus(videoId: string): Promise<AvatarJobStatus> {
-  return requestJson<AvatarJobStatus>(`/jobs/${videoId}`);
+export async function fetchAvatarJobStatus(id: string): Promise<AvatarJobStatus> {
+  return requestJson<AvatarJobStatus>(`/jobs/${id}`);
 }
 
 export async function generateDirectVideo(payload: DirectVideoPayload, wait = true): Promise<VideoJobResult> {
@@ -1170,8 +1171,8 @@ export async function fetchDrafts(): Promise<any[]> {
   return requestJson<any[]>("/drafts");
 }
 
-export async function deleteVideo(videoId: string): Promise<{ status: string; message: string }> {
-  return requestJson<{ status: string; message: string }>(`/videos/${videoId}`, {
+export async function deleteVideo(id: string): Promise<{ status: string; message: string }> {
+  return requestJson<{ status: string; message: string }>(`/videos/${id}`, {
     method: "DELETE",
   });
 }
