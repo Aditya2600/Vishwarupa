@@ -90,7 +90,6 @@ class AvatarJobWorker:
 
 
         while True:
-            logger.info('Avatar job worker started. Polling queue...')
             try:
                 messages = await asyncio.to_thread(self.sqs_service.receive_jobs, 5)
             except Exception:
