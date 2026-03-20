@@ -30,7 +30,7 @@ class SQSService:
         if self._initialized:
             return
             
-        self.queue_url = SQS_QUEUE_URL
+        self.queue_url = queue_url or SQS_QUEUE_URL
         client_kwargs: dict[str, Any] = {'region_name': settings.aws_region}
         if settings.aws_access_key_id and settings.aws_secret_access_key:
             client_kwargs['aws_access_key_id'] = settings.aws_access_key_id
@@ -41,12 +41,14 @@ class SQSService:
     def is_configured(self) -> bool:
         return bool(self.queue_url)
 
-    def send_job(self, job_id: str) -> dict[str, Any]:
-        if not self.queue_url:
+    def send_job(self, payload: dict[str, Any], queue_url: str | None = None) -> dict[str, Any]:
+        target_queue_url = (queue_url or self.queue_url or '').strip()
+        if not target_queue_url:
             raise RuntimeError('SQS queue is not configured. Set SQS_QUEUE_URL to enable avatar async jobs.')
-        payload = {'job_id': job_id, 'request_mode': 'avatar'}
+        if not isinstance(payload, dict) or not payload:
+            raise ValueError('SQS payload must be a non-empty dictionary.')
         return self.client.send_message(
-            QueueUrl=self.queue_url,
+            QueueUrl=target_queue_url,
             MessageBody=json.dumps(payload),
         )
 

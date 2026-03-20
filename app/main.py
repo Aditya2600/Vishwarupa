@@ -25,7 +25,6 @@ from app.models import (
     RemotionVideoRequest,
     StyledVideoResult,
     TemplateVideoRequest,
-    VideoJobRecord,
     VideoJobResult,
     UserCreate,
     Token,
@@ -38,7 +37,7 @@ from app.services.remotion_service import RemotionService
 from app.services.sqs_service import SQSService
 from app.services.video_service import VideoService
 from app.services.s3_service import S3Service
-from app.database import users_collection, videos_collection, drafts_collection, video_jobs_collection, custom_avatars_collection
+from app.database import users_collection, videos_collection, drafts_collection, custom_avatars_collection
 from app.auth import get_password_hash, verify_password, create_access_token, get_current_user
 from app.workers.avatar_job_worker import AvatarJobWorker
 
@@ -185,17 +184,22 @@ def _normalize_avatar_job_status(status_value: str | None) -> Literal['queued', 
 
 
 def _build_avatar_job_status_response(job: dict) -> AvatarJobStatusResponse:
-    status_value = _normalize_avatar_job_status(str(job.get('status') or 'queued'))
+    job_data = job.get('job_data') if isinstance(job.get('job_data'), dict) else {}
+    status_value = _normalize_avatar_job_status(str(job_data.get('status') or job.get('status') or 'queued'))
     result_payload = job.get('result_payload') if isinstance(job.get('result_payload'), dict) else {}
-    raw_error = job.get('error')
+    if not result_payload and isinstance(job_data.get('result_payload'), dict):
+        result_payload = job_data.get('result_payload') or {}
+
+    response_payload = result_payload if result_payload else job_data
+    raw_error = job.get('error') or job_data.get('error')
     error = str(raw_error).strip() if isinstance(raw_error, str) and raw_error.strip() else None
     return AvatarJobStatusResponse(
-        job_id=str(job.get('job_id')),
+        job_id=str(job.get('job_id') or job_data.get('job_id') or job.get('video_id')),
         status=status_value,
-        video_id=str(result_payload.get('video_id')) if result_payload.get('video_id') else None,
-        video_url=str(result_payload.get('video_url')) if result_payload.get('video_url') else None,
-        thumbnail_url=str(result_payload.get('thumbnail_url')) if result_payload.get('thumbnail_url') else None,
-        title=str(result_payload.get('title')) if result_payload.get('title') else None,
+        video_id=str(response_payload.get('video_id') or job.get('video_id')) if (response_payload.get('video_id') or job.get('video_id')) else None,
+        video_url=str(response_payload.get('video_url') or job.get('video_url')) if (response_payload.get('video_url') or job.get('video_url')) else None,
+        thumbnail_url=str(response_payload.get('thumbnail_url')) if response_payload.get('thumbnail_url') else None,
+        title=str(response_payload.get('title') or job.get('title')) if (response_payload.get('title') or job.get('title')) else None,
         error=error,
     )
 
@@ -734,55 +738,58 @@ async def create_avatar_job(request: DirectVideoRequest, current_user: str = Dep
             detail='Avatar async queue is not configured. Set SQS_QUEUE_URL and retry.',
         )
 
-    job_record: VideoJobRecord | None = None
+    job_id: str | None = None
     try:
+        job_id = uuid4().hex
         now = datetime.utcnow()
-        job_record = VideoJobRecord(
-            job_id=uuid4().hex,
+        request_payload = _to_mongo_safe(request.model_dump(mode='python'))
+        video_record = VideoRecord(
             user_email=current_user,
+            video_id=job_id,
             status='queued',
-            request_payload=_to_mongo_safe(request.model_dump(mode='python')),
-            created_at=now,
-            updated_at=now,
+            title=f"{request.title_prefix} - {request.customer_name}",
+            request_mode='avatar_async',
+            job_data={
+                'job_id': job_id,
+                'request_mode': 'avatar',
+                'status': 'queued',
+                'attempts': 0,
+                'request_payload': request_payload,
+            },
         )
-        await video_jobs_collection.insert_one(_to_mongo_safe(job_record))
-        await videos_collection.insert_one(_to_mongo_safe(
-            VideoRecord(
-                user_email=current_user,
-                video_id=job_record.job_id,
-                status='queued',
-                title=f"{request.title_prefix} - {request.customer_name}",
-                request_mode='avatar_async',
-                job_data={
-                    'job_id': job_record.job_id,
-                    'request_mode': 'avatar',
-                    'status': 'queued',
-                },
-            )
-        ))
-        sqs_service.send_job(job_record.job_id)
-        return AvatarJobAck(job_id=job_record.job_id, status='queued')
+        video_doc = _to_mongo_safe(video_record)
+        if isinstance(video_doc, dict):
+            video_doc.update({
+                'job_id': job_id,
+                'request_payload': request_payload,
+                'result_payload': None,
+                'error': None,
+                'attempts': 0,
+                'updated_at': now,
+                'started_at': None,
+                'completed_at': None,
+            })
+        await videos_collection.insert_one(video_doc)
+        sqs_service.send_job(
+            payload={'job_id': job_id, 'request_mode': 'avatar'},
+            queue_url=getattr(sqs_service, 'queue_url', None),
+        )
+        return AvatarJobAck(job_id=job_id, status='queued')
     except HTTPException:
         raise
     except Exception as exc:
-        if not job_record:
+        if not job_id:
             raise HTTPException(status_code=502, detail=GENERIC_GENERATION_ERROR) from exc
         failed_at = datetime.utcnow()
-        await video_jobs_collection.update_one(
-            {'job_id': job_record.job_id, 'user_email': current_user},
+        await videos_collection.update_one(
+            {'video_id': job_id, 'user_email': current_user},
             {'$set': {
                 'status': 'failed',
                 'error': str(exc),
                 'updated_at': failed_at,
                 'completed_at': failed_at,
-            }},
-        )
-        await videos_collection.update_one(
-            {'video_id': job_record.job_id, 'user_email': current_user},
-            {'$set': {
-                'status': 'failed',
                 'job_data': {
-                    'job_id': job_record.job_id,
+                    'job_id': job_id,
                     'request_mode': 'avatar',
                     'status': 'failed',
                     'error': str(exc),
@@ -794,7 +801,9 @@ async def create_avatar_job(request: DirectVideoRequest, current_user: str = Dep
 
 @app.get('/jobs/{job_id}', response_model=AvatarJobStatusResponse)
 async def get_avatar_job_status(job_id: str, current_user: str = Depends(get_current_user)):
-    job = await video_jobs_collection.find_one({'job_id': job_id, 'user_email': current_user})
+    job = await videos_collection.find_one(
+        {'video_id': job_id, 'user_email': current_user, 'request_mode': 'avatar_async'}
+    )
     if not job:
         raise HTTPException(status_code=404, detail='Job not found.')
     return _build_avatar_job_status_response(job)

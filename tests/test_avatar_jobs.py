@@ -66,13 +66,13 @@ class InMemoryCollection:
 
 class FakeSQSForApi:
     def __init__(self) -> None:
-        self.sent_job_ids: list[str] = []
+        self.sent_payloads: list[dict[str, Any]] = []
 
     def is_configured(self) -> bool:
         return True
 
-    def send_job(self, job_id: str) -> dict[str, str]:
-        self.sent_job_ids.append(job_id)
+    def send_job(self, payload: dict[str, Any], queue_url: str | None = None) -> dict[str, str]:
+        self.sent_payloads.append(copy.deepcopy(payload))
         return {'MessageId': 'mid-1'}
 
 
@@ -141,7 +141,10 @@ def test_sqs_service_send_avatar_job_contains_only_metadata(monkeypatch: pytest.
     monkeypatch.setattr('app.services.sqs_service.boto3.client', lambda *args, **kwargs: fake_client)
 
     service = SQSService(queue_url='https://sqs.us-east-1.amazonaws.com/12345/avatar-jobs')
-    service.send_job('job_123')
+    service.send_job(
+        payload={'job_id': 'job_123', 'request_mode': 'avatar'},
+        queue_url='https://sqs.us-east-1.amazonaws.com/12345/avatar-jobs',
+    )
 
     assert len(fake_client.calls) == 1
     payload = json.loads(fake_client.calls[0]['MessageBody'])
@@ -150,10 +153,8 @@ def test_sqs_service_send_avatar_job_contains_only_metadata(monkeypatch: pytest.
 
 
 def test_post_jobs_avatar_creates_job_and_sends_sqs(monkeypatch: pytest.MonkeyPatch) -> None:
-    jobs_collection = InMemoryCollection()
     videos_collection = InMemoryCollection()
     sqs_service = FakeSQSForApi()
-    monkeypatch.setattr(main_module, 'video_jobs_collection', jobs_collection)
     monkeypatch.setattr(main_module, 'videos_collection', videos_collection)
     monkeypatch.setattr(main_module, 'sqs_service', sqs_service)
 
@@ -161,24 +162,26 @@ def test_post_jobs_avatar_creates_job_and_sends_sqs(monkeypatch: pytest.MonkeyPa
 
     assert response.status == 'queued'
     assert response.job_id
-    assert sqs_service.sent_job_ids == [response.job_id]
-    assert response.job_id in jobs_collection.docs
-    stored = jobs_collection.docs[response.job_id]
+    assert sqs_service.sent_payloads == [{'job_id': response.job_id, 'request_mode': 'avatar'}]
+    assert response.job_id in videos_collection.docs
+    stored = videos_collection.docs[response.job_id]
     assert stored['status'] == 'queued'
     assert stored['request_payload']['customer_name'] == 'Aditi'
     assert stored['request_payload']['lan'] == 'LAN001'
-    assert response.job_id in videos_collection.docs
-    assert videos_collection.docs[response.job_id]['status'] == 'queued'
+    assert stored['video_id'] == response.job_id
+    assert stored['request_mode'] == 'avatar_async'
 
 
 def test_get_jobs_status_enforces_ownership(monkeypatch: pytest.MonkeyPatch) -> None:
-    jobs_collection = InMemoryCollection()
+    videos_collection = InMemoryCollection()
     job_id = 'job_001'
-    jobs_collection.docs[job_id] = {
+    videos_collection.docs[job_id] = {
+        'video_id': job_id,
         'job_id': job_id,
+        'request_mode': 'avatar_async',
         'user_email': 'owner@example.com',
         'status': 'completed',
-        'request_payload': {'customer_name': 'Aditi'},
+        'request_payload': {'customer_name': 'Aditi', 'lan': 'LAN001'},
         'result_payload': {
             'video_id': 'video_001',
             'video_url': 'https://example.com/video_001.mp4',
@@ -190,7 +193,7 @@ def test_get_jobs_status_enforces_ownership(monkeypatch: pytest.MonkeyPatch) -> 
         'created_at': datetime.utcnow(),
         'updated_at': datetime.utcnow(),
     }
-    monkeypatch.setattr(main_module, 'video_jobs_collection', jobs_collection)
+    monkeypatch.setattr(main_module, 'videos_collection', videos_collection)
 
     status_ok = asyncio.run(main_module.get_avatar_job_status(job_id, current_user='owner@example.com'))
     assert status_ok.status == 'completed'
@@ -203,11 +206,12 @@ def test_get_jobs_status_enforces_ownership(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 def test_worker_success_moves_job_to_completed() -> None:
-    jobs_collection = InMemoryCollection()
-    videos_collection = InMemoryCollection()
+    shared_collection = InMemoryCollection()
     sqs_service = FakeSQSForWorker()
-    jobs_collection.docs['job_success'] = {
+    shared_collection.docs['job_success'] = {
+        'video_id': 'job_success',
         'job_id': 'job_success',
+        'request_mode': 'avatar_async',
         'user_email': 'user@example.com',
         'status': 'queued',
         'request_payload': _build_direct_request().model_dump(mode='python'),
@@ -221,8 +225,8 @@ def test_worker_success_moves_job_to_completed() -> None:
         sqs_service=sqs_service,
         video_service=FakeVideoServiceSuccess(),
         s3_service=FakeS3Service(),
-        jobs_collection=jobs_collection,
-        videos_collection_ref=videos_collection,
+        jobs_collection=shared_collection,
+        videos_collection_ref=shared_collection,
         max_receive_count=3,
     )
 
@@ -232,19 +236,21 @@ def test_worker_success_moves_job_to_completed() -> None:
         'Attributes': {'ApproximateReceiveCount': '1'},
     }))
 
-    job = jobs_collection.docs['job_success']
+    job = shared_collection.docs['job_success']
     assert job['status'] == 'completed'
     assert job['attempts'] == 1
     assert job['result_payload']['video_id'] == 'video_123'
     assert sqs_service.deleted == ['rh-success']
-    assert 'job_success' in videos_collection.docs
+    assert 'job_success' in shared_collection.docs
 
 
 def test_worker_retry_path_keeps_message_for_retry() -> None:
     jobs_collection = InMemoryCollection()
     sqs_service = FakeSQSForWorker()
     jobs_collection.docs['job_retry'] = {
+        'video_id': 'job_retry',
         'job_id': 'job_retry',
+        'request_mode': 'avatar_async',
         'user_email': 'user@example.com',
         'status': 'queued',
         'request_payload': _build_direct_request().model_dump(mode='python'),
@@ -259,7 +265,7 @@ def test_worker_retry_path_keeps_message_for_retry() -> None:
         video_service=FakeVideoServiceFail(),
         s3_service=FakeS3Service(),
         jobs_collection=jobs_collection,
-        videos_collection_ref=InMemoryCollection(),
+        videos_collection_ref=jobs_collection,
         max_receive_count=3,
     )
 
@@ -280,7 +286,9 @@ def test_worker_marks_failed_after_max_receive_count() -> None:
     jobs_collection = InMemoryCollection()
     sqs_service = FakeSQSForWorker()
     jobs_collection.docs['job_fail'] = {
+        'video_id': 'job_fail',
         'job_id': 'job_fail',
+        'request_mode': 'avatar_async',
         'user_email': 'user@example.com',
         'status': 'queued',
         'request_payload': _build_direct_request().model_dump(mode='python'),
@@ -295,7 +303,7 @@ def test_worker_marks_failed_after_max_receive_count() -> None:
         video_service=FakeVideoServiceFail(),
         s3_service=FakeS3Service(),
         jobs_collection=jobs_collection,
-        videos_collection_ref=InMemoryCollection(),
+        videos_collection_ref=jobs_collection,
         max_receive_count=3,
     )
 
@@ -316,7 +324,9 @@ def test_worker_idempotency_deletes_duplicate_messages() -> None:
     jobs_collection = InMemoryCollection()
     sqs_service = FakeSQSForWorker()
     jobs_collection.docs['job_done'] = {
+        'video_id': 'job_done',
         'job_id': 'job_done',
+        'request_mode': 'avatar_async',
         'user_email': 'user@example.com',
         'status': 'completed',
         'request_payload': _build_direct_request().model_dump(mode='python'),
@@ -332,7 +342,7 @@ def test_worker_idempotency_deletes_duplicate_messages() -> None:
         video_service=FakeVideoServiceSuccess(),
         s3_service=FakeS3Service(),
         jobs_collection=jobs_collection,
-        videos_collection_ref=InMemoryCollection(),
+        videos_collection_ref=jobs_collection,
         max_receive_count=3,
     )
 

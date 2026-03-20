@@ -10,7 +10,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from app.config import settings
-from app.database import video_jobs_collection, videos_collection
+from app.database import videos_collection
 from app.models import DirectVideoRequest, VideoRecord
 from app.services.s3_service import S3Service
 from app.services.sqs_service import SQSService
@@ -72,16 +72,37 @@ class AvatarJobWorker:
         sqs_service: SQSService | None = None,
         video_service: VideoService | None = None,
         s3_service: S3Service | None = None,
-        jobs_collection: Any = video_jobs_collection,
-        videos_collection_ref: Any = videos_collection,
+        jobs_collection: Any = videos_collection,
+        videos_collection_ref: Any | None = None,
         max_receive_count: int | None = None,
     ) -> None:
         self.sqs_service = sqs_service or SQSService()
         self.video_service = video_service or VideoService()
         self.s3_service = s3_service or S3Service()
         self.jobs_collection = jobs_collection
-        self.videos_collection_ref = videos_collection_ref
+        self.videos_collection_ref = videos_collection_ref or jobs_collection
         self.max_receive_count = max(1, int(max_receive_count or settings.sqs_max_receive_count))
+
+    async def _find_job(self, job_id: str) -> dict[str, Any] | None:
+        job = await self.jobs_collection.find_one({'job_id': job_id})
+        if job:
+            return job
+        return await self.jobs_collection.find_one({'video_id': job_id})
+
+    async def _update_job(self, job_id: str, update: dict[str, Any], *, require_queued: bool = False) -> int:
+        query: dict[str, Any] = {'job_id': job_id}
+        if require_queued:
+            query['status'] = 'queued'
+        result = await self.jobs_collection.update_one(query, update)
+        modified_count = int(getattr(result, 'modified_count', 0))
+        if modified_count > 0:
+            return modified_count
+
+        fallback_query: dict[str, Any] = {'video_id': job_id}
+        if require_queued:
+            fallback_query['status'] = 'queued'
+        fallback_result = await self.jobs_collection.update_one(fallback_query, update)
+        return int(getattr(fallback_result, 'modified_count', 0))
 
     async def run_forever(self) -> None:
         if not self.sqs_service.is_configured():
@@ -116,7 +137,7 @@ class AvatarJobWorker:
                 await asyncio.to_thread(self.sqs_service.delete_message, receipt_handle)
             return
 
-        job = await self.jobs_collection.find_one({'job_id': job_id})
+        job = await self._find_job(job_id)
         if not job:
             logger.warning('Job %s not found. Removing SQS message.', job_id)
             if receipt_handle:
@@ -131,25 +152,31 @@ class AvatarJobWorker:
             return
 
         started_at = datetime.utcnow()
-        claim_result = await self.jobs_collection.update_one(
-            {'job_id': job_id, 'status': 'queued'},
+        modified_count = await self._update_job(
+            job_id,
             {'$set': {
                 'status': 'processing',
                 'updated_at': started_at,
                 'started_at': started_at,
                 'error': None,
             }, '$inc': {'attempts': 1}},
+            require_queued=True,
         )
-        modified_count = int(getattr(claim_result, 'modified_count', 0))
         if modified_count == 0:
             logger.info('Job %s was claimed by another worker. Deleting duplicate message.', job_id)
             if receipt_handle:
                 await asyncio.to_thread(self.sqs_service.delete_message, receipt_handle)
             return
 
-        claimed_job = await self.jobs_collection.find_one({'job_id': job_id})
+        claimed_job = await self._find_job(job_id)
         user_email = str(claimed_job.get('user_email') or '').strip() if isinstance(claimed_job, dict) else ''
         request_payload = claimed_job.get('request_payload') if isinstance(claimed_job, dict) else {}
+        if not isinstance(request_payload, dict):
+            request_payload = {}
+        if not request_payload and isinstance(claimed_job, dict):
+            job_data = claimed_job.get('job_data')
+            if isinstance(job_data, dict) and isinstance(job_data.get('request_payload'), dict):
+                request_payload = job_data.get('request_payload') or {}
         if not isinstance(request_payload, dict):
             request_payload = {}
         if user_email:
@@ -179,8 +206,8 @@ class AvatarJobWorker:
                     result.video_url = s3_url
 
             completed_at = datetime.utcnow()
-            await self.jobs_collection.update_one(
-                {'job_id': job_id},
+            await self._update_job(
+                job_id,
                 {'$set': {
                     'status': 'completed',
                     'result_payload': _to_mongo_safe(result),
@@ -203,8 +230,8 @@ class AvatarJobWorker:
             logger.exception('Job %s failed on receive count %s.', job_id, receive_count)
 
             if receive_count >= self.max_receive_count:
-                await self.jobs_collection.update_one(
-                    {'job_id': job_id},
+                await self._update_job(
+                    job_id,
                     {'$set': {
                         'status': 'failed',
                         'error': error_message,
@@ -229,8 +256,8 @@ class AvatarJobWorker:
                     await asyncio.to_thread(self.sqs_service.delete_message, receipt_handle)
                 return
 
-            await self.jobs_collection.update_one(
-                {'job_id': job_id},
+            await self._update_job(
+                job_id,
                 {'$set': {
                     'status': 'queued',
                     'error': error_message,
