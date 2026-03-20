@@ -37,20 +37,12 @@ class SQSService:
         self._initialized = True
 
     def send_job(self, payload: dict[str, Any], queue_url: str) -> dict[str, Any]:
-        queue_url = str(queue_url)
-        if not queue_url:
-            raise RuntimeError('SQS queue is not configured. Set SQS_QUEUE_URL to enable avatar async jobs.')
-        if not isinstance(payload, dict) or not payload:
-            raise ValueError('SQS payload must be a non-empty dictionary.')
         return self.client.send_message(
             QueueUrl=queue_url,
             MessageBody=json.dumps(payload),
         )
 
     def receive_jobs(self, queue_url: str, max_messages: int = 1) -> list[dict[str, Any]]:
-        queue_url = str(queue_url)
-        if not queue_url:
-            raise RuntimeError('SQS queue is not configured. Set SQS_QUEUE_URL to enable avatar async jobs.')
         response = self.client.receive_message(
             QueueUrl=queue_url,
             MaxNumberOfMessages=max(1, min(max_messages, 10)),
@@ -64,9 +56,6 @@ class SQSService:
         return [message for message in messages if isinstance(message, dict)]
 
     def delete_message(self, receipt_handle: str, queue_url: str) -> None:
-        queue_url = str(queue_url)
-        if not queue_url:
-            raise RuntimeError('SQS queue is not configured. Set SQS_QUEUE_URL to enable avatar async jobs.')
         self.client.delete_message(
             QueueUrl=queue_url,
             ReceiptHandle=receipt_handle,
