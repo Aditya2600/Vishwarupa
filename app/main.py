@@ -18,6 +18,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, ValidationError
 
 from app.config import settings
+from app.constants import SQS_QUEUE_URL
 from app.models import (
     AvatarJobAck,
     AvatarJobStatusResponse,
@@ -759,14 +760,13 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
 @app.post('/jobs/avatar', response_model=AvatarJobAck)
 async def create_avatar_job(request: DirectVideoRequest, current_user: str = Depends(get_current_user)):
-    try:
-        queue_url = AvatarJobWorker.resolve_queue_url()
-    except RuntimeError as exc:
+    queue_url = SQS_QUEUE_URL
+    if not queue_url:
         print("DEBUG: SQS queue is not configured")
         raise HTTPException(
             status_code=503,
             detail='Avatar async queue is not configured. Set SQS_QUEUE_URL and retry.',
-        ) from exc
+        )
 
     job_id: str | None = None
     try:

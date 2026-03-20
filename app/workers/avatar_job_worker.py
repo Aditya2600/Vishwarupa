@@ -77,13 +77,6 @@ def _parse_job_id(message: dict[str, Any]) -> str | None:
 
 
 class AvatarJobWorker:
-    @staticmethod
-    def resolve_queue_url(queue_url: str | None = None) -> str:
-        resolved_queue_url = str(queue_url or SQS_QUEUE_URL or '')
-        if not resolved_queue_url:
-            raise RuntimeError('SQS queue is not configured. Set SQS_QUEUE_URL before starting the worker.')
-        return resolved_queue_url
-
     def __init__(
         self,
         *,
@@ -96,7 +89,7 @@ class AvatarJobWorker:
         max_receive_count: int | None = None,
     ) -> None:
         self.sqs_service = sqs_service or SQSService()
-        self.queue_url = self.resolve_queue_url(queue_url)
+        self.queue_url = queue_url or SQS_QUEUE_URL or ''
         self.video_service = video_service or VideoService()
         self.s3_service = s3_service or S3Service()
         self.jobs_collection = jobs_collection
