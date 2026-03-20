@@ -187,7 +187,7 @@ export const AVATAR_TEMPLATES: Record<string, string> = Object.fromEntries(
   Object.keys(AVATAR_TEMPLATE_BUILDERS).map((language) => [language, getDefaultAvatarScript(language, "female")]),
 );
 
-export const REMOTION_SUPPORTED_LANGUAGES = Object.keys(REMOTION_TEMPLATES);
+export const REMOTION_SUPPORTED_LANGUAGES = Object.keys(REMOTION_TEMPLATES).filter((l) => l !== "Punjabi");
 
 export function getDefaultRemotionTranscript(language: string, mode: "personalized" | "universal" = "personalized", gender: "male" | "female" | null = "female"): string {
   const resolvedGender = resolveNarratorGender(gender);

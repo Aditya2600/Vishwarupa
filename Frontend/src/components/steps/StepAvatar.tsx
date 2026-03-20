@@ -154,10 +154,16 @@ export function StepAvatar({
             return false;
         }
 
-        const vName = voice.name.toLowerCase();
-        // Deduplicate voices by exact name (like Manu)
-        if (uniqueVoiceNames.has(vName)) return false;
-        
+        const vName = voice.name.toLowerCase().trim();
+        // Aggressively deduplicate 'peppy priya' variants
+        if (vName.includes("peppy priya")) {
+          if (uniqueVoiceNames.has("peppy priya")) return false;
+          uniqueVoiceNames.add("peppy priya");
+        } else {
+          if (uniqueVoiceNames.has(vName)) return false;
+          uniqueVoiceNames.add(vName);
+        }
+
         const voiceGen = (voice.gender || "").toLowerCase();
 
         // Specific allowlists for Hindi voices

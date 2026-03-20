@@ -22,7 +22,7 @@ VOICE_MAP = {
     "Hindi-Male": "hi-IN-MadhurNeural",
     "Hindi-Female": "hi-IN-SwaraNeural",
     "Marathi-Male": "mr-IN-ManoharNeural",
-    "Marathi-Female": "mr-IN-LalitaNeural",
+    "Marathi-Female": "mr-IN-AarohiNeural",
     "Tamil-Male": "ta-IN-ValluvarNeural",
     "Tamil-Female": "ta-IN-PallaviNeural",
     "Telugu-Male": "te-IN-MohanNeural",
@@ -30,13 +30,13 @@ VOICE_MAP = {
     "Kannada-Male": "kn-IN-GaganNeural",
     "Kannada-Female": "kn-IN-SapnaNeural",
     "Bengali-Male": "bn-IN-BashkarNeural",
-    "Bengali-Female": "bn-IN-TanishaNeural",
+    "Bengali-Female": "bn-IN-TanishaaNeural",
     "Gujarati-Male": "gu-IN-NiranjanNeural",
     "Gujarati-Female": "gu-IN-DhwaniNeural",
     "Malayalam-Male": "ml-IN-MidhunNeural",
     "Malayalam-Female": "ml-IN-SobhanaNeural",
-    "Punjabi-Male": "pa-IN-KaranNeural",
-    "Punjabi-Female": "pa-IN-RaaviNeural",
+    "Punjabi-Male": "pa-IN-OjasNeural",
+    "Punjabi-Female": "pa-IN-VaaniNeural",
 }
 
 DEFAULT_SCRIPT_EN = "Hello {{ customer_name }}. I am calling from {{ client_name }} regarding your {{ product_type }} account. The total outstanding balance is {{ tos }}. Please contact us at {{ contact_details }} to discuss repayment options."
