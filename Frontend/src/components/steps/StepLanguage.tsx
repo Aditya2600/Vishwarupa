@@ -35,11 +35,19 @@ export function StepLanguage({
 }: StepLanguageProps) {
   const [search, setSearch] = useState("");
   const remotionLanguageSet = new Set(REMOTION_SUPPORTED_LANGUAGES);
+  const avatarUnsupported = new Set(["Bengali", "Malayalam", "Punjabi"]);
+
   const filtered = LANGUAGES.filter(
     (l) =>
       l.name.toLowerCase().includes(search.toLowerCase()) ||
       l.native.toLowerCase().includes(search.toLowerCase())
-  );
+  ).sort((a, b) => {
+    const aComingSoon = videoType === "remotion" ? !remotionLanguageSet.has(a.name) : avatarUnsupported.has(a.name);
+    const bComingSoon = videoType === "remotion" ? !remotionLanguageSet.has(b.name) : avatarUnsupported.has(b.name);
+    if (aComingSoon && !bComingSoon) return 1;
+    if (!aComingSoon && bComingSoon) return -1;
+    return 0;
+  });
 
   return (
     <div>
@@ -108,7 +116,9 @@ export function StepLanguage({
       <div className="grid grid-cols-3 xl:grid-cols-4 gap-3">
         {filtered.map((lang) => {
           const isSelected = selected === lang.name;
-          const isComingSoon = videoType === "remotion" && !remotionLanguageSet.has(lang.name as any);
+          const isComingSoon = videoType === "remotion" 
+            ? !remotionLanguageSet.has(lang.name as any)
+            : avatarUnsupported.has(lang.name as any);
           const isAvailable = !isComingSoon;
           return (
             <button

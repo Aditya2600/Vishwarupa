@@ -489,14 +489,23 @@ export function isVoiceCompatibleWithLanguage(
     return false;
   }
 
-  // Explicitly whitelist the user's highly preferred voices for either English or Hindi
+  const englishBlacklist = ["abhishek", "mahesh", "warrior rohan", "akash", "kavya", "maryann", "mary ann"];
+  if (
+    voice.name && 
+    normalizedSelectedLanguage === "English" && 
+    englishBlacklist.some(blacklisted => voice.name.toLowerCase().includes(blacklisted))
+  ) {
+    return false;
+  }
+
+  // Explicitly whitelist the user's highly preferred voices for Hindi only
   const whiteListedIndianVoices = [
     "aaditya k", "aahana verma", "adv. aditi mehra", "anika mehra", "aditi - calm"
   ];
   
   if (
     voice.name && whiteListedIndianVoices.includes(voice.name.toLowerCase()) &&
-    (normalizedSelectedLanguage === "Hindi" || normalizedSelectedLanguage === "English")
+    normalizedSelectedLanguage === "Hindi"
   ) {
     return true;
   }
