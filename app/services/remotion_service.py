@@ -363,6 +363,7 @@ class RemotionService:
         return subs
 
     async def render_video(self, request: RemotionVideoRequest, job_id: str, scene_payload: dict[str, Any], render_payload: dict[str, Any]) -> str:
+        logger.info("Render video started")
         leads_path = self.remotion_path / "leads.json"
         leads = [render_payload] # Keep it simple for now
         leads_path.write_text(json.dumps(leads, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -379,7 +380,7 @@ class RemotionService:
 
         props_path = self.remotion_path / f"props_{job_id}.json"
         props_path.write_text(json.dumps({"leadId": job_id}, ensure_ascii=False), encoding='utf-8')
-
+        logger.info("Render video started command")
         # Ensure we specify the entry point 'src/index.jsx' and the composition ID 'main'
         command = [
             npx_bin, "remotion", "render", "src/index.jsx", "main",
