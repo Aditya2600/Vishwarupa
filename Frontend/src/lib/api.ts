@@ -158,6 +158,7 @@ const INDIAN_NAME_HINTS = [
   "aditi",
   "aditya",
   "ananya",
+  "anil",
   "ankit",
   "arjun",
   "aryan",

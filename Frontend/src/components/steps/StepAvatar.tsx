@@ -81,7 +81,7 @@ export function StepAvatar({
     if (!avatar.gender || avatar.gender.toLowerCase() !== targetGender) return false;
 
     const n = (avatar.name || "").toLowerCase().trim();
-    if (uniqueAvatarNames.has(n) || n === "riya" || n === "meera" || n === "aditya k" || n === "karan" || n === "rohan") return false;
+    if (uniqueAvatarNames.has(n) || n === "riya" || n === "meera" || n === "aditya k" || n === "karan" || n === "priya" || n === "rohan" || n === "kabir") return false;
     uniqueAvatarNames.add(n);
 
     return true;
