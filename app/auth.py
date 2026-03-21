@@ -5,6 +5,7 @@ from jose import JWTError, jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from app.config import settings
+from app.database import users_collection
 import os
 
 SECRET_KEY = os.getenv("SECRET_KEY", "default_secret_key")
@@ -38,9 +39,16 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
+        subject: str = str(payload.get("sub") or "").strip()
+        if not subject:
             raise credentials_exception
     except JWTError:
         raise credentials_exception
-    return email
+
+    # New tokens use user_id in sub. Fallback to legacy email tokens.
+    if "@" in subject:
+        user = await users_collection.find_one({"email": subject.lower()})
+        if not user:
+            raise credentials_exception
+        return str(user["_id"])
+    return subject

@@ -302,7 +302,11 @@ class MediaStylingService:
 
         cues: list[SubtitleCue] = []
         for block in re.split(r'\n\s*\n', cleaned):
-            lines = [line.strip() for line in block.split('\n') if line.strip()]
+            lines: list[str] = []
+            for line in block.split('\n'):
+                cleaned_line = line.strip()
+                if cleaned_line:
+                    lines.append(cleaned_line)
             if not lines:
                 continue
             if '-->' not in lines[0] and len(lines) > 1 and '-->' in lines[1]:
@@ -311,7 +315,7 @@ class MediaStylingService:
                 continue
 
             start_raw, end_raw = [part.strip().split(' ', 1)[0] for part in lines[0].split('-->', 1)]
-            content = ' '.join(lines[1:]).strip()
+            content = ' '.join(lines[1:])
             if not content:
                 continue
             cues.append(
@@ -359,7 +363,11 @@ class MediaStylingService:
         )
 
     def _build_transcript_cues(self, transcript: str, duration_seconds: float) -> list[SubtitleCue]:
-        sentences = [chunk.strip() for chunk in re.split(r'(?<=[.!?।])\s+', transcript) if chunk.strip()]
+        sentences: list[str] = []
+        for chunk in re.split(r'(?<=[.!?।])\s+', transcript):
+            cleaned_chunk = chunk.strip()
+            if cleaned_chunk:
+                sentences.append(cleaned_chunk)
         chunks: list[str] = []
         for sentence in sentences or [transcript]:
             words = sentence.split()
@@ -560,7 +568,7 @@ class MediaStylingService:
             filter_parts.append(logo_filter)
             
             # Use lowercase for dictionary lookup to match "top left", etc.
-            lookup_pos = logo_position.lower().strip()
+            lookup_pos = logo_position.lower()
             x_pos, y_pos = self._logo_positions.get(lookup_pos, self._logo_positions['top right'])
             filter_parts.append(f'[{last_label}][logo]overlay={x_pos}:{y_pos}[styled]')
             output_label = 'styled'

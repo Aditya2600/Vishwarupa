@@ -138,14 +138,13 @@ function buildAvatarDefaultTranscript(
 }
 
 function mapAvatarJobToVideoResult(job: {
-  job_id: string;
+  _id: string;
   status: string;
-  video_id?: string | null;
   video_url?: string | null;
   thumbnail_url?: string | null;
   title?: string | null;
 }): VideoJobResult {
-  const videoId = (job.video_id ?? "").trim() || job.job_id;
+  const videoId = (job._id ?? "").trim();
   return {
     request_mode: "direct",
     video_id: videoId,
@@ -153,7 +152,7 @@ function mapAvatarJobToVideoResult(job: {
     video_url: job.video_url ?? null,
     thumbnail_url: job.thumbnail_url ?? null,
     title: job.title ?? null,
-    raw_response: { job_id: job.job_id, status: job.status },
+    raw_response: { _id: job._id, status: job.status },
     saved_to: null,
   };
 }
@@ -219,7 +218,7 @@ const Index = () => {
     onSuccess: (result) => {
       statusPollingWarningShownRef.current = false;
       update({
-        avatarJobId: result.job_id,
+        avatarJobId: result._id,
         generationStatus: "submitting",
         generationError: "",
       });
