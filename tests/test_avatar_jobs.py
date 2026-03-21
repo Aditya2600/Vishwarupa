@@ -100,9 +100,6 @@ class FakeSQSForWorker:
     def __init__(self) -> None:
         self.deleted: list[str] = []
 
-    def receive_jobs(self, queue_url: str, max_messages: int = 1) -> list[dict[str, Any]]:  # pragma: no cover - not used in tests
-        return []
-
     def delete_message(self, receipt_handle: str, queue_url: str) -> None:
         self.deleted.append(receipt_handle)
 
@@ -259,10 +256,10 @@ def test_worker_success_moves_job_to_completed(monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_worker_retry_path_keeps_message_for_retry(monkeypatch: pytest.MonkeyPatch) -> None:
-    jobs_collection = InMemoryCollection()
+    videos_collection = InMemoryCollection()
     sqs_service = FakeSQSForWorker()
-    monkeypatch.setattr(worker_module, 'videos_collection', jobs_collection)
-    jobs_collection.docs['record_retry'] = {
+    monkeypatch.setattr(worker_module, 'videos_collection', videos_collection)
+    videos_collection.docs['record_retry'] = {
         '_id': 'record_retry',
         'request_mode': 'avatar_async',
         'user_id': 'user_001',
@@ -287,7 +284,7 @@ def test_worker_retry_path_keeps_message_for_retry(monkeypatch: pytest.MonkeyPat
         'Attributes': {'ApproximateReceiveCount': '1'},
     }))
 
-    job = jobs_collection.docs['record_retry']
+    job = videos_collection.docs['record_retry']
     assert job['status'] == 'queued'
     assert job['attempts'] == 1
     assert 'provider failed' in (job.get('error') or '')
@@ -295,10 +292,10 @@ def test_worker_retry_path_keeps_message_for_retry(monkeypatch: pytest.MonkeyPat
 
 
 def test_worker_marks_failed_after_max_receive_count(monkeypatch: pytest.MonkeyPatch) -> None:
-    jobs_collection = InMemoryCollection()
+    videos_collection = InMemoryCollection()
     sqs_service = FakeSQSForWorker()
-    monkeypatch.setattr(worker_module, 'videos_collection', jobs_collection)
-    jobs_collection.docs['record_fail'] = {
+    monkeypatch.setattr(worker_module, 'videos_collection', videos_collection)
+    videos_collection.docs['record_fail'] = {
         '_id': 'record_fail',
         'request_mode': 'avatar_async',
         'user_id': 'user_001',
@@ -323,7 +320,7 @@ def test_worker_marks_failed_after_max_receive_count(monkeypatch: pytest.MonkeyP
         'Attributes': {'ApproximateReceiveCount': '3'},
     }))
 
-    job = jobs_collection.docs['record_fail']
+    job = videos_collection.docs['record_fail']
     assert job['status'] == 'failed'
     assert job['attempts'] == 1
     assert 'provider failed' in (job.get('error') or '')
@@ -331,10 +328,10 @@ def test_worker_marks_failed_after_max_receive_count(monkeypatch: pytest.MonkeyP
 
 
 def test_worker_idempotency_deletes_duplicate_messages(monkeypatch: pytest.MonkeyPatch) -> None:
-    jobs_collection = InMemoryCollection()
+    videos_collection = InMemoryCollection()
     sqs_service = FakeSQSForWorker()
-    monkeypatch.setattr(worker_module, 'videos_collection', jobs_collection)
-    jobs_collection.docs['record_done'] = {
+    monkeypatch.setattr(worker_module, 'videos_collection', videos_collection)
+    videos_collection.docs['record_done'] = {
         '_id': 'record_done',
         'request_mode': 'avatar_async',
         'user_id': 'user_001',

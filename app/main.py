@@ -235,6 +235,34 @@ async def _find_avatar_job(job_id: str, current_user: str) -> dict[str, Any] | N
     )
 
 
+async def _refresh_processing_video(video: dict[str, Any], current_user: str) -> None:
+    if video.get("status") != "processing" or video.get("request_mode") not in {"direct", "template"}:
+        return
+
+    external_video_id = _stored_video_job_id(video)
+    if not external_video_id:
+        return
+
+    try:
+        refreshed = await asyncio.to_thread(
+            service.get_video_status_result,
+            external_video_id,
+            request_mode=str(video.get("request_mode") or "direct"),
+        )
+    except RuntimeError as exc:
+        detail = str(exc)
+        await _mark_video_failed(current_user, external_video_id, detail)
+        video["status"] = "failed"
+        video["job_data"] = {"detail": detail}
+        return
+
+    await _persist_video_job_result(current_user, refreshed)
+    video["status"] = _normalize_video_status(refreshed.status)
+    video["title"] = refreshed.title or video.get("title")
+    video["video_url"] = refreshed.video_url or video.get("video_url")
+    video["job_data"] = _to_mongo_safe(refreshed)
+
+
 def _form_text(value: object) -> str | None:
     if value is None:
         return None
@@ -763,13 +791,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 @app.post('/jobs/avatar', response_model=AvatarJobAck)
 async def create_avatar_job(request: DirectVideoRequest, current_user: str = Depends(get_current_user)):
     queue_url = SQS_QUEUE_URL
-    if not queue_url:
-        print("DEBUG: SQS queue is not configured")
-        raise HTTPException(
-            status_code=503,
-            detail='Avatar async queue is not configured. Set SQS_QUEUE_URL and retry.',
-        )
-
+    
     job_id: str | None = None
     try:
         now = datetime.utcnow()
@@ -1059,31 +1081,16 @@ async def get_my_videos(current_user: str = Depends(get_current_user)):
     cursor = videos_collection.find({"user_id": current_user}).sort("created_at", -1)
     videos = await cursor.to_list(length=100)
 
-    for video in videos:
-        if video.get("status") != "processing" or video.get("request_mode") not in {"direct", "template"}:
-            continue
-
-        external_video_id = _stored_video_job_id(video)
-        if not external_video_id:
-            continue
-
-        try:
-            refreshed = service.get_video_status_result(
-                external_video_id,
-                request_mode=str(video.get("request_mode") or "direct"),
-            )
-        except RuntimeError as exc:
-            detail = str(exc)
-            await _mark_video_failed(current_user, external_video_id, detail)
-            video["status"] = "failed"
-            video["job_data"] = {"detail": detail}
-            continue
-
-        await _persist_video_job_result(current_user, refreshed)
-        video["status"] = _normalize_video_status(refreshed.status)
-        video["title"] = refreshed.title or video.get("title")
-        video["video_url"] = refreshed.video_url or video.get("video_url")
-        video["job_data"] = _to_mongo_safe(refreshed)
+    refresh_tasks = [
+        _refresh_processing_video(video, current_user)
+        for video in videos
+        if video.get("status") == "processing" and video.get("request_mode") in {"direct", "template"}
+    ]
+    if refresh_tasks:
+        refresh_results = await asyncio.gather(*refresh_tasks, return_exceptions=True)
+        for refresh_result in refresh_results:
+            if isinstance(refresh_result, Exception):
+                raise refresh_result
 
     for video in videos:
         video["_id"] = str(video["_id"])

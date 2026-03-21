@@ -53,7 +53,7 @@ def _extract_receive_count(message: dict[str, Any]) -> int:
 
 
 def _mongo_id(value: str) -> ObjectId | str:
-    cleaned = str(value).strip()
+    cleaned = str(value)
     if ObjectId.is_valid(cleaned):
         return ObjectId(cleaned)
     return cleaned
@@ -63,7 +63,7 @@ def _parse_job_id(message: dict[str, Any]) -> str | None:
     body = message.get('Body')
     if isinstance(body, dict):
         job_id = body.get('_id')
-        return str(job_id).strip() if job_id else None
+        return str(job_id) if job_id else None
     if isinstance(body, str):
         try:
             payload = json.loads(body)
@@ -72,7 +72,7 @@ def _parse_job_id(message: dict[str, Any]) -> str | None:
         if isinstance(payload, dict):
             job_id = payload.get('_id')
             if job_id:
-                return str(job_id).strip() or None
+                return str(job_id) or None
     return None
 
 
@@ -81,13 +81,12 @@ class AvatarJobWorker:
         self,
         *,
         sqs_service: SQSService | None = None,
-        queue_url: str | None = None,
         video_service: VideoService | None = None,
         s3_service: S3Service | None = None,
         max_receive_count: int | None = None,
     ) -> None:
         self.sqs_service = sqs_service or SQSService()
-        self.queue_url = queue_url or SQS_QUEUE_URL or ''
+        self.queue_url = SQS_QUEUE_URL
         self.video_service = video_service or VideoService()
         self.s3_service = s3_service or S3Service()
         self.videos_collection = videos_collection
@@ -107,7 +106,16 @@ class AvatarJobWorker:
         while True:
             logger.info('Avatar job worker started. Polling queue...')
             try:
-                messages = await asyncio.to_thread(self.sqs_service.receive_jobs, self.queue_url, 5)
+                response = await asyncio.to_thread(
+                    self.sqs_service.client.receive_message,
+                    QueueUrl=self.queue_url,
+                    MaxNumberOfMessages=5,
+                    WaitTimeSeconds=max(1, settings.sqs_wait_time_seconds),
+                    VisibilityTimeout=max(1, settings.sqs_visibility_timeout_seconds),
+                    AttributeNames=['ApproximateReceiveCount'],
+                )
+                raw_messages = response.get('Messages')
+                messages = [message for message in raw_messages if isinstance(message, dict)] if isinstance(raw_messages, list) else []
             except Exception:
                 logger.exception('Failed while polling SQS. Retrying shortly.')
                 await asyncio.sleep(2)
@@ -116,14 +124,16 @@ class AvatarJobWorker:
             if not messages:
                 continue
 
-            for message in messages:
-                try:
-                    await self.process_message(message)
-                except Exception:
-                    logger.exception('Unhandled exception while processing SQS message.')
+            await asyncio.gather(*(self._process_message_safe(message) for message in messages))
+
+    async def _process_message_safe(self, message: dict[str, Any]) -> None:
+        try:
+            await self.process_message(message)
+        except Exception:
+            logger.exception('Unhandled exception while processing SQS message.')
 
     async def process_message(self, message: dict[str, Any]) -> None:
-        receipt_handle = str(message.get('ReceiptHandle') or '').strip()
+        receipt_handle = str(message.get('ReceiptHandle') or '')
         job_id = _parse_job_id(message)
         if not job_id:
             logger.warning('Discarding SQS message without valid record id: %s', message.get('MessageId'))
@@ -138,7 +148,7 @@ class AvatarJobWorker:
                 await asyncio.to_thread(self.sqs_service.delete_message, receipt_handle, self.queue_url)
             return
 
-        current_status = str(job.get('status') or 'queued').strip().lower()
+        current_status = str(job.get('status') or 'queued').lower()
         if current_status in {'processing', 'completed', 'failed'}:
             logger.info('Video %s already in terminal/in-flight state (%s); deleting duplicate message.', job_id, current_status)
             if receipt_handle:
@@ -163,7 +173,7 @@ class AvatarJobWorker:
             return
 
         claimed_job = await self._find_job(job_id)
-        user_id = str(claimed_job.get('user_id') or '').strip() if isinstance(claimed_job, dict) else ''
+        user_id = str(claimed_job.get('user_id') or '') if isinstance(claimed_job, dict) else ''
         request_payload = claimed_job.get('request_payload') if isinstance(claimed_job, dict) else {}
         if not isinstance(request_payload, dict):
             request_payload = {}
@@ -220,7 +230,7 @@ class AvatarJobWorker:
         except Exception as exc:
             receive_count = _extract_receive_count(message)
             failed_at = datetime.utcnow()
-            error_message = str(exc).strip() or 'Unknown avatar generation error.'
+            error_message = str(exc) or 'Unknown avatar generation error.'
             logger.exception('Video %s failed on receive count %s.', job_id, receive_count)
 
             if receive_count >= self.max_receive_count:

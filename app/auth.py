@@ -48,7 +48,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     # New tokens use user_id in sub. Fallback to legacy email tokens.
     if "@" in subject:
         user = await users_collection.find_one({"email": subject.lower()})
-        if not user or not user.get("_id"):
+        if not user:
             raise credentials_exception
         return str(user["_id"])
     return subject

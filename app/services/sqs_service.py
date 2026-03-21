@@ -42,19 +42,6 @@ class SQSService:
             MessageBody=json.dumps(payload),
         )
 
-    def receive_jobs(self, queue_url: str, max_messages: int = 1) -> list[dict[str, Any]]:
-        response = self.client.receive_message(
-            QueueUrl=queue_url,
-            MaxNumberOfMessages=max(1, min(max_messages, 10)),
-            WaitTimeSeconds=max(1, settings.sqs_wait_time_seconds),
-            VisibilityTimeout=max(1, settings.sqs_visibility_timeout_seconds),
-            AttributeNames=['ApproximateReceiveCount'],
-        )
-        messages = response.get('Messages')
-        if not isinstance(messages, list):
-            return []
-        return [message for message in messages if isinstance(message, dict)]
-
     def delete_message(self, receipt_handle: str, queue_url: str) -> None:
         self.client.delete_message(
             QueueUrl=queue_url,
