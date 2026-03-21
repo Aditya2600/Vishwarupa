@@ -13,11 +13,6 @@ class Settings(BaseSettings):
     heygen_template_id: str | None = None
     heygen_template_payload_path: str = 'sample_data/template_payload.json'
     
-    # Custom Avatars Configuration
-    avatar_id_mahesh: str = "2311cba09f374de6b971ea5fa23ff993"
-    avatar_id_rahul: str = "932371fea0eb462ea9beccff656d4823"
-    avatar_id_priya: str = "c56120f1c7564d20b1f87416a6b8d0d1"
-    avatar_id_adv_aditi_mehra: str = "b8d00c953a114b299792b6197a80cc70"
     default_video_width: int = 1280
     default_video_height: int = 720
     default_background_color: str = '#F4F4F4'
@@ -43,6 +38,7 @@ class Settings(BaseSettings):
     sqs_wait_time_seconds: int = 20
     sqs_visibility_timeout_seconds: int = 120
     sqs_max_receive_count: int = 3
+    sqs_queue_url: str | None = None
 
     @field_validator('heygen_avatar_id', 'heygen_voice_id', 'heygen_template_id', mode='before')
     @classmethod

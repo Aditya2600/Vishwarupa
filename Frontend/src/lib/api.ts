@@ -202,10 +202,8 @@ const INDIAN_AVATAR_DISPLAY_NAMES = {
     "Diya",
     "Ishita",
     "Kavya",
-    "Meera",
     "Naina",
     "Priya",
-    "Riya",
     "Saanvi",
     "Shruti",
   ],
@@ -214,7 +212,6 @@ const INDIAN_AVATAR_DISPLAY_NAMES = {
     "Aditya",
     "Arjun",
     "Kabir",
-    "Karan",
     "Madhav",
     "Rohan",
     "Samar",
@@ -606,6 +603,15 @@ function normalizeNetworkError(error: unknown): Error {
   }
 
   return new Error(SERVER_UNREACHABLE_MESSAGE);
+}
+
+export async function getCustomAvatars(): Promise<any[]> {
+  try {
+    return await requestJson<any[]>("/custom-avatars");
+  } catch (error) {
+    console.error("Failed to fetch custom avatars:", error);
+    return [];
+  }
 }
 
 export async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {

@@ -41,6 +41,8 @@ import {
   stylizeVideo,
   type VideoJobResult,
   type VoiceOption,
+  requestJson,
+  getCustomAvatars,
 } from "@/lib/api";
 import { STEPS, useWizardStore } from "@/store/wizardStore";
 
@@ -182,6 +184,12 @@ const Index = () => {
     enabled: state.videoType === "avatar",
   });
 
+  const customAvatarsQuery = useQuery({
+    queryKey: ["custom-avatars"],
+    queryFn: () => requestJson<any[]>("/custom-avatars"),
+    enabled: state.videoType === "avatar",
+  });
+
   const voicesQuery = useQuery({
     queryKey: ["voices"],
     queryFn: fetchVoices,
@@ -189,6 +197,7 @@ const Index = () => {
   });
 
   const avatars = avatarsQuery.data ?? [];
+  const customAvatars = customAvatarsQuery.data ?? [];
   const voices = voicesQuery.data ?? [];
   const selectedAvatar = findAvatarById(avatars, state.avatarId);
   const selectedVoice = findVoiceById(voices, state.voiceId);
@@ -871,6 +880,7 @@ const Index = () => {
         return (
           <StepAvatar
             avatars={avatars}
+            customAvatars={customAvatars}
             voices={voices}
             language={state.language}
             isLoading={avatarsQuery.isLoading}

@@ -11,6 +11,7 @@ import { compareVoicesForLanguage, isVoiceCompatibleWithLanguage, type AvatarOpt
 
 interface StepAvatarProps {
   avatars: AvatarOption[];
+  customAvatars: any[];
   voices: VoiceOption[];
   language: string;
   isLoading: boolean;
@@ -29,6 +30,7 @@ interface StepAvatarProps {
 
 export function StepAvatar({
   avatars,
+  customAvatars,
   voices,
   language,
   isLoading,
@@ -59,48 +61,27 @@ export function StepAvatar({
 
 
   const isCustomOrRequested = (avatar: AvatarOption) => {
-    return avatar.id === "c56120f1c7564d20b1f87416a6b8d0d1" ||
-           avatar.id === "932371fea0eb462ea9beccff656d4823" ||
-           avatar.id === "2311cba09f374de6b971ea5fa23ff993" ||
+    return customAvatars.some(ca => ca.avatar_id === avatar.id) ||
            avatar.category === "My Avatars" ||
            avatar.category === "Lead Avatar" ||
            avatar.category === "Talking Photo";
   };
   const uniqueAvatarNames = new Set<string>();
 
-  // Ensure missing Indian male and female avatars are explicitly injected if the API falls short, guaranteeing 5 options
-  const fallbackAvatars: AvatarOption[] = [
-    {
-      id: "Adrian_public_3_20240312",
-      name: "Aditya K",
-      gender: "male",
-      category: "Professional Male",
-      previewImageUrl: "https://files2.heygen.ai/avatar/v3/696e5afe51ee4794aa232753fa703fea_14947/preview_talk_2.webp",
-      isPremium: false,
-      raw: {}
-    }
-  ];
-
-  const fullAvatars = [...avatars, ...fallbackAvatars];
-
-  const filteredAvatars = fullAvatars.map(avatar => {
-    if ((avatar.name || "").toLowerCase().includes("sanjay")) {
-      return { ...avatar, name: "Aditya K" };
-    }
-    return avatar;
-  }).filter((avatar) => {
+  const filteredAvatars = avatars.filter((avatar) => {
     const targetGender = filter.toLowerCase();
 
-    // Explicit overrides for known avatars that might be missing gender metadata
-    if (avatar.id === "c56120f1c7564d20b1f87416a6b8d0d1") return targetGender === "female";
-    if (avatar.id === "932371fea0eb462ea9beccff656d4823") return targetGender === "male";
-    if (avatar.id === "2311cba09f374de6b971ea5fa23ff993") return targetGender === "male";
+    // Dynamically check for gender overrides from the custom avatars in DB
+    const dbAvatar = customAvatars.find(ca => ca.avatar_id === avatar.id);
+    if (dbAvatar && dbAvatar.gender) {
+      return dbAvatar.gender.toLowerCase() === targetGender;
+    }
 
     // Strict gender match based on selected filter
     if (!avatar.gender || avatar.gender.toLowerCase() !== targetGender) return false;
 
     const n = (avatar.name || "").toLowerCase().trim();
-    if (uniqueAvatarNames.has(n)) return false;
+    if (uniqueAvatarNames.has(n) || n === "riya" || n === "meera" || n === "aditya k" || n === "karan" || n === "priya" || n === "rohan") return false;
     uniqueAvatarNames.add(n);
 
     return true;
@@ -109,20 +90,19 @@ export function StepAvatar({
       const name = (avatar.name || "").toLowerCase();
       const isMale = avatar.gender && avatar.gender.toLowerCase() === "male";
       
+      // Fetch custom rank or priority from DB if we add that field later.
+      // For now, still use smart name-based priority for the handful we care about.
       if (isMale) {
         if (name.includes("aditya")) return 1;
         if (name.includes("arjun")) return 2;
         if (name.includes("mahesh")) return 3;
         if (name.includes("rahul")) return 4;
-        if (name.includes("rohan")) return 5;
         return 99;
       } else {
         if (name.includes("kavya")) return 1;
         if (name.includes("adv. aditi")) return 2;
-        if (name.includes("priya")) return 3;
-        if (name.includes("shruti")) return 4;
-        if (name.includes("sneha")) return 5;
-        if (name.includes("riya")) return 6;
+        if (name.includes("shruti")) return 3;
+        if (name.includes("sneha")) return 4;
         return 99;
       }
     };
