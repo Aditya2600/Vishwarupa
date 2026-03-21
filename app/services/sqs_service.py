@@ -6,7 +6,6 @@ from typing import Any
 import boto3
 
 from app.config import settings
-from app.constants import SQS_QUEUE_URL
 import logging
 
 logger = logging.getLogger("app")
@@ -43,27 +42,8 @@ class SQSService:
             MessageBody=json.dumps(payload),
         )
 
-    def delete_message(self, receipt_handle: str, queue_url: str | None = None) -> None:
-        url = queue_url or settings.sqs_queue_url or SQS_QUEUE_URL
-            
+    def delete_message(self, receipt_handle: str, queue_url: str) -> None:
         self.client.delete_message(
-            QueueUrl=url,
+            QueueUrl=queue_url,
             ReceiptHandle=receipt_handle,
         )
-
-    def is_configured(self) -> bool:
-        """Check if AWS credentials and region are provided."""
-        return bool(settings.aws_region)
-
-    def receive_messages(self, queue_url: str | None = None, max_messages: int = 1) -> list[dict[str, Any]]:
-        """Receive a batch of messages from the SQS queue."""
-        url = queue_url or settings.sqs_queue_url or SQS_QUEUE_URL
-
-        response = self.client.receive_message(
-            QueueUrl=url,
-            MaxNumberOfMessages=max_messages,
-            WaitTimeSeconds=settings.sqs_wait_time_seconds,
-            VisibilityTimeout=settings.sqs_visibility_timeout_seconds,
-            AttributeNames=['ApproximateReceiveCount']
-        )
-        return response.get('Messages', [])
