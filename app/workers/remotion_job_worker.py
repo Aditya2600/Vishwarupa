@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from app.config import settings
@@ -18,7 +19,6 @@ logger = logging.getLogger("app")
 
 def _to_mongo_safe(obj: Any) -> Any:
     """Recursively convert Pydantic models and Paths to JSON-safe types."""
-    from pathlib import Path
     if hasattr(obj, "model_dump"):
         obj = obj.model_dump(mode="python")
     if isinstance(obj, dict):
