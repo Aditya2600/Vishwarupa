@@ -22,7 +22,7 @@ VOICE_MAP = {
     "Hindi-Male": "hi-IN-MadhurNeural",
     "Hindi-Female": "hi-IN-SwaraNeural",
     "Marathi-Male": "mr-IN-ManoharNeural",
-    "Marathi-Female": "mr-IN-LalitaNeural",
+    "Marathi-Female": "mr-IN-AarohiNeural",
     "Tamil-Male": "ta-IN-ValluvarNeural",
     "Tamil-Female": "ta-IN-PallaviNeural",
     "Telugu-Male": "te-IN-MohanNeural",
@@ -30,13 +30,13 @@ VOICE_MAP = {
     "Kannada-Male": "kn-IN-GaganNeural",
     "Kannada-Female": "kn-IN-SapnaNeural",
     "Bengali-Male": "bn-IN-BashkarNeural",
-    "Bengali-Female": "bn-IN-TanishaNeural",
+    "Bengali-Female": "bn-IN-TanishaaNeural",
     "Gujarati-Male": "gu-IN-NiranjanNeural",
     "Gujarati-Female": "gu-IN-DhwaniNeural",
     "Malayalam-Male": "ml-IN-MidhunNeural",
     "Malayalam-Female": "ml-IN-SobhanaNeural",
-    "Punjabi-Male": "pa-IN-KaranNeural",
-    "Punjabi-Female": "pa-IN-RaaviNeural",
+    "Punjabi-Male": "pa-IN-OjasNeural",
+    "Punjabi-Female": "pa-IN-VaaniNeural",
 }
 
 DEFAULT_SCRIPT_EN = "Hello {{ customer_name }}. I am calling from {{ client_name }} regarding your {{ product_type }} account. The total outstanding balance is {{ tos }}. Please contact us at {{ contact_details }} to discuss repayment options."
@@ -363,6 +363,7 @@ class RemotionService:
         return subs
 
     async def render_video(self, request: RemotionVideoRequest, job_id: str, scene_payload: dict[str, Any], render_payload: dict[str, Any]) -> str:
+        logger.info("Render video started")
         leads_path = self.remotion_path / "leads.json"
         leads = [render_payload] # Keep it simple for now
         leads_path.write_text(json.dumps(leads, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -379,7 +380,7 @@ class RemotionService:
 
         props_path = self.remotion_path / f"props_{job_id}.json"
         props_path.write_text(json.dumps({"leadId": job_id}, ensure_ascii=False), encoding='utf-8')
-
+        logger.info("Render video started command")
         # Ensure we specify the entry point 'src/index.jsx' and the composition ID 'main'
         command = [
             npx_bin, "remotion", "render", "src/index.jsx", "main",

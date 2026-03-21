@@ -104,7 +104,6 @@ class AvatarJobWorker:
 
     async def run_forever(self) -> None:
         while True:
-            logger.info('Avatar job worker started. Polling queue...')
             try:
                 response = await asyncio.to_thread(
                     self.sqs_service.client.receive_message,

@@ -11,12 +11,13 @@ WORKDIR /app
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        chromium \
-        ffmpeg \
-        fonts-liberation \
-        fonts-noto-core \
-        nodejs \
-        npm \
+    chromium \
+    ffmpeg \
+    fonts-liberation \
+    fonts-noto-core \
+    nodejs \
+    npm \
+    vim \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./
