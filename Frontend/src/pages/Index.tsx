@@ -140,12 +140,11 @@ function buildAvatarDefaultTranscript(
 function mapAvatarJobToVideoResult(job: {
   _id: string;
   status: string;
-  provider_video_id?: string | null;
   video_url?: string | null;
   thumbnail_url?: string | null;
   title?: string | null;
 }): VideoJobResult {
-  const videoId = (job.provider_video_id ?? job._id ?? "").trim();
+  const videoId = (job._id ?? "").trim();
   return {
     request_mode: "direct",
     video_id: videoId,
@@ -153,7 +152,7 @@ function mapAvatarJobToVideoResult(job: {
     video_url: job.video_url ?? null,
     thumbnail_url: job.thumbnail_url ?? null,
     title: job.title ?? null,
-    raw_response: { _id: job._id, provider_video_id: job.provider_video_id ?? null, status: job.status },
+    raw_response: { _id: job._id, status: job.status },
     saved_to: null,
   };
 }

@@ -56,7 +56,6 @@ export interface AvatarJobAck {
 export interface AvatarJobStatus {
   _id: string;
   status: "queued" | "processing" | "completed" | "failed";
-  provider_video_id?: string | null;
   video_url?: string | null;
   thumbnail_url?: string | null;
   title?: string | null;

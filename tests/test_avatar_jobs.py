@@ -11,6 +11,7 @@ from fastapi import HTTPException
 os.environ.setdefault('HEYGEN_API_KEY', 'test-key')
 
 import app.main as main_module
+import app.workers.avatar_job_worker as worker_module
 from app.models import DirectVideoRequest, VideoJobResult
 from app.services.sqs_service import SQSService
 from app.workers.avatar_job_worker import AvatarJobWorker
@@ -193,7 +194,6 @@ def test_get_jobs_status_enforces_ownership(monkeypatch: pytest.MonkeyPatch) -> 
     job_id = 'record_001'
     videos_collection.docs[job_id] = {
         '_id': job_id,
-        'provider_video_id': 'video_001',
         'request_mode': 'avatar_async',
         'user_id': 'user_owner_001',
         'status': 'completed',
@@ -214,7 +214,6 @@ def test_get_jobs_status_enforces_ownership(monkeypatch: pytest.MonkeyPatch) -> 
     status_ok = asyncio.run(main_module.get_avatar_job_status(job_id, current_user='user_owner_001'))
     assert status_ok.status == 'completed'
     assert status_ok.id == 'record_001'
-    assert status_ok.provider_video_id == 'provider_video_001'
     assert status_ok.video_url == 'https://example.com/video_001.mp4'
 
     with pytest.raises(HTTPException) as exc_info:
@@ -222,9 +221,10 @@ def test_get_jobs_status_enforces_ownership(monkeypatch: pytest.MonkeyPatch) -> 
     assert exc_info.value.status_code == 404
 
 
-def test_worker_success_moves_job_to_completed() -> None:
+def test_worker_success_moves_job_to_completed(monkeypatch: pytest.MonkeyPatch) -> None:
     shared_collection = InMemoryCollection()
     sqs_service = FakeSQSForWorker()
+    monkeypatch.setattr(worker_module, 'videos_collection', shared_collection)
     shared_collection.docs['record_success'] = {
         '_id': 'record_success',
         'request_mode': 'avatar_async',
@@ -241,8 +241,6 @@ def test_worker_success_moves_job_to_completed() -> None:
         sqs_service=sqs_service,
         video_service=FakeVideoServiceSuccess(),
         s3_service=FakeS3Service(),
-        jobs_collection=shared_collection,
-        videos_collection_ref=shared_collection,
         max_receive_count=3,
     )
 
@@ -255,15 +253,15 @@ def test_worker_success_moves_job_to_completed() -> None:
     job = shared_collection.docs['record_success']
     assert job['status'] == 'completed'
     assert job['attempts'] == 1
-    assert job['provider_video_id'] == 'video_123'
     assert job['result_payload']['video_id'] == 'video_123'
     assert sqs_service.deleted == ['rh-success']
     assert 'record_success' in shared_collection.docs
 
 
-def test_worker_retry_path_keeps_message_for_retry() -> None:
+def test_worker_retry_path_keeps_message_for_retry(monkeypatch: pytest.MonkeyPatch) -> None:
     jobs_collection = InMemoryCollection()
     sqs_service = FakeSQSForWorker()
+    monkeypatch.setattr(worker_module, 'videos_collection', jobs_collection)
     jobs_collection.docs['record_retry'] = {
         '_id': 'record_retry',
         'request_mode': 'avatar_async',
@@ -280,8 +278,6 @@ def test_worker_retry_path_keeps_message_for_retry() -> None:
         sqs_service=sqs_service,
         video_service=FakeVideoServiceFail(),
         s3_service=FakeS3Service(),
-        jobs_collection=jobs_collection,
-        videos_collection_ref=jobs_collection,
         max_receive_count=3,
     )
 
@@ -298,9 +294,10 @@ def test_worker_retry_path_keeps_message_for_retry() -> None:
     assert sqs_service.deleted == []
 
 
-def test_worker_marks_failed_after_max_receive_count() -> None:
+def test_worker_marks_failed_after_max_receive_count(monkeypatch: pytest.MonkeyPatch) -> None:
     jobs_collection = InMemoryCollection()
     sqs_service = FakeSQSForWorker()
+    monkeypatch.setattr(worker_module, 'videos_collection', jobs_collection)
     jobs_collection.docs['record_fail'] = {
         '_id': 'record_fail',
         'request_mode': 'avatar_async',
@@ -317,8 +314,6 @@ def test_worker_marks_failed_after_max_receive_count() -> None:
         sqs_service=sqs_service,
         video_service=FakeVideoServiceFail(),
         s3_service=FakeS3Service(),
-        jobs_collection=jobs_collection,
-        videos_collection_ref=jobs_collection,
         max_receive_count=3,
     )
 
@@ -335,9 +330,10 @@ def test_worker_marks_failed_after_max_receive_count() -> None:
     assert sqs_service.deleted == ['rh-fail']
 
 
-def test_worker_idempotency_deletes_duplicate_messages() -> None:
+def test_worker_idempotency_deletes_duplicate_messages(monkeypatch: pytest.MonkeyPatch) -> None:
     jobs_collection = InMemoryCollection()
     sqs_service = FakeSQSForWorker()
+    monkeypatch.setattr(worker_module, 'videos_collection', jobs_collection)
     jobs_collection.docs['record_done'] = {
         '_id': 'record_done',
         'request_mode': 'avatar_async',
@@ -355,8 +351,6 @@ def test_worker_idempotency_deletes_duplicate_messages() -> None:
         sqs_service=sqs_service,
         video_service=FakeVideoServiceSuccess(),
         s3_service=FakeS3Service(),
-        jobs_collection=jobs_collection,
-        videos_collection_ref=jobs_collection,
         max_receive_count=3,
     )
 

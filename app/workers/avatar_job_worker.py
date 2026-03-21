@@ -84,26 +84,23 @@ class AvatarJobWorker:
         queue_url: str | None = None,
         video_service: VideoService | None = None,
         s3_service: S3Service | None = None,
-        jobs_collection: Any = videos_collection,
-        videos_collection_ref: Any | None = None,
         max_receive_count: int | None = None,
     ) -> None:
         self.sqs_service = sqs_service or SQSService()
         self.queue_url = queue_url or SQS_QUEUE_URL or ''
         self.video_service = video_service or VideoService()
         self.s3_service = s3_service or S3Service()
-        self.jobs_collection = jobs_collection
-        self.videos_collection_ref = videos_collection_ref or jobs_collection
+        self.videos_collection = videos_collection
         self.max_receive_count = max(1, int(max_receive_count or settings.sqs_max_receive_count))
 
     async def _find_job(self, job_id: str) -> dict[str, Any] | None:
-        return await self.jobs_collection.find_one({'_id': _mongo_id(job_id)})
+        return await self.videos_collection.find_one({'_id': _mongo_id(job_id)})
 
     async def _update_job(self, job_id: str, update: dict[str, Any], *, require_queued: bool = False) -> int:
         query: dict[str, Any] = {'_id': _mongo_id(job_id)}
         if require_queued:
             query['status'] = 'queued'
-        result = await self.jobs_collection.update_one(query, update)
+        result = await self.videos_collection.update_one(query, update)
         return int(getattr(result, 'modified_count', 0))
 
     async def run_forever(self) -> None:
@@ -177,7 +174,7 @@ class AvatarJobWorker:
         if not isinstance(request_payload, dict):
             request_payload = {}
         if user_id:
-            await self.videos_collection_ref.update_one(
+            await self.videos_collection.update_one(
                 {'_id': _mongo_id(job_id), 'user_id': user_id},
                 {'$set': {
                     'status': 'processing',
@@ -237,7 +234,7 @@ class AvatarJobWorker:
                     }},
                 )
                 if user_id:
-                    await self.videos_collection_ref.update_one(
+                    await self.videos_collection.update_one(
                         {'_id': _mongo_id(job_id), 'user_id': user_id},
                         {'$set': {
                             'status': 'failed',
@@ -262,7 +259,7 @@ class AvatarJobWorker:
                 }},
             )
             if user_id:
-                await self.videos_collection_ref.update_one(
+                await self.videos_collection.update_one(
                     {'_id': _mongo_id(job_id), 'user_id': user_id},
                     {'$set': {
                         'status': 'queued',
@@ -285,7 +282,7 @@ class AvatarJobWorker:
             request_mode='avatar_async',
             job_data=result_payload,
         )
-        await self.videos_collection_ref.update_one(
+        await self.videos_collection.update_one(
             {'_id': _mongo_id(job_id), 'user_id': user_id},
             {'$set': _to_mongo_safe(video_record)},
             upsert=True,

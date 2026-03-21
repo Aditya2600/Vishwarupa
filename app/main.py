@@ -160,10 +160,7 @@ async def _persist_video_job_result(current_user: str, result: VideoJobResult) -
     await videos_collection.update_one(
         {
             "user_id": current_user,
-            "$or": [
-                {"provider_video_id": result.video_id},
-                {"video_id": result.video_id},
-            ],
+            "job_data.video_id": result.video_id,
         },
         {"$set": update_fields},
     )
@@ -173,10 +170,7 @@ async def _mark_video_failed(current_user: str, video_id: str, detail: str) -> N
     await videos_collection.update_one(
         {
             "user_id": current_user,
-            "$or": [
-                {"provider_video_id": video_id},
-                {"video_id": video_id},
-            ],
+            "job_data.video_id": video_id,
         },
         {"$set": {
             "status": "failed",
@@ -208,11 +202,9 @@ def _build_avatar_job_status_response(job: dict) -> AvatarJobStatusResponse:
     cleaned_error = raw_error.strip() if isinstance(raw_error, str) else ''
     error = cleaned_error or None
     job_id = str(job.get('_id') or '')
-    provider_video_id = response_payload.get('video_id') or job.get('provider_video_id')
     return AvatarJobStatusResponse(
         _id=job_id,
         status=status_value,
-        provider_video_id=str(provider_video_id) if provider_video_id else None,
         video_url=str(response_payload.get('video_url') or job.get('video_url')) if (response_payload.get('video_url') or job.get('video_url')) else None,
         thumbnail_url=str(response_payload.get('thumbnail_url')) if response_payload.get('thumbnail_url') else None,
         title=str(response_payload.get('title') or job.get('title')) if (response_payload.get('title') or job.get('title')) else None,
@@ -225,6 +217,16 @@ def _mongo_id(value: str) -> ObjectId | str:
     if ObjectId.is_valid(cleaned):
         return ObjectId(cleaned)
     return cleaned
+
+
+def _stored_video_job_id(video: dict[str, Any]) -> str | None:
+    job_data = video.get('job_data') if isinstance(video.get('job_data'), dict) else {}
+    result_payload = video.get('result_payload') if isinstance(video.get('result_payload'), dict) else {}
+
+    for candidate in (job_data.get('video_id'), result_payload.get('video_id')):
+        if candidate:
+            return str(candidate)
+    return None
 
 
 async def _find_avatar_job(job_id: str, current_user: str) -> dict[str, Any] | None:
@@ -846,7 +848,6 @@ async def generate_direct(request: DirectVideoRequest, wait: bool = True, curren
         user_id=current_user,
         status="completed" if wait else "processing",
         title=f"{request.title_prefix} - {request.customer_name}",
-        provider_video_id=result.get("video_id") if isinstance(result, dict) else result.video_id,
         request_mode="direct",
         job_data=_to_mongo_safe(result)
     )
@@ -880,9 +881,20 @@ async def stylize_video(
     current_user: str = Depends(get_current_user)
 ):
     print(f"DEBUG: Stylize request for video {video_id} by {current_user}")
+    stored_video = await videos_collection.find_one(
+        {
+            "user_id": current_user,
+            "$or": [
+                {"_id": _mongo_id(video_id)},
+                {"job_data.video_id": video_id},
+                {"result_payload.video_id": video_id},
+            ],
+        }
+    )
+    resolved_video_id = _stored_video_job_id(stored_video) if stored_video else None
     try:
         artifact = styling_service.style_video(
-            video_id,
+            resolved_video_id or video_id,
             StyleRequest(
                 include_captions=include_captions,
                 subtitle_color=subtitle_color,
@@ -922,8 +934,9 @@ async def stylize_video(
         {
             "user_id": current_user,
             "$or": [
-                {"provider_video_id": video_id},
-                {"video_id": video_id},
+                {"_id": _mongo_id(video_id)},
+                {"job_data.video_id": resolved_video_id or video_id},
+                {"result_payload.video_id": resolved_video_id or video_id},
             ],
         },
         {"$set": {
@@ -951,7 +964,6 @@ async def generate_template(request: TemplateVideoRequest, wait: bool = True, cu
         user_id=current_user,
         status="completed" if wait else "processing",
         title=f"Template Video - {request.customer_name}",
-        provider_video_id=result.get("video_id") if isinstance(result, dict) else result.video_id,
         request_mode="template",
         job_data=_to_mongo_safe(result)
     )
@@ -1034,7 +1046,6 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         status="completed",
         title=job_result.title,
         video_url=job_result.video_url,
-        provider_video_id=job_result.video_id,
         request_mode="remotion",
         job_data=embeddable_job_data
     )
@@ -1052,18 +1063,18 @@ async def get_my_videos(current_user: str = Depends(get_current_user)):
         if video.get("status") != "processing" or video.get("request_mode") not in {"direct", "template"}:
             continue
 
-        provider_video_id = str(video.get("provider_video_id") or video.get("video_id") or '')
-        if not provider_video_id:
+        external_video_id = _stored_video_job_id(video)
+        if not external_video_id:
             continue
 
         try:
             refreshed = service.get_video_status_result(
-                provider_video_id,
+                external_video_id,
                 request_mode=str(video.get("request_mode") or "direct"),
             )
         except RuntimeError as exc:
             detail = str(exc)
-            await _mark_video_failed(current_user, provider_video_id, detail)
+            await _mark_video_failed(current_user, external_video_id, detail)
             video["status"] = "failed"
             video["job_data"] = {"detail": detail}
             continue
