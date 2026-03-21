@@ -43,7 +43,7 @@ export function HeaderBar({ onCreateVideo, primaryLabel = "Create Video" }: Head
       >
         {/* Product wordmark */}
         <span className="font-display text-[1.15rem] font-bold tracking-tight bg-gradient-to-r from-[#5F1284] to-[#8D4DB8] bg-clip-text text-transparent">
-          Wishvarupa
+          Vishwarupa
         </span>
         {/* "by" label */}
         <span className="hidden sm:inline text-[11px] font-medium text-muted-foreground/50 tracking-wide">by</span>
