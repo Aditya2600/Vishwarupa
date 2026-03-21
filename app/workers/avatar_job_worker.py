@@ -180,11 +180,10 @@ class AvatarJobWorker:
             request_payload = {}
         if user_id:
             await self.videos_collection.update_one(
-                {'_id': _mongo_id(video_id), 'user_id': user_id},
+                {'_id': _mongo_id(video_id)},
                 {'$set': {
                     'status': 'processing',
                     'job_data': {
-                        '_id': video_id,
                         'request_mode': 'avatar',
                         'status': 'processing',
                     },
@@ -240,11 +239,10 @@ class AvatarJobWorker:
                 )
                 if user_id:
                     await self.videos_collection.update_one(
-                        {'_id': _mongo_id(video_id), 'user_id': user_id},
+                        {'_id': _mongo_id(video_id)},
                         {'$set': {
                             'status': 'failed',
                             'job_data': {
-                                '_id': video_id,
                                 'request_mode': 'avatar',
                                 'status': 'failed',
                                 'error': error_message,
@@ -265,11 +263,10 @@ class AvatarJobWorker:
             )
             if user_id:
                 await self.videos_collection.update_one(
-                    {'_id': _mongo_id(video_id), 'user_id': user_id},
+                    {'_id': _mongo_id(video_id)},
                     {'$set': {
                         'status': 'queued',
                         'job_data': {
-                            '_id': video_id,
                             'request_mode': 'avatar',
                             'status': 'queued',
                             'error': error_message,
@@ -288,7 +285,7 @@ class AvatarJobWorker:
             job_data=result_payload,
         )
         await self.videos_collection.update_one(
-            {'_id': _mongo_id(video_id), 'user_id': user_id},
+            {'_id': _mongo_id(video_id)},
             {'$set': _to_mongo_safe(video_record)},
             upsert=True,
         )
