@@ -201,9 +201,9 @@ def _build_avatar_job_status_response(job: dict) -> AvatarJobStatusResponse:
     raw_error = job.get('error') or job_data.get('error')
     cleaned_error = raw_error.strip() if isinstance(raw_error, str) else ''
     error = cleaned_error or None
-    job_id = str(job.get('_id') or '')
+    video_id = str(job.get('_id') or '')
     return AvatarJobStatusResponse(
-        _id=job_id,
+        _id=video_id,
         status=status_value,
         video_url=str(response_payload.get('video_url') or job.get('video_url')) if (response_payload.get('video_url') or job.get('video_url')) else None,
         thumbnail_url=str(response_payload.get('thumbnail_url')) if response_payload.get('thumbnail_url') else None,
@@ -229,9 +229,9 @@ def _stored_video_job_id(video: dict[str, Any]) -> str | None:
     return None
 
 
-async def _find_avatar_job(job_id: str, current_user: str) -> dict[str, Any] | None:
+async def _find_avatar_video(video_id: str, current_user: str) -> dict[str, Any] | None:
     return await videos_collection.find_one(
-        {'_id': _mongo_id(job_id), 'user_id': current_user, 'request_mode': 'avatar_async'}
+        {'_id': _mongo_id(video_id), 'user_id': current_user, 'request_mode': 'avatar_async'}
     )
 
 
@@ -792,7 +792,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 async def create_avatar_job(request: DirectVideoRequest, current_user: str = Depends(get_current_user)):
     queue_url = SQS_QUEUE_URL
     
-    job_id: str | None = None
+    video_id: str | None = None
     try:
         now = datetime.utcnow()
         request_payload = _to_mongo_safe(request.model_dump(mode='python'))
@@ -820,20 +820,20 @@ async def create_avatar_job(request: DirectVideoRequest, current_user: str = Dep
                 'completed_at': None,
             })
         insert_result = await videos_collection.insert_one(video_doc)
-        job_id = str(insert_result.inserted_id)
+        video_id = str(insert_result.inserted_id)
         sqs_service.send_job(
-            payload={'_id': job_id, 'request_mode': 'avatar'},
+            payload={'_id': video_id, 'request_mode': 'avatar'},
             queue_url=queue_url,
         )
-        return AvatarJobAck(_id=job_id, status='queued')
+        return AvatarJobAck(_id=video_id, status='queued')
     except HTTPException:
         raise
     except Exception as exc:
-        if not job_id:
+        if not video_id:
             raise HTTPException(status_code=502, detail=GENERIC_GENERATION_ERROR) from exc
         failed_at = datetime.utcnow()
         await videos_collection.update_one(
-            {'_id': _mongo_id(job_id), 'user_id': current_user},
+            {'_id': _mongo_id(video_id), 'user_id': current_user},
             {'$set': {
                 'status': 'failed',
                 'error': str(exc),
@@ -849,12 +849,12 @@ async def create_avatar_job(request: DirectVideoRequest, current_user: str = Dep
         raise HTTPException(status_code=502, detail=GENERIC_GENERATION_ERROR) from exc
 
 
-@app.get('/jobs/{job_id}', response_model=AvatarJobStatusResponse)
-async def get_avatar_job_status(job_id: str, current_user: str = Depends(get_current_user)):
-    job = await _find_avatar_job(job_id, current_user)
-    if not job:
+@app.get('/jobs/{video_id}', response_model=AvatarJobStatusResponse)
+async def get_avatar_job_status(video_id: str, current_user: str = Depends(get_current_user)):
+    video = await _find_avatar_video(video_id, current_user)
+    if not video:
         raise HTTPException(status_code=404, detail='Job not found.')
-    return _build_avatar_job_status_response(job)
+    return _build_avatar_job_status_response(video)
 
 @app.post('/generate/direct')
 async def generate_direct(request: DirectVideoRequest, wait: bool = True, current_user: str = Depends(get_current_user)):
@@ -1033,7 +1033,7 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    render_video_id = str(result['job_id'])
+    render_video_id = str(result['video_id'])
     relative_video_path = result['video_path'].relative_to(settings.output_dir).as_posix()
     video_url = f"/api/artifacts/{relative_video_path}"
     
@@ -1206,10 +1206,10 @@ async def preview_voice(
             pass
         raise HTTPException(status_code=500, detail=str(exc))
 
-@app.delete('/videos/{job_id}')
-async def delete_video(job_id: str, current_user: str = Depends(get_current_user)):
-    print(f"DEBUG: Delete request for video {job_id} by {current_user}")
-    result = await videos_collection.delete_one({"_id": _mongo_id(job_id), "user_id": current_user})
+@app.delete('/videos/{video_id}')
+async def delete_video(video_id: str, current_user: str = Depends(get_current_user)):
+    print(f"DEBUG: Delete request for video {video_id} by {current_user}")
+    result = await videos_collection.delete_one({"_id": _mongo_id(video_id), "user_id": current_user})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Video not found")
     return {"status": "success", "message": "Video deleted successfully"}

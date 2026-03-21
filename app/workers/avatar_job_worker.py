@@ -59,20 +59,20 @@ def _mongo_id(value: str) -> ObjectId | str:
     return cleaned
 
 
-def _parse_job_id(message: dict[str, Any]) -> str | None:
+def _parse_video_id(message: dict[str, Any]) -> str | None:
     body = message.get('Body')
     if isinstance(body, dict):
-        job_id = body.get('_id')
-        return str(job_id) if job_id else None
+        video_id = body.get('_id')
+        return str(video_id) if video_id else None
     if isinstance(body, str):
         try:
             payload = json.loads(body)
         except json.JSONDecodeError:
             return None
         if isinstance(payload, dict):
-            job_id = payload.get('_id')
-            if job_id:
-                return str(job_id) or None
+            video_id = payload.get('_id')
+            if video_id:
+                return str(video_id) or None
     return None
 
 
@@ -92,13 +92,10 @@ class AvatarJobWorker:
         self.videos_collection = videos_collection
         self.max_receive_count = max(1, int(max_receive_count or settings.sqs_max_receive_count))
 
-    async def _find_job(self, job_id: str) -> dict[str, Any] | None:
-        return await self.videos_collection.find_one({'_id': _mongo_id(job_id)})
+    async def _find_video(self, video_id: str) -> dict[str, Any] | None:
+        return await self.videos_collection.find_one({'_id': _mongo_id(video_id)})
 
-    async def _update_job(self, job_id: str, update: dict[str, Any], *, require_queued: bool = False) -> int:
-        query: dict[str, Any] = {'_id': _mongo_id(job_id)}
-        if require_queued:
-            query['status'] = 'queued'
+    async def _update_video(self, query: dict[str, Any], update: dict[str, Any]) -> int:
         result = await self.videos_collection.update_one(query, update)
         return int(getattr(result, 'modified_count', 0))
 
@@ -133,62 +130,61 @@ class AvatarJobWorker:
 
     async def process_message(self, message: dict[str, Any]) -> None:
         receipt_handle = str(message.get('ReceiptHandle') or '')
-        job_id = _parse_job_id(message)
-        if not job_id:
+        video_id = _parse_video_id(message)
+        if not video_id:
             logger.warning('Discarding SQS message without valid record id: %s', message.get('MessageId'))
             if receipt_handle:
                 await asyncio.to_thread(self.sqs_service.delete_message, receipt_handle, self.queue_url)
             return
 
-        job = await self._find_job(job_id)
-        if not job:
-            logger.warning('Video job %s not found. Removing SQS message.', job_id)
+        video = await self._find_video(video_id)
+        if not video:
+            logger.warning('Video %s not found. Removing SQS message.', video_id)
             if receipt_handle:
                 await asyncio.to_thread(self.sqs_service.delete_message, receipt_handle, self.queue_url)
             return
 
-        current_status = str(job.get('status') or 'queued').lower()
+        current_status = str(video.get('status') or 'queued').lower()
         if current_status in {'processing', 'completed', 'failed'}:
-            logger.info('Video %s already in terminal/in-flight state (%s); deleting duplicate message.', job_id, current_status)
+            logger.info('Video %s already in terminal/in-flight state (%s); deleting duplicate message.', video_id, current_status)
             if receipt_handle:
                 await asyncio.to_thread(self.sqs_service.delete_message, receipt_handle, self.queue_url)
             return
 
         started_at = datetime.utcnow()
-        modified_count = await self._update_job(
-            job_id,
+        modified_count = await self._update_video(
+            {'_id': _mongo_id(video_id), 'status': 'queued'},
             {'$set': {
                 'status': 'processing',
                 'updated_at': started_at,
                 'started_at': started_at,
                 'error': None,
             }, '$inc': {'attempts': 1}},
-            require_queued=True,
         )
         if modified_count == 0:
-            logger.info('Video %s was claimed by another worker. Deleting duplicate message.', job_id)
+            logger.info('Video %s was claimed by another worker. Deleting duplicate message.', video_id)
             if receipt_handle:
                 await asyncio.to_thread(self.sqs_service.delete_message, receipt_handle, self.queue_url)
             return
 
-        claimed_job = await self._find_job(job_id)
-        user_id = str(claimed_job.get('user_id') or '') if isinstance(claimed_job, dict) else ''
-        request_payload = claimed_job.get('request_payload') if isinstance(claimed_job, dict) else {}
+        claimed_video = await self._find_video(video_id)
+        user_id = str(claimed_video.get('user_id') or '') if isinstance(claimed_video, dict) else ''
+        request_payload = claimed_video.get('request_payload') if isinstance(claimed_video, dict) else {}
         if not isinstance(request_payload, dict):
             request_payload = {}
-        if not request_payload and isinstance(claimed_job, dict):
-            job_data = claimed_job.get('job_data')
+        if not request_payload and isinstance(claimed_video, dict):
+            job_data = claimed_video.get('job_data')
             if isinstance(job_data, dict) and isinstance(job_data.get('request_payload'), dict):
                 request_payload = job_data.get('request_payload') or {}
         if not isinstance(request_payload, dict):
             request_payload = {}
         if user_id:
             await self.videos_collection.update_one(
-                {'_id': _mongo_id(job_id), 'user_id': user_id},
+                {'_id': _mongo_id(video_id), 'user_id': user_id},
                 {'$set': {
                     'status': 'processing',
                     'job_data': {
-                        '_id': job_id,
+                        '_id': video_id,
                         'request_mode': 'avatar',
                         'status': 'processing',
                     },
@@ -209,8 +205,8 @@ class AvatarJobWorker:
                     result.video_url = s3_url
 
             completed_at = datetime.utcnow()
-            await self._update_job(
-                job_id,
+            await self._update_video(
+                {'_id': _mongo_id(video_id)},
                 {'$set': {
                     'status': 'completed',
                     'result_payload': _to_mongo_safe(result),
@@ -221,20 +217,20 @@ class AvatarJobWorker:
             )
 
             if user_id:
-                await self._upsert_video_record(user_id, job_id, request, result)
+                await self._upsert_video_record(user_id, video_id, request, result)
 
             if receipt_handle:
                 await asyncio.to_thread(self.sqs_service.delete_message, receipt_handle, self.queue_url)
-            logger.info('Video %s completed successfully.', job_id)
+            logger.info('Video %s completed successfully.', video_id)
         except Exception as exc:
             receive_count = _extract_receive_count(message)
             failed_at = datetime.utcnow()
             error_message = str(exc) or 'Unknown avatar generation error.'
-            logger.exception('Video %s failed on receive count %s.', job_id, receive_count)
+            logger.exception('Video %s failed on receive count %s.', video_id, receive_count)
 
             if receive_count >= self.max_receive_count:
-                await self._update_job(
-                    job_id,
+                await self._update_video(
+                    {'_id': _mongo_id(video_id)},
                     {'$set': {
                         'status': 'failed',
                         'error': error_message,
@@ -244,11 +240,11 @@ class AvatarJobWorker:
                 )
                 if user_id:
                     await self.videos_collection.update_one(
-                        {'_id': _mongo_id(job_id), 'user_id': user_id},
+                        {'_id': _mongo_id(video_id), 'user_id': user_id},
                         {'$set': {
                             'status': 'failed',
                             'job_data': {
-                                '_id': job_id,
+                                '_id': video_id,
                                 'request_mode': 'avatar',
                                 'status': 'failed',
                                 'error': error_message,
@@ -259,8 +255,8 @@ class AvatarJobWorker:
                     await asyncio.to_thread(self.sqs_service.delete_message, receipt_handle, self.queue_url)
                 return
 
-            await self._update_job(
-                job_id,
+            await self._update_video(
+                {'_id': _mongo_id(video_id)},
                 {'$set': {
                     'status': 'queued',
                     'error': error_message,
@@ -269,11 +265,11 @@ class AvatarJobWorker:
             )
             if user_id:
                 await self.videos_collection.update_one(
-                    {'_id': _mongo_id(job_id), 'user_id': user_id},
+                    {'_id': _mongo_id(video_id), 'user_id': user_id},
                     {'$set': {
                         'status': 'queued',
                         'job_data': {
-                            '_id': job_id,
+                            '_id': video_id,
                             'request_mode': 'avatar',
                             'status': 'queued',
                             'error': error_message,
@@ -281,7 +277,7 @@ class AvatarJobWorker:
                     }},
                 )
 
-    async def _upsert_video_record(self, user_id: str, job_id: str, request: DirectVideoRequest, result: Any) -> None:
+    async def _upsert_video_record(self, user_id: str, video_id: str, request: DirectVideoRequest, result: Any) -> None:
         result_payload = _to_mongo_safe(result)
         video_record = VideoRecord(
             user_id=user_id,
@@ -292,7 +288,7 @@ class AvatarJobWorker:
             job_data=result_payload,
         )
         await self.videos_collection.update_one(
-            {'_id': _mongo_id(job_id), 'user_id': user_id},
+            {'_id': _mongo_id(video_id), 'user_id': user_id},
             {'$set': _to_mongo_safe(video_record)},
             upsert=True,
         )

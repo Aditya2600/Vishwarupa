@@ -188,9 +188,9 @@ def test_post_jobs_avatar_creates_job_and_sends_sqs(monkeypatch: pytest.MonkeyPa
 
 def test_get_jobs_status_enforces_ownership(monkeypatch: pytest.MonkeyPatch) -> None:
     videos_collection = InMemoryCollection()
-    job_id = 'record_001'
-    videos_collection.docs[job_id] = {
-        '_id': job_id,
+    video_id = 'record_001'
+    videos_collection.docs[video_id] = {
+        '_id': video_id,
         'request_mode': 'avatar_async',
         'user_id': 'user_owner_001',
         'status': 'completed',
@@ -208,13 +208,13 @@ def test_get_jobs_status_enforces_ownership(monkeypatch: pytest.MonkeyPatch) -> 
     }
     monkeypatch.setattr(main_module, 'videos_collection', videos_collection)
 
-    status_ok = asyncio.run(main_module.get_avatar_job_status(job_id, current_user='user_owner_001'))
+    status_ok = asyncio.run(main_module.get_avatar_job_status(video_id, current_user='user_owner_001'))
     assert status_ok.status == 'completed'
     assert status_ok.id == 'record_001'
     assert status_ok.video_url == 'https://example.com/video_001.mp4'
 
     with pytest.raises(HTTPException) as exc_info:
-        asyncio.run(main_module.get_avatar_job_status(job_id, current_user='user_other_001'))
+        asyncio.run(main_module.get_avatar_job_status(video_id, current_user='user_other_001'))
     assert exc_info.value.status_code == 404
 
 

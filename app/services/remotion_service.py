@@ -84,12 +84,12 @@ class RemotionService:
         return product_map.get(language, product_map['English'])
 
     async def generate_tts(self, request: RemotionVideoRequest) -> dict[str, Any]:
-        job_id = f"{request.lan or 'preview'}_{int(datetime.now().timestamp())}"
+        video_id = f"{request.lan or 'preview'}_{int(datetime.now().timestamp())}"
         # Save to public/audio as expected by TemplateVideo.jsx
         audio_dir = self.remotion_path / "public" / "audio"
         audio_dir.mkdir(exist_ok=True)
-        audio_file = audio_dir / f"{job_id}.mp3"
-        vtt_file = self.assets_path / f"{job_id}.vtt"
+        audio_file = audio_dir / f"{video_id}.mp3"
+        vtt_file = self.assets_path / f"{video_id}.vtt"
         
         voice_key = f"{request.language}-{request.voice_gender.capitalize()}"
         voice = VOICE_MAP.get(voice_key, VOICE_MAP.get("Hindi-Female"))
@@ -156,8 +156,8 @@ class RemotionService:
             
         audio_meta = MP3(audio_file)
         return {
-            "job_id": job_id,
-            "audio_path": f"/audio/{job_id}.mp3",
+            "video_id": video_id,
+            "audio_path": f"/audio/{video_id}.mp3",
             "full_audio_path": str(audio_file),
             "vtt_path": vtt_file,
             "duration": audio_meta.info.length,
@@ -323,11 +323,11 @@ class RemotionService:
             'ui_copy': t.get('ui', i18n['English']['ui'])
         }
 
-    def build_render_payload(self, request: RemotionVideoRequest, job_id: str, script_text: str, audio_path: str, vtt_path: Path, scene_payload: dict[str, Any]) -> dict[str, Any]:
+    def build_render_payload(self, request: RemotionVideoRequest, video_id: str, script_text: str, audio_path: str, vtt_path: Path, scene_payload: dict[str, Any]) -> dict[str, Any]:
         subtitles = self.parse_vtt(vtt_path)
         is_universal = (request.video_variety or "personalized") == "universal"
         return {
-            "id": job_id,
+            "id": video_id,
             "language": request.language,
             "video_variety": request.video_variety or "personalized",
             "audio_url": audio_path,
@@ -362,13 +362,13 @@ class RemotionService:
             subs.append({'text': ' '.join(text.split()), 'start': self._time_to_seconds(start), 'end': self._time_to_seconds(end)})
         return subs
 
-    async def render_video(self, request: RemotionVideoRequest, job_id: str, scene_payload: dict[str, Any], render_payload: dict[str, Any]) -> str:
+    async def render_video(self, request: RemotionVideoRequest, video_id: str, scene_payload: dict[str, Any], render_payload: dict[str, Any]) -> str:
         logger.info("Render video started")
         leads_path = self.remotion_path / "leads.json"
         leads = [render_payload] # Keep it simple for now
         leads_path.write_text(json.dumps(leads, ensure_ascii=False, indent=2), encoding='utf-8')
         
-        output_name = f"{job_id}.mp4"
+        output_name = f"{video_id}.mp4"
         # Render directly into output_dir so it's handled properly by artifacts mount
         output_path = settings.output_dir / output_name
         output_path.parent.mkdir(exist_ok=True)
@@ -378,8 +378,8 @@ class RemotionService:
         if os.name == 'nt' and npx_bin == 'npx':
             npx_bin = 'npx.cmd'
 
-        props_path = self.remotion_path / f"props_{job_id}.json"
-        props_path.write_text(json.dumps({"leadId": job_id}, ensure_ascii=False), encoding='utf-8')
+        props_path = self.remotion_path / f"props_{video_id}.json"
+        props_path.write_text(json.dumps({"leadId": video_id}, ensure_ascii=False), encoding='utf-8')
         logger.info("Render video started command")
         # Ensure we specify the entry point 'src/index.jsx' and the composition ID 'main'
         command = [
@@ -424,14 +424,14 @@ class RemotionService:
             scene = self.build_universal_scene_payload(request)
         else:
             scene = self.build_scene_payload(request, request.tos or "0", request.loan_amount or "", "elevated")
-        render_p = self.build_render_payload(request, tts['job_id'], tts['text'], tts['audio_path'], tts['vtt_path'], scene)
-        video_url = await self.render_video(request, tts['job_id'], scene, render_p)
+        render_p = self.build_render_payload(request, tts['video_id'], tts['text'], tts['audio_path'], tts['vtt_path'], scene)
+        video_url = await self.render_video(request, tts['video_id'], scene, render_p)
         return {
             "video_url": video_url,
             "video_path": settings.output_dir / video_url.lstrip('/'),
             "audio_path": self.remotion_path / "public" / tts['audio_path'].lstrip('/'),
             "audio_url": tts['audio_path'],
-            "job_id": tts['job_id'], 
+            "video_id": tts['video_id'], 
             "text": tts['text']
         }
 
