@@ -80,14 +80,12 @@ async def poll_sqs():
             try:
                 body = json.loads(body_raw)
                 if isinstance(body, dict) and body.get("request_mode") == "remotion":
-                    from app.workers.remotion_job_worker import RemotionJobWorker
                     job_id = body.get("job_id") or body.get("_id")
                     if job_id:
-                        asyncio.create_task(
-                            RemotionJobWorker()._process_job(
-                                str(job_id), 
-                                message.get("ReceiptHandle")
-                            )
+                        from app.workers.remotion_job_worker import RemotionJobWorker
+                        await RemotionJobWorker()._process_job(
+                            str(job_id), 
+                            message.get("ReceiptHandle")
                         )
                     return # Handled completely. RemotionJobWorker deletes it from SQS.
             except Exception:
@@ -1138,19 +1136,24 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
     final_status = "queued"
     final_url = None
     
+    logger.info(f"STARTING BLOCKING WAIT FOR REMOTION {video_id}")
     while waited < max_wait:
         await asyncio.sleep(2)
         waited += 2
         check_doc = await videos_collection.find_one({"video_id": video_id})
         if check_doc:
             st = check_doc.get("status")
+            logger.info(f"WAITING for {video_id} - {st} ({waited}s)")
             if st in ("completed", "failed"):
                 final_status = st
                 final_url = check_doc.get("video_url")
                 if st == "failed":
-                    raise HTTPException(status_code=500, detail=str(check_doc.get("error_message", "Unknown render error")))
+                    msg = str(check_doc.get("error_message", "Unknown render error"))
+                    logger.error(f"Remotion backend failed: {msg}")
+                    raise HTTPException(status_code=500, detail=msg)
                 break
 
+    logger.info(f"FINISHED WAIT FOR {video_id} -> {final_status}")
     job_result.status = final_status
     if final_url:
         job_result.video_url = final_url
