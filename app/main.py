@@ -1027,6 +1027,7 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
 
     from bson import ObjectId
     video_id = str(ObjectId())
+    logger.info(f"Initialized new Remotion video job with ID: {video_id}")
 
     # Build the queued result
     job_result = VideoJobResult(
@@ -1060,6 +1061,10 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
     
     await videos_collection.insert_one(video_record_dict)
     
+    # NOTE: Render and S3 Upload logic has been moved to the RemotionJobWorker 
+    # for asynchronous processing to prevent API timeouts.
+    logger.info(f"Job record {video_id} persisted to database. Handing off to SQS queue...")
+    
     # 3. Submit to SQS
     try:
         from app.services.sqs_service import SQSService
@@ -1068,10 +1073,9 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         sqs_svc.send_job(
             payload={
                 '_id': video_id, 
-                'job_id': video_id,
                 'request_mode': 'remotion'
             },
-            queue_url=settings.sqs_queue_url or SQS_QUEUE_URL
+            queue_url=SQS_QUEUE_URL
         )
     except Exception as e:
         import traceback
@@ -1079,7 +1083,7 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         # Logging error to a file to assist diagnosis if terminal is hidden
         with open("sqs_fail.log", "a") as f:
             f.write(f"SQS FAIL: {e}\n{traceback.format_exc()}\n")
-        await videos_collection.delete_one({'_id': ObjectId(video_id)})
+        await videos_collection.delete_one({'_id': _mongo_id(video_id)})
         raise HTTPException(status_code=500, detail=f"Failed to enqueue remotion video generation: {e}")
 
     return job_result
@@ -1111,6 +1115,8 @@ async def get_my_videos(current_user: str = Depends(get_current_user)):
 
 @app.get('/custom-avatars')
 async def get_custom_avatars():
+    """Returns metadata for precisely matched custom Indian avatars (like Adv. Mahesh).
+    Different from /jobs/avatar which is used to submit a real generation job."""
     cursor = custom_avatars_collection.find({})
     avatars = await cursor.to_list(length=100)
     for av in avatars:
