@@ -72,7 +72,7 @@ class RemotionJobWorker:
                     continue
 
                 job_id = body.get("job_id") or body.get("_id")
-                receipt_handle = message.get("receipt_handle")
+                receipt_handle = message.get("ReceiptHandle")
 
                 if not job_id:
                     logger.warning(f"RemotionJobWorker: Received message with no job_id/id: {body}, skipping.")
@@ -118,14 +118,15 @@ class RemotionJobWorker:
 
         try:
             # 4. Generate Remotion video
-            raw_payload = job_doc.get("job_data", {})
+            raw_payload = job_doc.get("job_data", {}).get("request_payload", {})
             remotion_req = RemotionVideoRequest(**raw_payload)
             
-            result_path = await self.remotion_service.render_video(remotion_req)
+            result_payload = await self.remotion_service.generate_video(remotion_req)
+            result_path = result_payload["video_path"]
             
             # 5. Upload to S3
             s3_key = f"videos/{job_id}.mp4"
-            final_url = await self.s3_service.upload_file(result_path, s3_key)
+            final_url = self.s3_service.upload_video(result_path, s3_key)
             
             # 6. Update MongoDB to completed
             await self.videos_collection_ref.update_one(

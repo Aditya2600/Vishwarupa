@@ -42,6 +42,14 @@ class SQSService:
             MessageBody=json.dumps(payload),
         )
 
+    def receive_messages(self, queue_url: str, max_messages: int = 1) -> list[dict[str, Any]]:
+        response = self.client.receive_message(
+            QueueUrl=queue_url,
+            MaxNumberOfMessages=max_messages,
+            WaitTimeSeconds=5,
+        )
+        return response.get('Messages', [])
+
     def delete_message(self, receipt_handle: str, queue_url: str) -> None:
         self.client.delete_message(
             QueueUrl=queue_url,

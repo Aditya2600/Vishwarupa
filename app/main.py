@@ -67,7 +67,36 @@ app.add_middleware(
 async def poll_sqs():
     print("Starting SQS Worker...")
     try:
+        from app.workers.avatar_job_worker import AvatarJobWorker
         from app.workers.remotion_job_worker import RemotionJobWorker
+        
+        # ---- RUNTIME PATCH: Stop Avatar worker from eating Remotion queue jobs ----
+        orig_process = AvatarJobWorker.process_message
+        
+        async def patched_process(self, message: dict) -> None:
+            import json
+            import asyncio
+            body_raw = message.get("Body", "{}")
+            try:
+                body = json.loads(body_raw)
+                if isinstance(body, dict) and body.get("request_mode") == "remotion":
+                    from app.workers.remotion_job_worker import RemotionJobWorker
+                    job_id = body.get("job_id") or body.get("_id")
+                    if job_id:
+                        asyncio.create_task(
+                            RemotionJobWorker()._process_job(
+                                str(job_id), 
+                                message.get("ReceiptHandle")
+                            )
+                        )
+                    return # Handled completely. RemotionJobWorker deletes it from SQS.
+            except Exception:
+                pass
+            await orig_process(self, message)
+
+        AvatarJobWorker.process_message = patched_process
+        # --------------------------------------------------------------------------
+
         await asyncio.gather(
             AvatarJobWorker().run_forever(),
             RemotionJobWorker().run_forever()
@@ -346,7 +375,13 @@ async def _parse_remotion_payload(request: Request) -> RemotionVideoRequest:
         logger.info(f"Remotion video payload started: {payload}")
         return RemotionVideoRequest.model_validate(payload)
     except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+        safe_errors = exc.errors()
+        for err in safe_errors:
+            if 'input' in err and isinstance(err['input'], bytes):
+                err['input'] = "<raw_bytes_hidden>"
+            if 'logo_bytes' in str(err.get('loc', '')):
+                err['input'] = "<raw_bytes_hidden>"
+        raise HTTPException(status_code=422, detail=safe_errors) from exc
 
 
 @app.exception_handler(RuntimeError)
@@ -885,9 +920,20 @@ async def generate_direct(request: DirectVideoRequest, wait: bool = True, curren
 @app.get('/videos/{video_id}/status')
 async def get_video_status(
     video_id: str,
-    request_mode: Literal['direct', 'template'] = 'direct',
+    request_mode: str = 'direct',
     current_user: str = Depends(get_current_user),
 ):
+    if request_mode.startswith('remotion'):
+        doc = await videos_collection.find_one({"video_id": video_id})
+        if not doc:
+            raise HTTPException(status_code=404, detail="Video not found")
+        # Match VideoJobResult signature
+        return {
+            "request_mode": request_mode,
+            "status": doc.get("status", "pending"),
+            "video_url": doc.get("video_url")
+        }
+
     result = service.get_video_status_result(video_id, request_mode=request_mode)
     await _persist_video_job_result(current_user, result)
     return result
@@ -1042,7 +1088,8 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
     )
 
     embeddable_job_data = _to_mongo_safe(job_result)
-    embeddable_job_data['payload_hash'] = payload_hash
+    import uuid
+    embeddable_job_data['payload_hash'] = payload_hash + "_" + str(uuid.uuid4())
     embeddable_job_data['request_payload'] = _to_mongo_safe(payload)
 
     video_record = VideoRecord(
@@ -1072,7 +1119,7 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         sqs_svc = SQSService()
         sqs_svc.send_job(
             payload={
-                '_id': video_id, 
+                'job_id': video_id,
                 'request_mode': 'remotion'
             },
             queue_url=SQS_QUEUE_URL
@@ -1080,12 +1127,33 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
     except Exception as e:
         import traceback
         traceback.print_exc()
-        # Logging error to a file to assist diagnosis if terminal is hidden
         with open("sqs_fail.log", "a") as f:
             f.write(f"SQS FAIL: {e}\n{traceback.format_exc()}\n")
         await videos_collection.delete_one({'_id': _mongo_id(video_id)})
         raise HTTPException(status_code=500, detail=f"Failed to enqueue remotion video generation: {e}")
 
+    import asyncio
+    max_wait = 300
+    waited = 0
+    final_status = "queued"
+    final_url = None
+    
+    while waited < max_wait:
+        await asyncio.sleep(2)
+        waited += 2
+        check_doc = await videos_collection.find_one({"video_id": video_id})
+        if check_doc:
+            st = check_doc.get("status")
+            if st in ("completed", "failed"):
+                final_status = st
+                final_url = check_doc.get("video_url")
+                if st == "failed":
+                    raise HTTPException(status_code=500, detail=str(check_doc.get("error_message", "Unknown render error")))
+                break
+
+    job_result.status = final_status
+    if final_url:
+        job_result.video_url = final_url
     return job_result
 
 @app.get('/my-videos')
