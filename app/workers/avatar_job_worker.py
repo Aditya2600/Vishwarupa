@@ -144,6 +144,11 @@ class AvatarJobWorker:
                 await asyncio.to_thread(self.sqs_service.delete_message, receipt_handle, self.queue_url)
             return
 
+        # NEW: Ignore messages intended for the Remotion worker
+        if video.get("request_mode") == "remotion":
+            logger.info("AvatarWorker skipping Remotion job %s", video_id)
+            return
+
         current_status = str(video.get('status') or 'queued').lower()
         if current_status in {'processing', 'completed', 'failed'}:
             logger.info('Video %s already in terminal/in-flight state (%s); deleting duplicate message.', video_id, current_status)

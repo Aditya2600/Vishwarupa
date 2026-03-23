@@ -41,6 +41,7 @@ from app.services.s3_service import S3Service
 from app.database import users_collection, videos_collection, drafts_collection, custom_avatars_collection
 from app.auth import get_password_hash, verify_password, create_access_token, get_current_user
 from app.workers.avatar_job_worker import AvatarJobWorker
+from app.workers.remotion_job_worker import RemotionJobWorker
 
 import logging
 
@@ -67,12 +68,9 @@ app.add_middleware(
 async def poll_sqs():
     print("Starting SQS Worker...")
     try:
-        from app.workers.avatar_job_worker import AvatarJobWorker
-        from app.workers.remotion_job_worker import RemotionJobWorker
-        
         # ---- RUNTIME PATCH: Stop Avatar worker from eating Remotion queue jobs ----
         orig_process = AvatarJobWorker.process_message
-        
+
         async def patched_process(self, message: dict) -> None:
             import json
             import asyncio
@@ -80,11 +78,10 @@ async def poll_sqs():
             try:
                 body = json.loads(body_raw)
                 if isinstance(body, dict) and body.get("request_mode") == "remotion":
-                    job_id = body.get("job_id") or body.get("_id")
-                    if job_id:
-                        from app.workers.remotion_job_worker import RemotionJobWorker
+                    video_id = body.get("video_id") or body.get("job_id") or body.get("_id")
+                    if video_id:
                         await RemotionJobWorker()._process_job(
-                            str(job_id), 
+                            str(video_id),
                             message.get("ReceiptHandle")
                         )
                     return # Handled completely. RemotionJobWorker deletes it from SQS.
@@ -114,11 +111,11 @@ async def startup_db_client():
             print("DEBUG: Set WindowsProactorEventLoopPolicy in startup")
         except Exception as e:
             print(f"DEBUG: Failed to set event loop policy in startup: {e}")
-            
+
     try:
         # The ping command is cheap and does not require auth.
         await users_collection.database.command("ping")
-        
+
         print("\n" + "="*50)
         print("SUCCESS: Connected to MongoDB Cluster successfully!")
         print("="*50 + "\n")
@@ -412,7 +409,7 @@ api_cache = Cache(Cache.MEMORY)
 async def list_avatars() -> dict:
     import time
     start = time.time()
-    
+
     cached_data = await api_cache.get("avatars")
     if cached_data is not None:
         ms = (time.time() - start) * 1000
@@ -426,13 +423,13 @@ async def list_avatars() -> dict:
         talking_photos_resp = client.list_talking_photos()
     except Exception:
         talking_photos_resp = {"data": {"talking_photos": []}}
-    
+
     # Merge them. extractAvatarArray in frontend looks for root.avatars, data.avatars, etc.
     # We can just put them both in a list or merge the data arrays.
-    
+
     avatars_data = avatars_resp.get("data", {}).get("avatars", [])
     talking_photos_data = talking_photos_resp.get("data", {}).get("talking_photos", [])
-    
+
     # Standardize talking photos to look more like avatars
     for tp in talking_photos_data:
         tp["avatar_id"] = tp.get("talking_photo_id")
@@ -440,16 +437,16 @@ async def list_avatars() -> dict:
         tp["style"] = "Talking Photo"
         tp["preview_image_url"] = tp.get("talking_photo_url")
         # HeyGen talking photos often don't have gender in the root, maybe we can keep it as unknown
-    
+
     all_avatars = list(avatars_data or []) + list(talking_photos_data or [])
-    
+
     # Fetch dynamically from MongoDB
     db_avatars_cursor = custom_avatars_collection.find({})
     db_avatars_list = await db_avatars_cursor.to_list(length=100)
-    
+
     db_target_ids = []
     db_avatars_map = {}
-    
+
     for db_av in db_avatars_list:
         aid = db_av.get("avatar_id")
         if aid:
@@ -458,18 +455,18 @@ async def list_avatars() -> dict:
 
     updated_avatars = []
     target_avatars_found = {}
-    
+
     for a in all_avatars:
         aid = a.get("avatar_id")
         name = a.get("avatar_name", "").lower()
-        
+
         # Standardize gender for Talking Photos or missing genders
         if not a.get("gender"):
             if "aditi" in name or "female" in name or "woman" in name:
                 a["gender"] = "female"
             elif "male" in name or "man" in name:
                 a["gender"] = "male"
-        
+
         if aid in db_target_ids:
             # Override HeyGen's raw data with our precise Database Definitions
             db_def = db_avatars_map[aid]
@@ -481,9 +478,9 @@ async def list_avatars() -> dict:
             target_avatars_found[aid] = a
         else:
             updated_avatars.append(a)
-            
+
     top_avatars = []
-    
+
     # Ensure all requested DB avatars are placed at the very top, even if HeyGen API dropped them
     for aid in db_target_ids:
         if aid in target_avatars_found:
@@ -507,7 +504,7 @@ async def list_avatars() -> dict:
 
     for a in updated_avatars:
         name = a.get("avatar_name", "")
-        
+
         # Remove gender assumptions for strictly matching Indian names since some avatars have blank gender
         if not a.get("gender"):
             if "female" in name.lower() or "woman" in name.lower():
@@ -535,12 +532,12 @@ async def list_avatars() -> dict:
                 a["avatar_name"] = name.replace(" in Brown blazer", "").replace(" in Blue blazer", "").replace(" in Black suit", "")
                 final_males.append(a)
                 seen_base_names.add(base_name)
-                
+
             elif current_gender == "female" and len(final_females) < 3:
                 # User explicitly requested Kavya Sofa Front, skip all other Kavyas
                 if "kavya" in n_lower and "sofa front" not in n_lower:
                     continue
-                    
+
                 a["style"] = "Professional Female"
                 a["avatar_name"] = name.replace(" Indoor Front", "").replace(" Sofa Front", "").replace(" Office Front", "")
                 final_females.append(a)
@@ -548,7 +545,7 @@ async def list_avatars() -> dict:
 
         if len(final_males) == 3 and len(final_females) == 3:
             break
-            
+
     # Guarantee EXACTLY 5 total males and exactly 5 total females. Force pad if the catalog falls short natively.
     m_idx = len(final_males)
     f_idx = len(final_females)
@@ -558,19 +555,19 @@ async def list_avatars() -> dict:
     for a in updated_avatars:
         if m_idx == 3 and f_idx == 3:
             break
-            
+
         if not a.get("preview_image_url") and not a.get("preview_url"):
             continue # Ensure we only use avatars with actual loaded thumbnails
-            
+
         name = a.get("avatar_name", "")
         base_name = name.split()[0].lower() if name else ""
         if base_name in seen_base_names:
             continue
-            
+
         n_lower = name.lower()
         if any(unprof in n_lower for unprof in unprofessional_hints):
             continue
-            
+
         current_gender = a.get("gender", "").lower()
         if current_gender == "male" and m_idx < 3:
             a["style"] = "Professional Male"
@@ -584,38 +581,38 @@ async def list_avatars() -> dict:
             final_females.append(a)
             seen_base_names.add(base_name)
             f_idx += 1
-        
+
     # Guarantee EXACTLY 5 total males and exactly 5 total females. Force pad if the catalog falls short natively using Mediterranean/tan-skin models.
     m_idx = len(final_males)
     f_idx = len(final_females)
     generic_male_names = ["Arjun", "Aditya", "Rohan"]
     generic_female_names = ["Shruti", "Sneha", "Kavya"]
-    
+
     brown_passing_male_hints = ["juan", "adrian", "marcos", "lucas", "rafael", "david", "mateo", "daniel"]
     brown_passing_female_hints = ["adriana", "maria", "elena", "sofia", "isabella", "ana", "carmen", "laura"]
 
     for a in updated_avatars:
         if m_idx == 3 and f_idx == 3:
             break
-            
+
         if not a.get("preview_image_url") and not a.get("preview_url"):
             continue # Ensure we only use avatars with actual loaded thumbnails
-            
+
         name = a.get("avatar_name", "")
         base_name = name.split()[0].lower() if name else ""
         if base_name in seen_base_names:
             continue
-            
+
         n_lower = name.lower()
         if any(unprof in n_lower for unprof in unprofessional_hints):
             continue
-            
+
         current_gender = a.get("gender", "").lower()
-        
+
         # Only inject avatars that physically appear tan or Mediterranean to act as Indian stand-ins
         is_brown_male = any(h in n_lower for h in brown_passing_male_hints)
         is_brown_female = any(h in n_lower for h in brown_passing_female_hints)
-        
+
         if current_gender == "male" and m_idx < 3 and is_brown_male:
             a["style"] = "Professional Male"
             a["avatar_name"] = generic_male_names[m_idx]
@@ -628,7 +625,7 @@ async def list_avatars() -> dict:
             final_females.append(a)
             seen_base_names.add(base_name)
             f_idx += 1
-        
+
     # Combine lists: top_avatars first
     final_list = top_avatars + final_males + final_females
 
@@ -637,11 +634,11 @@ async def list_avatars() -> dict:
             "avatars": final_list
         }
     }
-    
+
     await api_cache.set("avatars", result, ttl=7200)
     ms = (time.time() - start) * 1000
     print(f"✅ [AVATAR CACHE SAVED] Fetched from HeyGen and wrote to aiocache in {ms:.3f} ms")
-    
+
     return result
 
 
@@ -649,7 +646,7 @@ async def list_avatars() -> dict:
 async def list_voices() -> dict:
     import time
     start = time.time()
-    
+
     cached_data = await api_cache.get("voices")
     if cached_data is not None:
         ms = (time.time() - start) * 1000
@@ -660,7 +657,7 @@ async def list_voices() -> dict:
 
     raw_result = client.list_voices()
     voices = raw_result.get("data", {}).get("voices", [])
-    
+
     # Filter out explicitly removed voices (generic Aditi) but keep Adv. Aditi Mehra.
     # Then de-duplicate near-identical name variants so users see only one useful entry.
     filtered_voices = []
@@ -675,7 +672,7 @@ async def list_voices() -> dict:
                 seen_adv_aditi = True
             else:
                 continue
-                
+
         filtered_voices.append(v)
 
     def _voice_name_key(voice: dict) -> str:
@@ -715,7 +712,7 @@ async def list_voices() -> dict:
     await api_cache.set("voices", raw_result, ttl=7200)
     ms = (time.time() - start) * 1000
     print(f"✅ [VOICE CACHE SAVED] Fetched from HeyGen and wrote to aiocache in {ms:.3f} ms")
-    
+
     return raw_result
 
 
@@ -737,7 +734,7 @@ async def proxy_audio(url: str):
     import httpx
     from fastapi.responses import StreamingResponse
     print(f"DEBUG: Proxying audio from {url}")
-    
+
     async def stream_audio():
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
@@ -777,7 +774,7 @@ async def signup(user: UserCreate):
     if existing_user:
         print(f"DEBUG: User {normalized_email} already exists")
         raise HTTPException(status_code=400, detail="Email already registered")
-    
+
     hashed_password = get_password_hash(user.password)
     user_dict = user.model_dump()
     user_dict["email"] = normalized_email
@@ -785,7 +782,7 @@ async def signup(user: UserCreate):
     user_dict["username"] = display_name
     user_dict["hashed_password"] = hashed_password
     del user_dict["password"]
-    
+
     await users_collection.insert_one(user_dict)
     print(f"DEBUG: User {normalized_email} successfully registered")
     return {"message": "User created successfully"}
@@ -812,7 +809,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     print(f"DEBUG: Login successful for account: {login_identifier}")
     access_token = create_access_token(data={"sub": str(user["_id"]), "email": user["email"]})
     return {
@@ -825,10 +822,92 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
 # --- Video Generation Endpoints ---
 
+@app.post("/generate/remotion", response_model=VideoJobResult)
+async def generate_remotion_video(request: RemotionVideoRequest, user: dict = Depends(get_current_user)):
+    """
+    Standard production flow for Remotion video generation:
+    1. Create a unique video_id
+    2. Save metadata to MongoDB as 'queued'
+    3. Send the video_id to SQS
+    4. Poll MongoDB until done or timeout
+    """
+    try:
+        # 1. Generate unique video_id
+        import uuid
+        video_id = str(uuid.uuid4())
+        logger.info(f"INITIATING Remotion generation: {video_id} for user {user.get('email')}")
+
+        # 2. Record initial job in MongoDB
+        video_record = {
+            "video_id": video_id,
+            "status": "queued",
+            "user_id": str(user["_id"]),
+            "job_data": {
+                "request_payload": request.model_dump(mode="python"),
+                "request_mode": "remotion"
+            },
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        }
+        await videos_collection.insert_one(video_record)
+
+        # 3. Enqueue to SQS
+        sqs_payload = {
+            "video_id": video_id,
+            "request_mode": "remotion"
+        }
+        sqs_service = SQSService()
+        sqs_service.send_job(sqs_payload, SQS_QUEUE_URL)
+        logger.info(f"ENQUEUED {video_id} to SQS.")
+
+        # 4. Optimized Polling Loop (Restored & Clean)
+        max_wait_seconds = 300
+        poll_interval = 2
+        waited = 0
+
+        while waited < max_wait_seconds:
+            # Only fetch necessary fields for performance
+            video_doc = await videos_collection.find_one(
+                {"video_id": video_id},
+                {"status": 1, "video_url": 1, "error_message": 1}
+            )
+
+            if not video_doc:
+                raise HTTPException(status_code=404, detail="Video record lost during processing.")
+
+            status = video_doc.get("status", "queued")
+            logger.info(f"WAITING for {video_id} - {status} ({waited}s)")
+
+            if status == "completed":
+                return VideoJobResult(
+                    video_id=video_id,
+                    status="completed",
+                    video_url=video_doc.get("video_url"),
+                    raw_response={}
+                )
+
+            if status == "failed":
+                error_msg = video_doc.get("error_message", "Unknown worker error")
+                logger.error(f"FAILED {video_id} - Job reached failure state: {error_msg}")
+                raise HTTPException(status_code=500, detail=f"Video generation failed: {error_msg}")
+
+            await asyncio.sleep(poll_interval)
+            waited += poll_interval
+
+        # Timeout reached
+        logger.warning(f"TIMEOUT {video_id} after {max_wait_seconds}s")
+        raise HTTPException(status_code=408, detail="Video generation timed out.")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"ERROR starting Remotion generation for {user.get('email')}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post('/jobs/avatar', response_model=AvatarJobAck)
 async def create_avatar_job(request: DirectVideoRequest, current_user: str = Depends(get_current_user)):
     queue_url = SQS_QUEUE_URL
-    
+
     video_id: str | None = None
     try:
         now = datetime.utcnow()
@@ -896,12 +975,12 @@ async def get_avatar_job_status(video_id: str, current_user: str = Depends(get_c
 @app.post('/generate/direct')
 async def generate_direct(request: DirectVideoRequest, wait: bool = True, current_user: str = Depends(get_current_user)):
     result = service.generate_direct(request, wait=wait)
-    
+
     if wait and result.saved_to:
         s3_url = s3_service.upload_video(result.saved_to, f"videos/{result.video_id}.mp4")
         if s3_url:
             result.video_url = s3_url
-    
+
     # Save to MongoDB
     video_record = VideoRecord(
         user_id=current_user,
@@ -911,7 +990,7 @@ async def generate_direct(request: DirectVideoRequest, wait: bool = True, curren
         job_data=_to_mongo_safe(result)
     )
     await videos_collection.insert_one(_to_mongo_safe(video_record))
-    
+
     return result
 
 
@@ -982,7 +1061,7 @@ async def stylize_video(
 
     final_relative = artifact.final_video_path.relative_to(settings.output_dir).as_posix()
     video_url = f"/api/artifacts/{final_relative}"
-    
+
     s3_url = s3_service.upload_video(artifact.final_video_path, f"videos/{video_id}.mp4")
     if s3_url:
         video_url = s3_url
@@ -1023,12 +1102,12 @@ async def stylize_video(
 async def generate_template(request: TemplateVideoRequest, wait: bool = True, current_user: str = Depends(get_current_user)):
     print(f"DEBUG: Template generation request by {current_user}")
     result = service.generate_from_template(request, wait=wait)
-    
+
     if wait and result.saved_to:
         s3_url = s3_service.upload_video(result.saved_to, f"videos/{result.video_id}.mp4")
         if s3_url:
             result.video_url = s3_url
-    
+
     # Save to MongoDB
     video_record = VideoRecord(
         user_id=current_user,
@@ -1041,123 +1120,6 @@ async def generate_template(request: TemplateVideoRequest, wait: bool = True, cu
     print(f"DEBUG: Template generation saved to DB")
     return result
 
-
-@app.post('/generate/remotion', response_model=VideoJobResult)
-async def generate_remotion(request: Request, current_user: str = Depends(get_current_user)):
-    import hashlib
-    import json
-    payload = await _parse_remotion_payload(request)
-    logger.info(f"Remotion video payload ended:")
-    # 1. Create a deterministic hash of the entire configuration payload
-    payload_dict = payload.model_dump(exclude_none=True)
-    if 'logo_bytes' in payload_dict and payload_dict['logo_bytes']:
-        payload_dict['logo_bytes'] = str(len(payload_dict['logo_bytes']))
-    
-    payload_str = json.dumps(payload_dict, sort_keys=True, ensure_ascii=False)
-    payload_hash = hashlib.sha256(payload_str.encode('utf-8')).hexdigest()
-
-    # 2. Check Database for an identical completed video globally
-    cached_record = await videos_collection.find_one({
-        "request_mode": "remotion",
-        "status": "completed",
-        "job_data.payload_hash": payload_hash
-    })
-
-    if cached_record and cached_record.get('job_data'):
-        # Reconstruct the VideoJobResult from the stored dataset directly
-        job_data = cached_record['job_data'].copy()
-        job_data.pop('payload_hash', None)
-        return VideoJobResult(**job_data)
-
-    from bson import ObjectId
-    video_id = str(ObjectId())
-    logger.info(f"Initialized new Remotion video job with ID: {video_id}")
-
-    # Build the queued result
-    job_result = VideoJobResult(
-        request_mode='remotion',
-        video_id=video_id,
-        status='queued',
-        video_url=None,
-        thumbnail_url=None,
-        title=f"{payload.title_prefix} - {payload.customer_name} - {payload.lan}",
-        raw_response={},
-        saved_to=None,
-    )
-
-    embeddable_job_data = _to_mongo_safe(job_result)
-    import uuid
-    embeddable_job_data['payload_hash'] = payload_hash + "_" + str(uuid.uuid4())
-    embeddable_job_data['request_payload'] = _to_mongo_safe(payload)
-
-    video_record = VideoRecord(
-        user_id=current_user,
-        status="queued",
-        title=job_result.title,
-        video_url=None,
-        request_mode="remotion_async",
-        job_data=embeddable_job_data
-    )
-    
-    # Needs a preset _id so the worker can fetch it!
-    video_record_dict = _to_mongo_safe(video_record)
-    video_record_dict['_id'] = ObjectId(video_id)
-    video_record_dict['video_id'] = video_id
-    
-    await videos_collection.insert_one(video_record_dict)
-    
-    # NOTE: Render and S3 Upload logic has been moved to the RemotionJobWorker 
-    # for asynchronous processing to prevent API timeouts.
-    logger.info(f"Job record {video_id} persisted to database. Handing off to SQS queue...")
-    
-    # 3. Submit to SQS
-    try:
-        from app.services.sqs_service import SQSService
-        from app.constants import SQS_QUEUE_URL
-        sqs_svc = SQSService()
-        sqs_svc.send_job(
-            payload={
-                'job_id': video_id,
-                'request_mode': 'remotion'
-            },
-            queue_url=SQS_QUEUE_URL
-        )
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        with open("sqs_fail.log", "a") as f:
-            f.write(f"SQS FAIL: {e}\n{traceback.format_exc()}\n")
-        await videos_collection.delete_one({'_id': _mongo_id(video_id)})
-        raise HTTPException(status_code=500, detail=f"Failed to enqueue remotion video generation: {e}")
-
-    import asyncio
-    max_wait = 300
-    waited = 0
-    final_status = "queued"
-    final_url = None
-    
-    logger.info(f"STARTING BLOCKING WAIT FOR REMOTION {video_id}")
-    while waited < max_wait:
-        await asyncio.sleep(2)
-        waited += 2
-        check_doc = await videos_collection.find_one({"video_id": video_id})
-        if check_doc:
-            st = check_doc.get("status")
-            logger.info(f"WAITING for {video_id} - {st} ({waited}s)")
-            if st in ("completed", "failed"):
-                final_status = st
-                final_url = check_doc.get("video_url")
-                if st == "failed":
-                    msg = str(check_doc.get("error_message", "Unknown render error"))
-                    logger.error(f"Remotion backend failed: {msg}")
-                    raise HTTPException(status_code=500, detail=msg)
-                break
-
-    logger.info(f"FINISHED WAIT FOR {video_id} -> {final_status}")
-    job_result.status = final_status
-    if final_url:
-        job_result.video_url = final_url
-    return job_result
 
 @app.get('/my-videos')
 async def get_my_videos(current_user: str = Depends(get_current_user)):
@@ -1231,13 +1193,14 @@ async def preview_voice(
                 return StreamingResponse(stream_audio(), media_type="audio/mpeg")
         except Exception as e:
             print(f"DEBUG: HeyGen TTS failed, falling back to edge-tts: {e}")
-    from app.services.remotion_service import RemotionService
-    from app.models import LeadRecord, DirectVideoRequest
-    from app.services.script_renderer import build_context, _normalize_placeholder_syntax
-    from jinja2 import Environment
     
+    # Fallback to RemotionService/edge-tts if HeyGen failed or wasn't attempted
     try:
-        remotion_service = RemotionService()
+        from app.services.remotion_service import RemotionService
+        from app.models import LeadRecord, DirectVideoRequest
+        from app.services.script_renderer import build_context, _normalize_placeholder_syntax
+        from jinja2 import Environment
+        from app.constants import VOICE_MAP
         
         # Safe defaults for the preview context
         dummy_lead = LeadRecord(
@@ -1261,8 +1224,9 @@ async def preview_voice(
         except Exception:
             final_text = preview_text
 
-        from app.models import RemotionVideoRequest
-        dummy_request = RemotionVideoRequest(
+        remotion_service = RemotionService() # Initialize here
+        
+        dummy_request = RemotionVideoRequest( # Changed from DirectVideoRequest
             customer_name=dummy_lead.customer_name,
             lan=dummy_lead.lan,
             client_name=dummy_lead.client_name,

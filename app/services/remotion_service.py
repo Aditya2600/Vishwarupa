@@ -3,6 +3,10 @@ import json
 import logging
 import os
 import re
+import shutil
+import subprocess
+import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
@@ -83,13 +87,16 @@ class RemotionService:
         product_map = translations.get(product_type, translations['loan'])
         return product_map.get(language, product_map['English'])
 
-    async def generate_tts(self, request: RemotionVideoRequest) -> dict[str, Any]:
-        video_id = f"{request.lan or 'preview'}_{int(datetime.now().timestamp())}"
+    async def generate_tts(self, request: RemotionVideoRequest, video_id: str | None = None) -> dict[str, Any]:
+        voice_gender = (request.voice_gender or "female").lower()
+        effective_video_id = video_id or f"{request.language or 'remotion'}_{int(time.time())}"
+        
+        output_filename = f"{effective_video_id}.mp3"
         # Save to public/audio as expected by TemplateVideo.jsx
         audio_dir = self.remotion_path / "public" / "audio"
         audio_dir.mkdir(exist_ok=True)
-        audio_file = audio_dir / f"{video_id}.mp3"
-        vtt_file = self.assets_path / f"{video_id}.vtt"
+        audio_file = audio_dir / output_filename
+        vtt_file = self.assets_path / f"{effective_video_id}.vtt"
         
         voice_key = f"{request.language}-{request.voice_gender.capitalize()}"
         voice = VOICE_MAP.get(voice_key, VOICE_MAP.get("Hindi-Female"))
@@ -410,14 +417,14 @@ class RemotionService:
 
         return f"/{output_name}" 
 
-    async def generate_video(self, request: RemotionVideoRequest) -> dict[str, Any]:
+    async def generate_video(self, request: RemotionVideoRequest, video_id: str | None = None) -> dict[str, Any]:
         # Save logo asset if present
         if request.logo_bytes and request.logo_filename:
             await self._persist_logo_asset(request.logo_bytes, request.logo_filename)
 
         is_universal = (request.video_variety or "personalized") == "universal"
 
-        tts = await self.generate_tts(request)
+        tts = await self.generate_tts(request, video_id=video_id)
         # Universal mode: use generic scene cards so no empty customer data leaks
         # into the Remotion visual scenes.
         if is_universal:
