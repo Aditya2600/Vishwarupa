@@ -169,16 +169,14 @@ class TemplateVideoRequest(LeadRecord):
 
 
 class VideoJobResult(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
-
     request_mode: Literal['direct', 'template', 'remotion']
-    video_id: str = Field(alias='_id')
+    video_id: str
     status: str
     video_url: str | None = None
     thumbnail_url: str | None = None
     title: str | None = None
-    raw_response: dict
-    saved_to: Path | None = None
+    raw_response: dict | None = None
+    saved_to: Path | str | None = None
     video_path: str | None = None
     audio_path: str | None = None
 

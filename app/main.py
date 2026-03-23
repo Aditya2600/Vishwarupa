@@ -919,12 +919,13 @@ async def get_video_status(
     current_user: str = Depends(get_current_user),
 ):
     if request_mode.startswith('remotion'):
-        doc = await videos_collection.find_one({"video_id": video_id})
+        doc = await videos_collection.find_one({"_id": _mongo_id(video_id)})
         if not doc:
             raise HTTPException(status_code=404, detail="Video not found")
         # Match VideoJobResult signature
         return {
             "request_mode": request_mode,
+            "video_id": str(doc["_id"]),
             "status": doc.get("status", "pending"),
             "video_url": doc.get("video_url")
         }
