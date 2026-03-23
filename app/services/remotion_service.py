@@ -136,14 +136,20 @@ class RemotionService:
         
         def run_tts():
             import subprocess
-            return subprocess.run(command, shell=True, capture_output=True, text=True)
+            import tempfile
+            with tempfile.NamedTemporaryFile() as out_f, tempfile.NamedTemporaryFile() as err_f:
+                result = subprocess.run(command, shell=True, stdout=out_f, stderr=err_f)
+                out_f.seek(0)
+                err_f.seek(0)
+                stdout_text = out_f.read().decode('utf-8', errors='ignore')
+                stderr_text = err_f.read().decode('utf-8', errors='ignore')
+                if result.returncode != 0:
+                    logger.error(f"TTS Process Error: {stderr_text}")
+                    raise Exception(f"TTS Error: {stderr_text}")
+                return result
 
         try:
             result_process = await asyncio.to_thread(run_tts)
-            
-            if result_process.returncode != 0:
-                logger.error(f"TTS Process Error: {result_process.stderr}")
-                raise Exception(f"TTS Error: {result_process.stderr}")
 
             # Give a small buffer for file to be finalized on disk
             for _ in range(10):
@@ -376,46 +382,60 @@ class RemotionService:
         leads_path.write_text(json.dumps(leads, ensure_ascii=False, indent=2), encoding='utf-8')
         
         output_name = f"{video_id}.mp4"
-        # Render directly into output_dir so it's handled properly by artifacts mount
         output_path = settings.output_dir / output_name
         output_path.parent.mkdir(exist_ok=True)
         
-        # On Windows, 'npx' often needs to be 'npx.cmd'
-        npx_bin = settings.remotion_npx_binary
-        if os.name == 'nt' and npx_bin == 'npx':
-            npx_bin = 'npx.cmd'
-
         props_path = self.remotion_path / f"props_{video_id}.json"
         props_path.write_text(json.dumps({"leadId": video_id}, ensure_ascii=False), encoding='utf-8')
         logger.info("Render video started command")
-        # Ensure we specify the entry point 'src/index.jsx' and the composition ID 'main'
-        command = [
-            npx_bin, "remotion", "render", "src/index.jsx", "main",
-            str(output_path),
-            f"--props={str(props_path).replace(os.sep, '/')}",
-            "--overwrite"
-        ]
-        
-        if settings.remotion_browser_executable:
-            command.extend(["--browser-executable", settings.remotion_browser_executable])
         
         def run_render():
             import subprocess
-            # Remove shell=True because command is a list; otherwise npx hangs on Windows
-            return subprocess.run(command, cwd=str(self.remotion_path), capture_output=True, text=True)
+            import uuid
+            
+            npx = "npx.cmd" if os.name == 'nt' else "npx"
+            c = f'{npx} --yes remotion render src/index.jsx main "{output_path}" --props="{str(props_path).replace(os.sep, "/")}" --overwrite'
+            if settings.remotion_browser_executable:
+                c += f' --browser-executable="{settings.remotion_browser_executable}"'
+            
+            # Pure file handle without tempfile locking mechanics
+            out_file = self.remotion_path / f"out_{uuid.uuid4().hex}.log"
+            
+            with open(out_file, "w", encoding="utf-8") as out_f:
+                result = subprocess.run(
+                    c, 
+                    cwd=str(self.remotion_path), 
+                    shell=True, 
+                    stdout=out_f, 
+                    stderr=subprocess.STDOUT,
+                    stdin=subprocess.DEVNULL # Prevent headless prompts from freezing terminal
+                )
+            
+            # Read after process safely completes
+            if out_file.exists():
+                stdout_text = out_file.read_text(encoding="utf-8", errors="ignore")
+                try: out_file.unlink() # Cleanup silently
+                except: pass
+            else:
+                stdout_text = ""
+                
+            if result.returncode != 0:
+                logger.error(f"Remotion render failed with code {result.returncode}")
+                logger.error(f"Remotion output: {stdout_text}")
+                raise ValueError(f"Remotion render failed: {stdout_text}")
+            return result
 
         try:
             result_process = await asyncio.to_thread(run_render)
-            
-            if result_process.returncode != 0:
-                logger.error(f"Remotion render failed with code {result_process.returncode}")
-                if result_process.stderr: logger.error(f"Remotion stderr: {result_process.stderr}")
-                raise ValueError(f"Remotion render failed: {result_process.stderr}")
         except Exception as e:
             logger.error(f"Failed to start Remotion rendering: {e}")
             raise e
 
-        return f"/{output_name}" 
+        # Final check if output actually exists
+        if not output_path.exists():
+            raise ValueError("Remotion render exited completely but output video was NOT created on disk.")
+
+        return f"/{output_name}"
 
     async def generate_video(self, request: RemotionVideoRequest, video_id: str | None = None) -> dict[str, Any]:
         # Save logo asset if present

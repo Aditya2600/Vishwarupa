@@ -142,7 +142,7 @@ class RemotionJobWorker:
         except Exception as exc:
             logger.error(f"RemotionJobWorker: Failed to process video_id={video_id}: {exc}")
             await self.videos_collection_ref.update_one(
-                {"video_id": video_id},
+                {"_id": ObjectId(video_id)},
                 {"$set": {
                     "status": "failed",
                     "error_message": str(exc),

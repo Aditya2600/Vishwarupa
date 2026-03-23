@@ -68,29 +68,8 @@ app.add_middleware(
 async def poll_sqs():
     print("Starting SQS Worker...")
     try:
-        # ---- RUNTIME PATCH: Stop Avatar worker from eating Remotion queue jobs ----
-        orig_process = AvatarJobWorker.process_message
-
-        async def patched_process(self, message: dict) -> None:
-            import json
-            import asyncio
-            body_raw = message.get("Body", "{}")
-            try:
-                body = json.loads(body_raw)
-                if isinstance(body, dict) and body.get("request_mode") == "remotion":
-                    video_id = body.get("video_id") or body.get("job_id") or body.get("_id")
-                    if video_id:
-                        await RemotionJobWorker()._process_job(
-                            str(video_id),
-                            message.get("ReceiptHandle")
-                        )
-                    return # Handled completely. RemotionJobWorker deletes it from SQS.
-            except Exception:
-                pass
-            await orig_process(self, message)
-
-        AvatarJobWorker.process_message = patched_process
-        # --------------------------------------------------------------------------
+        # AvatarJobWorker already internally ignores 'remotion' jobs properly now.
+        # Starting independent workers gracefully...
 
         await asyncio.gather(
             AvatarJobWorker().run_forever(),
@@ -920,14 +899,23 @@ async def get_video_status(
 ):
     if request_mode.startswith('remotion'):
         doc = await videos_collection.find_one({"_id": _mongo_id(video_id)})
+        
+        # Safe logging without cp1252 crash
+        try:
+            print(f">>> found doc: {bool(doc)} {video_id}")
+        except:
+            pass
+            
         if not doc:
             raise HTTPException(status_code=404, detail="Video not found")
-        # Match VideoJobResult signature
+            
         return {
             "request_mode": request_mode,
             "video_id": str(doc["_id"]),
+            "_id": str(doc["_id"]),
             "status": doc.get("status", "pending"),
-            "video_url": doc.get("video_url")
+            "video_url": doc.get("video_url"),
+            "error": doc.get("error_message", "Unknown backend remotion error")
         }
 
     result = service.get_video_status_result(video_id, request_mode=request_mode)
@@ -1061,11 +1049,15 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         "job_data.payload_hash": payload_hash
     })
 
-    if cached_record and cached_record.get('job_data'):
-        # Reconstruct the VideoJobResult from the stored dataset directly
-        job_data = cached_record['job_data'].copy()
-        job_data.pop('payload_hash', None)
-        return VideoJobResult(**job_data)
+    if cached_record:
+        return VideoJobResult(
+            request_mode="remotion",
+            video_id=str(cached_record["_id"]),
+            status=cached_record.get("status", "completed"),
+            video_url=cached_record.get("video_url"),
+            thumbnail_url=cached_record.get("thumbnail_url"),
+            title=cached_record.get("title"),
+        )
 
     embeddable_job_data = {
         'payload_hash': f"{payload_hash}_{time.time()}",
