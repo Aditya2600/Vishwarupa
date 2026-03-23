@@ -42,26 +42,12 @@ class SQSService:
             MessageBody=json.dumps(payload),
         )
 
-<<<<<<< Updated upstream
-    def receive_messages(self, queue_url: str, max_messages: int = 1, visibility_timeout: int | None = None) -> list[dict[str, Any]]:
-        params = {
-            'QueueUrl': queue_url,
-            'MaxNumberOfMessages': max_messages,
-            'WaitTimeSeconds': 5,
-        }
-        if visibility_timeout is not None:
-            params['VisibilityTimeout'] = visibility_timeout
-            
-        response = self.client.receive_message(**params)
-=======
     def receive_messages(self, queue_url: str, max_messages: int = 1) -> list[dict[str, Any]]:
         response = self.client.receive_message(
             QueueUrl=queue_url,
             MaxNumberOfMessages=max_messages,
             WaitTimeSeconds=settings.sqs_wait_time_seconds,
-            VisibilityTimeout=settings.sqs_visibility_timeout_seconds,
         )
->>>>>>> Stashed changes
         return response.get('Messages', [])
 
     def delete_message(self, receipt_handle: str, queue_url: str) -> None:

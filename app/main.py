@@ -1236,7 +1236,7 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         raise HTTPException(status_code=500, detail=f"Failed to enqueue remotion video generation: {e}")
 
     import asyncio
-    max_wait = 300
+    max_wait = settings.poll_timeout_seconds
     waited = 0
     final_status = "queued"
     final_url = None
