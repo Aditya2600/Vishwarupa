@@ -5,6 +5,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from bson import ObjectId
 
 from app.config import settings
 from app.constants import SQS_QUEUE_URL
@@ -84,7 +85,7 @@ class RemotionJobWorker:
         """Fetch job from MongoDB, run Remotion generation, and update the record."""
         # 1. Fetch full job document from MongoDB
         job_doc = await self.videos_collection_ref.find_one(
-            {"video_id": video_id}
+            {"_id": ObjectId(video_id)}
         )
 
         if not job_doc:
@@ -104,7 +105,7 @@ class RemotionJobWorker:
         # 3. Mark as processing
         now = datetime.utcnow()
         await self.videos_collection_ref.update_one(
-            {"video_id": video_id},
+            {"_id": ObjectId(video_id)},
             {"$set": {
                 "status": "processing",
                 "updated_at": now,
@@ -126,7 +127,7 @@ class RemotionJobWorker:
             
             # 6. Update MongoDB to completed
             await self.videos_collection_ref.update_one(
-                {"video_id": video_id},
+                {"_id": ObjectId(video_id)},
                 {"$set": {
                     "status": "completed",
                     "video_url": final_url,

@@ -822,112 +822,6 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
 # --- Video Generation Endpoints ---
 
-@app.post("/generate/remotion", response_model=VideoJobResult)
-async def generate_remotion_video(
-    request: Request,
-    current_user: str = Depends(get_current_user)
-):
-    form_data = await request.form()
-    data_dict = dict(form_data)
-    
-    logo_file_param = data_dict.pop("logo_file", None)
-    # also remove logoFile if frontend sent it by that name conceptually:
-    logo_file_param = data_dict.pop("logoFile", logo_file_param)
-    
-    # In Starlette, form_data gets are UploadFile objects if it's a file
-    from starlette.datastructures import UploadFile as StarletteUploadFile
-    from fastapi import UploadFile
-
-    try:
-        remotion_req = RemotionVideoRequest(**data_dict)
-    except Exception as e:
-        logger.error(f"Validation error: {e}")
-        raise HTTPException(status_code=422, detail=str(e))
-
-    if isinstance(logo_file_param, (UploadFile, StarletteUploadFile)):
-        remotion_req.logo_bytes = await logo_file_param.read()
-        remotion_req.logo_filename = logo_file_param.filename
-
-    """
-    Standard production flow for Remotion video generation:
-    1. Create a unique video_id
-    2. Save metadata to MongoDB as 'queued'
-    3. Send the video_id to SQS
-    4. Poll MongoDB until done or timeout
-    """
-    try:
-        # 1. Generate unique video_id
-        import uuid
-        video_id = str(uuid.uuid4())
-        logger.info(f"INITIATING Remotion generation: {video_id} for user {current_user}")
-
-        # 2. Record initial job in MongoDB
-        video_record = {
-            "video_id": video_id,
-            "status": "queued",
-            "user_id": current_user,
-            "job_data": {
-                "request_payload": remotion_req.model_dump(mode="python"),
-                "request_mode": "remotion"
-            },
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
-        }
-        await videos_collection.insert_one(video_record)
-
-        # 3. Enqueue to SQS
-        sqs_payload = {
-            "_id": video_id,
-            "request_mode": "remotion"
-        }
-        sqs_service = SQSService()
-        sqs_service.send_job(sqs_payload, SQS_QUEUE_URL)
-        logger.info(f"ENQUEUED {video_id} to SQS.")
-
-        # 4. Optimized Polling Loop (Restored & Clean)
-        max_wait_seconds = settings.poll_timeout_seconds
-        poll_interval = 2
-        waited = 0
-
-        while waited < max_wait_seconds:
-            # Only fetch necessary fields for performance
-            video_doc = await videos_collection.find_one(
-                {"video_id": video_id},
-                {"status": 1, "video_url": 1, "error_message": 1}
-            )
-
-            if not video_doc:
-                raise HTTPException(status_code=404, detail="Video record lost during processing.")
-
-            status = video_doc.get("status", "queued")
-            logger.info(f"WAITING for {video_id} - {status} ({waited}s)")
-
-            if status == "completed":
-                return VideoJobResult(
-                    video_id=video_id,
-                    status="completed",
-                    video_url=video_doc.get("video_url"),
-                    raw_response={}
-                )
-
-            if status == "failed":
-                error_msg = video_doc.get("error_message", "Unknown worker error")
-                logger.error(f"FAILED {video_id} - Job reached failure state: {error_msg}")
-                raise HTTPException(status_code=500, detail=f"Video generation failed: {error_msg}")
-
-            await asyncio.sleep(poll_interval)
-            waited += poll_interval
-
-        # Timeout reached
-        logger.warning(f"TIMEOUT {video_id} after {max_wait_seconds}s")
-        raise HTTPException(status_code=408, detail="Video generation timed out.")
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception(f"ERROR starting Remotion generation for {user.get('email')}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
 @app.post('/jobs/avatar', response_model=AvatarJobAck)
 async def create_avatar_job(request: DirectVideoRequest, current_user: str = Depends(get_current_user)):
     queue_url = SQS_QUEUE_URL
@@ -1145,8 +1039,6 @@ async def generate_template(request: TemplateVideoRequest, wait: bool = True, cu
     return result
 
 
-<<<<<<< Updated upstream
-=======
 @app.post('/generate/remotion', response_model=VideoJobResult)
 async def generate_remotion(request: Request, current_user: str = Depends(get_current_user)):
     import hashlib
@@ -1174,11 +1066,27 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         job_data.pop('payload_hash', None)
         return VideoJobResult(**job_data)
 
-    from bson import ObjectId
-    video_id = str(ObjectId())
-    logger.info(f"Initialized new Remotion video job with ID: {video_id}")
+    embeddable_job_data = {
+        'payload_hash': payload_hash,
+        'request_payload': _to_mongo_safe(payload),
+        'request_mode': 'remotion'
+    }
 
-    # Build the queued result
+    video_record = VideoRecord(
+        user_id=current_user,
+        status="queued",
+        title=f"{payload.title_prefix} - {payload.customer_name} - {payload.lan}",
+        video_url=None,
+        request_mode="remotion_async",
+        job_data=embeddable_job_data
+    )
+    
+    video_record_dict = _to_mongo_safe(video_record)
+    
+    insert_result = await videos_collection.insert_one(video_record_dict)
+    video_id = str(insert_result.inserted_id)
+    
+    # Build the queued result using the MongoDB-generated ID
     job_result = VideoJobResult(
         request_mode='remotion',
         video_id=video_id,
@@ -1189,27 +1097,6 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         raw_response={},
         saved_to=None,
     )
-
-    embeddable_job_data = _to_mongo_safe(job_result)
-    import uuid
-    embeddable_job_data['payload_hash'] = payload_hash + "_" + str(uuid.uuid4())
-    embeddable_job_data['request_payload'] = _to_mongo_safe(payload)
-
-    video_record = VideoRecord(
-        user_id=current_user,
-        status="queued",
-        title=job_result.title,
-        video_url=None,
-        request_mode="remotion_async",
-        job_data=embeddable_job_data
-    )
-    
-    # Needs a preset _id so the worker can fetch it!
-    video_record_dict = _to_mongo_safe(video_record)
-    video_record_dict['_id'] = ObjectId(video_id)
-    video_record_dict['video_id'] = video_id
-    
-    await videos_collection.insert_one(video_record_dict)
     
     # NOTE: Render and S3 Upload logic has been moved to the RemotionJobWorker 
     # for asynchronous processing to prevent API timeouts.
@@ -1264,7 +1151,6 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         job_result.video_url = final_url
     return job_result
 
->>>>>>> Stashed changes
 @app.get('/my-videos')
 async def get_my_videos(current_user: str = Depends(get_current_user)):
     cursor = videos_collection.find({"user_id": current_user}).sort("created_at", -1)
