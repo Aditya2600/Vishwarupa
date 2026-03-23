@@ -823,7 +823,25 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 # --- Video Generation Endpoints ---
 
 @app.post("/generate/remotion", response_model=VideoJobResult)
-async def generate_remotion_video(request: RemotionVideoRequest, user: dict = Depends(get_current_user)):
+async def generate_remotion_video(
+    request: Request,
+    logo_file: UploadFile | None = File(None),
+    user: dict = Depends(get_current_user)
+):
+    form_data = await request.form()
+    data_dict = dict(form_data)
+    data_dict.pop("logo_file", None)
+
+    try:
+        remotion_req = RemotionVideoRequest(**data_dict)
+    except Exception as e:
+        logger.error(f"Validation error: {e}")
+        raise HTTPException(status_code=422, detail=str(e))
+
+    if logo_file:
+        remotion_req.logo_bytes = await logo_file.read()
+        remotion_req.logo_filename = logo_file.filename
+
     """
     Standard production flow for Remotion video generation:
     1. Create a unique video_id
@@ -843,7 +861,7 @@ async def generate_remotion_video(request: RemotionVideoRequest, user: dict = De
             "status": "queued",
             "user_id": str(user["_id"]),
             "job_data": {
-                "request_payload": request.model_dump(mode="python"),
+                "request_payload": remotion_req.model_dump(mode="python"),
                 "request_mode": "remotion"
             },
             "created_at": datetime.utcnow(),
