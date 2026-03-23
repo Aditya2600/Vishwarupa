@@ -67,7 +67,38 @@ app.add_middleware(
 async def poll_sqs():
     print("Starting SQS Worker...")
     try:
-        await AvatarJobWorker().run_forever()
+        from app.workers.avatar_job_worker import AvatarJobWorker
+        from app.workers.remotion_job_worker import RemotionJobWorker
+        
+        # ---- RUNTIME PATCH: Stop Avatar worker from eating Remotion queue jobs ----
+        orig_process = AvatarJobWorker.process_message
+        
+        async def patched_process(self, message: dict) -> None:
+            import json
+            import asyncio
+            body_raw = message.get("Body", "{}")
+            try:
+                body = json.loads(body_raw)
+                if isinstance(body, dict) and body.get("request_mode") == "remotion":
+                    job_id = body.get("job_id") or body.get("_id")
+                    if job_id:
+                        from app.workers.remotion_job_worker import RemotionJobWorker
+                        await RemotionJobWorker()._process_job(
+                            str(job_id), 
+                            message.get("ReceiptHandle")
+                        )
+                    return # Handled completely. RemotionJobWorker deletes it from SQS.
+            except Exception:
+                pass
+            await orig_process(self, message)
+
+        AvatarJobWorker.process_message = patched_process
+        # --------------------------------------------------------------------------
+
+        await asyncio.gather(
+            AvatarJobWorker().run_forever(),
+            RemotionJobWorker().run_forever()
+        )
     except Exception as e:
         logger.error(f"SQS Worker crashed: {e}")
 
@@ -342,7 +373,13 @@ async def _parse_remotion_payload(request: Request) -> RemotionVideoRequest:
         logger.info(f"Remotion video payload started: {payload}")
         return RemotionVideoRequest.model_validate(payload)
     except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+        safe_errors = exc.errors()
+        for err in safe_errors:
+            if 'input' in err and isinstance(err['input'], bytes):
+                err['input'] = "<raw_bytes_hidden>"
+            if 'logo_bytes' in str(err.get('loc', '')):
+                err['input'] = "<raw_bytes_hidden>"
+        raise HTTPException(status_code=422, detail=safe_errors) from exc
 
 
 @app.exception_handler(RuntimeError)
@@ -461,7 +498,7 @@ async def list_avatars() -> dict:
                 "is_premium": db_def.get("is_premium", False),
                 "preview_image_url": db_def.get("preview_image_url", "")
             })
-    indian_name_hints = ["aahana", "abhishek", "aditi", "aditya", "ankit", "arjun", "aryan", "diya", "ishita", "kabir", "karan", "kavya", "kishore", "maya", "mohan", "rahul", "rohan", "sanjay", "shruti", "sneha", "aakash", "ananya", "neha", "amit", "vikram"]
+    indian_name_hints = ["aahana", "abhishek", "aditi", "aditya", "ankit", "arjun", "aryan", "diya", "ishita", "kabir", "kavya", "kishore", "maya", "mohan", "rahul", "rohan", "shruti", "sneha", "aakash", "ananya", "neha", "amit", "vikram"]
     unprofessional_hints = ["outdoor", "sport", "casual", "t-shirt", "tshirt", "t shirt"]
 
     final_males = []
@@ -515,8 +552,8 @@ async def list_avatars() -> dict:
     # Guarantee EXACTLY 5 total males and exactly 5 total females. Force pad if the catalog falls short natively.
     m_idx = len(final_males)
     f_idx = len(final_females)
-    generic_male_names = ["Arjun", "Aditya", "Karan", "Rohan"]
-    generic_female_names = ["Shruti", "Sneha", "Kavya", "Riya"]
+    generic_male_names = ["Arjun", "Aditya", "Rohan"]
+    generic_female_names = ["Shruti", "Sneha", "Kavya"]
 
     for a in updated_avatars:
         if m_idx == 3 and f_idx == 3:
@@ -551,8 +588,8 @@ async def list_avatars() -> dict:
     # Guarantee EXACTLY 5 total males and exactly 5 total females. Force pad if the catalog falls short natively using Mediterranean/tan-skin models.
     m_idx = len(final_males)
     f_idx = len(final_females)
-    generic_male_names = ["Arjun", "Aditya", "Karan", "Rohan"]
-    generic_female_names = ["Shruti", "Sneha", "Kavya", "Riya"]
+    generic_male_names = ["Arjun", "Aditya", "Rohan"]
+    generic_female_names = ["Shruti", "Sneha", "Kavya"]
     
     brown_passing_male_hints = ["juan", "adrian", "marcos", "lucas", "rafael", "david", "mateo", "daniel"]
     brown_passing_female_hints = ["adriana", "maria", "elena", "sofia", "isabella", "ana", "carmen", "laura"]
@@ -881,9 +918,20 @@ async def generate_direct(request: DirectVideoRequest, wait: bool = True, curren
 @app.get('/videos/{video_id}/status')
 async def get_video_status(
     video_id: str,
-    request_mode: Literal['direct', 'template'] = 'direct',
+    request_mode: str = 'direct',
     current_user: str = Depends(get_current_user),
 ):
+    if request_mode.startswith('remotion'):
+        doc = await videos_collection.find_one({"video_id": video_id})
+        if not doc:
+            raise HTTPException(status_code=404, detail="Video not found")
+        # Match VideoJobResult signature
+        return {
+            "request_mode": request_mode,
+            "status": doc.get("status", "pending"),
+            "video_url": doc.get("video_url")
+        }
+
     result = service.get_video_status_result(video_id, request_mode=request_mode)
     await _persist_video_job_result(current_user, result)
     return result
@@ -1003,15 +1051,12 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
     # 1. Create a deterministic hash of the entire configuration payload
     payload_dict = payload.model_dump(exclude_none=True)
     if 'logo_bytes' in payload_dict and payload_dict['logo_bytes']:
-        # Don't natively hash raw bytes directly; hash their length/presence instead if needed, 
-        # but to be perfectly safe we can drop them from the string buffer 
         payload_dict['logo_bytes'] = str(len(payload_dict['logo_bytes']))
     
     payload_str = json.dumps(payload_dict, sort_keys=True, ensure_ascii=False)
     payload_hash = hashlib.sha256(payload_str.encode('utf-8')).hexdigest()
 
     # 2. Check Database for an identical completed video globally
-    logger.info(f"Remotion video Check Database:")
     cached_record = await videos_collection.find_one({
         "request_mode": "remotion",
         "status": "completed",
@@ -1019,65 +1064,103 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
     })
 
     if cached_record and cached_record.get('job_data'):
-        print(f"DEBUG: Returning cached Text-to-Video generation for payload hash {payload_hash}")
         # Reconstruct the VideoJobResult from the stored dataset directly
         job_data = cached_record['job_data'].copy()
         job_data.pop('payload_hash', None)
-        # Avoid overriding the new unique video_id but serve the exact same URL and metadata
         return VideoJobResult(**job_data)
 
-    try:
-        logger.info(f"Remotion video generate_video:")
-        result = await remotion_service.generate_video(payload)
-        logger.info(f"Remotion video generate_video ended:")
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    from bson import ObjectId
+    video_id = str(ObjectId())
+    logger.info(f"Initialized new Remotion video job with ID: {video_id}")
 
-    render_video_id = str(result['video_id'])
-    relative_video_path = result['video_path'].relative_to(settings.output_dir).as_posix()
-    video_url = f"/api/artifacts/{relative_video_path}"
-    
-    logger.info(f"Remotion video upload_video:")
-    s3_url = s3_service.upload_video(result['video_path'], f"videos/{render_video_id}.mp4")
-    if s3_url:
-        video_url = s3_url
-    logger.info(f"Remotion video upload_video: {video_url}")
+    # Build the queued result
     job_result = VideoJobResult(
         request_mode='remotion',
-        video_id=render_video_id,
-        status='completed',
-        video_url=video_url,
+        video_id=video_id,
+        status='queued',
+        video_url=None,
         thumbnail_url=None,
         title=f"{payload.title_prefix} - {payload.customer_name} - {payload.lan}",
-        raw_response={
-            'video_id': render_video_id,
-            'audio_path': str(result['audio_path']),
-            'text': result['text'],
-        },
-        saved_to=result['video_path'],
-        video_path=str(result['video_path']),
-        audio_path=str(result['audio_path']),
+        raw_response={},
+        saved_to=None,
     )
 
-    # 3. Save to MongoDB with the embedded payload hash flag for future queries
     embeddable_job_data = _to_mongo_safe(job_result)
-    embeddable_job_data['payload_hash'] = payload_hash
+    import uuid
+    embeddable_job_data['payload_hash'] = payload_hash + "_" + str(uuid.uuid4())
+    embeddable_job_data['request_payload'] = _to_mongo_safe(payload)
 
     video_record = VideoRecord(
         user_id=current_user,
-        status="completed",
+        status="queued",
         title=job_result.title,
-        video_url=job_result.video_url,
-        request_mode="remotion",
+        video_url=None,
+        request_mode="remotion_async",
         job_data=embeddable_job_data
     )
-    await videos_collection.insert_one(_to_mongo_safe(video_record))
     
+    # Needs a preset _id so the worker can fetch it!
+    video_record_dict = _to_mongo_safe(video_record)
+    video_record_dict['_id'] = ObjectId(video_id)
+    video_record_dict['video_id'] = video_id
+    
+    await videos_collection.insert_one(video_record_dict)
+    
+    # NOTE: Render and S3 Upload logic has been moved to the RemotionJobWorker 
+    # for asynchronous processing to prevent API timeouts.
+    logger.info(f"Job record {video_id} persisted to database. Handing off to SQS queue...")
+    
+    # 3. Submit to SQS
+    try:
+        from app.services.sqs_service import SQSService
+        from app.constants import SQS_QUEUE_URL
+        sqs_svc = SQSService()
+        sqs_svc.send_job(
+            payload={
+                'job_id': video_id,
+                'request_mode': 'remotion'
+            },
+            queue_url=SQS_QUEUE_URL
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        with open("sqs_fail.log", "a") as f:
+            f.write(f"SQS FAIL: {e}\n{traceback.format_exc()}\n")
+        await videos_collection.delete_one({'_id': _mongo_id(video_id)})
+        raise HTTPException(status_code=500, detail=f"Failed to enqueue remotion video generation: {e}")
+
+    import asyncio
+    max_wait = 300
+    waited = 0
+    final_status = "queued"
+    final_url = None
+    
+    logger.info(f"STARTING BLOCKING WAIT FOR REMOTION {video_id}")
+    while waited < max_wait:
+        await asyncio.sleep(2)
+        waited += 2
+        check_doc = await videos_collection.find_one({"video_id": video_id})
+        if check_doc:
+            st = check_doc.get("status")
+            logger.info(f"WAITING for {video_id} - {st} ({waited}s)")
+            if st in ("completed", "failed"):
+                final_status = st
+                final_url = check_doc.get("video_url")
+                if st == "failed":
+                    msg = str(check_doc.get("error_message", "Unknown render error"))
+                    logger.error(f"Remotion backend failed: {msg}")
+                    raise HTTPException(status_code=500, detail=msg)
+                break
+
+    logger.info(f"FINISHED WAIT FOR {video_id} -> {final_status}")
+    job_result.status = final_status
+    if final_url:
+        job_result.video_url = final_url
     return job_result
 
 @app.get('/my-videos')
 async def get_my_videos(current_user: str = Depends(get_current_user)):
-    print(f"DEBUG: Fetching videos for {current_user}")
     cursor = videos_collection.find({"user_id": current_user}).sort("created_at", -1)
     videos = await cursor.to_list(length=100)
 
@@ -1100,6 +1183,16 @@ async def get_my_videos(current_user: str = Depends(get_current_user)):
             video["video_url"] = "/api/artifacts/" + url.split("/artifacts/", 1)[1]
 
     return videos
+
+@app.get('/custom-avatars')
+async def get_custom_avatars():
+    """Returns metadata for precisely matched custom Indian avatars (like Adv. Mahesh).
+    Different from /jobs/avatar which is used to submit a real generation job."""
+    cursor = custom_avatars_collection.find({})
+    avatars = await cursor.to_list(length=100)
+    for av in avatars:
+        av["_id"] = str(av["_id"])
+    return avatars
 
 @app.get('/ping')
 async def ping():

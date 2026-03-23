@@ -68,3 +68,4 @@ verify_server_avatars.py
 find_avatars.py
 find_voices*.py
 test_remotion.py
+lipsync_poc/

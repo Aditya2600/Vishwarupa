@@ -49,7 +49,7 @@ const Login: React.FC = () => {
         email: data.email ?? email.trim().toLowerCase(),
         fullName: typeof data.full_name === 'string' && data.full_name.trim() ? data.full_name.trim() : null,
       });
-      toast({ title: 'Login Successful', description: 'Welcome back!' });
+      toast({ title: 'Login Successful', description: 'Welcome back!', duration: 3000 });
       navigate('/');
     } catch (error) {
       const description = getFriendlyLoginErrorMessage(error);
