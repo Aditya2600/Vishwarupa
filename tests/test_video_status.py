@@ -34,21 +34,20 @@ def test_get_video_status_result_returns_video_job_result() -> None:
 
 class FakeS3Service:
     def __init__(self) -> None:
-        self.calls: list[tuple[str, int]] = []
+        self.calls: list[str | None] = []
 
-    def generate_presigned_video_url(self, s3_key: str, expires_in: int = 3600) -> str | None:
-        self.calls.append((s3_key, expires_in))
-        return f'https://signed.example/{s3_key}?expires={expires_in}'
+    def presign_video_url(self, video_url: str | None) -> str | None:
+        self.calls.append(video_url)
+        if not video_url:
+            return video_url
+        return video_url.replace('https://vishvarupa.s3.us-east-1.amazonaws.com/', 'https://signed.example/')
 
 
 def test_presign_s3_video_url_converts_stable_s3_url(monkeypatch) -> None:
     fake_s3_service = FakeS3Service()
     monkeypatch.setattr(main_module, 's3_service', fake_s3_service)
-    monkeypatch.setattr(main_module, 'settings', SimpleNamespace(aws_region='us-east-1'))
 
-    result = main_module._presign_s3_video_url(
-        'https://vishvarupa.s3.us-east-1.amazonaws.com/videos/video.mp4'
-    )
+    result = main_module.s3_service.presign_video_url('https://vishvarupa.s3.us-east-1.amazonaws.com/videos/video.mp4')
 
-    assert result == 'https://signed.example/videos/video.mp4?expires=3600'
-    assert fake_s3_service.calls == [('videos/video.mp4', 3600)]
+    assert result == 'https://signed.example/videos/video.mp4'
+    assert fake_s3_service.calls == ['https://vishvarupa.s3.us-east-1.amazonaws.com/videos/video.mp4']

@@ -19,7 +19,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, ValidationError
 
 from app.config import settings
-from app.constants import S3_BUCKET_NAME, SQS_QUEUE_URL
+from app.constants import SQS_QUEUE_URL
 from app.models import (
     AvatarJobAck,
     AvatarJobStatusResponse,
@@ -179,30 +179,15 @@ def _to_mongo_safe(value: object) -> object:
     return value
 
 
-def _presign_s3_video_url(video_url: str | None) -> str | None:
-    if not video_url:
-        return video_url
-
-    prefix = f"https://{S3_BUCKET_NAME}.s3.{settings.aws_region}.amazonaws.com/"
-    if not video_url.startswith(prefix):
-        return video_url
-
-    s3_key = video_url[len(prefix):]
-    if not s3_key:
-        return video_url
-
-    return s3_service.generate_presigned_video_url(s3_key) or video_url
-
-
 def _response_video_job_result(result: VideoJobResult) -> VideoJobResult:
-    presigned_video_url = _presign_s3_video_url(result.video_url)
+    presigned_video_url = s3_service.presign_video_url(result.video_url)
     if presigned_video_url == result.video_url:
         return result
     return result.model_copy(update={'video_url': presigned_video_url})
 
 
 def _response_styled_video_result(result: StyledVideoResult) -> StyledVideoResult:
-    presigned_video_url = _presign_s3_video_url(result.final_video_url)
+    presigned_video_url = s3_service.presign_video_url(result.final_video_url)
     if presigned_video_url == result.final_video_url:
         return result
     return result.model_copy(update={'final_video_url': presigned_video_url})
@@ -266,7 +251,7 @@ def _build_avatar_job_status_response(job: dict) -> AvatarJobStatusResponse:
     return AvatarJobStatusResponse(
         _id=video_id,
         status=status_value,
-        video_url=_presign_s3_video_url(
+        video_url=s3_service.presign_video_url(
             str(response_payload.get('video_url') or job.get('video_url'))
         ) if (response_payload.get('video_url') or job.get('video_url')) else None,
         thumbnail_url=str(response_payload.get('thumbnail_url')) if response_payload.get('thumbnail_url') else None,
@@ -961,7 +946,7 @@ async def get_video_status(
         return {
             "request_mode": request_mode,
             "status": doc.get("status", "pending"),
-            "video_url": _presign_s3_video_url(doc.get("video_url"))
+            "video_url": s3_service.presign_video_url(doc.get("video_url"))
         }
 
     result = service.get_video_status_result(video_id, request_mode=request_mode)
@@ -1213,7 +1198,7 @@ async def get_my_videos(current_user: str = Depends(get_current_user)):
         if url and isinstance(url, str) and "/artifacts/" in url:
             video["video_url"] = "/api/artifacts/" + url.split("/artifacts/", 1)[1]
         elif isinstance(url, str):
-            video["video_url"] = _presign_s3_video_url(url)
+            video["video_url"] = s3_service.presign_video_url(url)
 
     return videos
 
