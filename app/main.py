@@ -1145,6 +1145,126 @@ async def generate_template(request: TemplateVideoRequest, wait: bool = True, cu
     return result
 
 
+<<<<<<< Updated upstream
+=======
+@app.post('/generate/remotion', response_model=VideoJobResult)
+async def generate_remotion(request: Request, current_user: str = Depends(get_current_user)):
+    import hashlib
+    import json
+    payload = await _parse_remotion_payload(request)
+    logger.info(f"Remotion video payload ended:")
+    # 1. Create a deterministic hash of the entire configuration payload
+    payload_dict = payload.model_dump(exclude_none=True)
+    if 'logo_bytes' in payload_dict and payload_dict['logo_bytes']:
+        payload_dict['logo_bytes'] = str(len(payload_dict['logo_bytes']))
+    
+    payload_str = json.dumps(payload_dict, sort_keys=True, ensure_ascii=False)
+    payload_hash = hashlib.sha256(payload_str.encode('utf-8')).hexdigest()
+
+    # 2. Check Database for an identical completed video globally
+    cached_record = await videos_collection.find_one({
+        "request_mode": "remotion",
+        "status": "completed",
+        "job_data.payload_hash": payload_hash
+    })
+
+    if cached_record and cached_record.get('job_data'):
+        # Reconstruct the VideoJobResult from the stored dataset directly
+        job_data = cached_record['job_data'].copy()
+        job_data.pop('payload_hash', None)
+        return VideoJobResult(**job_data)
+
+    from bson import ObjectId
+    video_id = str(ObjectId())
+    logger.info(f"Initialized new Remotion video job with ID: {video_id}")
+
+    # Build the queued result
+    job_result = VideoJobResult(
+        request_mode='remotion',
+        video_id=video_id,
+        status='queued',
+        video_url=None,
+        thumbnail_url=None,
+        title=f"{payload.title_prefix} - {payload.customer_name} - {payload.lan}",
+        raw_response={},
+        saved_to=None,
+    )
+
+    embeddable_job_data = _to_mongo_safe(job_result)
+    import uuid
+    embeddable_job_data['payload_hash'] = payload_hash + "_" + str(uuid.uuid4())
+    embeddable_job_data['request_payload'] = _to_mongo_safe(payload)
+
+    video_record = VideoRecord(
+        user_id=current_user,
+        status="queued",
+        title=job_result.title,
+        video_url=None,
+        request_mode="remotion_async",
+        job_data=embeddable_job_data
+    )
+    
+    # Needs a preset _id so the worker can fetch it!
+    video_record_dict = _to_mongo_safe(video_record)
+    video_record_dict['_id'] = ObjectId(video_id)
+    video_record_dict['video_id'] = video_id
+    
+    await videos_collection.insert_one(video_record_dict)
+    
+    # NOTE: Render and S3 Upload logic has been moved to the RemotionJobWorker 
+    # for asynchronous processing to prevent API timeouts.
+    logger.info(f"Job record {video_id} persisted to database. Handing off to SQS queue...")
+    
+    # 3. Submit to SQS
+    try:
+        from app.services.sqs_service import SQSService
+        from app.constants import SQS_QUEUE_URL
+        sqs_svc = SQSService()
+        sqs_svc.send_job(
+            payload={
+                '_id': video_id,
+                'request_mode': 'remotion'
+            },
+            queue_url=SQS_QUEUE_URL
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        with open("sqs_fail.log", "a") as f:
+            f.write(f"SQS FAIL: {e}\n{traceback.format_exc()}\n")
+        await videos_collection.delete_one({'_id': _mongo_id(video_id)})
+        raise HTTPException(status_code=500, detail=f"Failed to enqueue remotion video generation: {e}")
+
+    import asyncio
+    max_wait = 300
+    waited = 0
+    final_status = "queued"
+    final_url = None
+    
+    logger.info(f"STARTING BLOCKING WAIT FOR REMOTION {video_id}")
+    while waited < max_wait:
+        await asyncio.sleep(2)
+        waited += 2
+        check_doc = await videos_collection.find_one({"video_id": video_id})
+        if check_doc:
+            st = check_doc.get("status")
+            logger.info(f"WAITING for {video_id} - {st} ({waited}s)")
+            if st in ("completed", "failed"):
+                final_status = st
+                final_url = check_doc.get("video_url")
+                if st == "failed":
+                    msg = str(check_doc.get("error_message", "Unknown render error"))
+                    logger.error(f"Remotion backend failed: {msg}")
+                    raise HTTPException(status_code=500, detail=msg)
+                break
+
+    logger.info(f"FINISHED WAIT FOR {video_id} -> {final_status}")
+    job_result.status = final_status
+    if final_url:
+        job_result.video_url = final_url
+    return job_result
+
+>>>>>>> Stashed changes
 @app.get('/my-videos')
 async def get_my_videos(current_user: str = Depends(get_current_user)):
     cursor = videos_collection.find({"user_id": current_user}).sort("created_at", -1)

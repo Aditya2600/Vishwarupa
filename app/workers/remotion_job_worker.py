@@ -56,11 +56,15 @@ class RemotionJobWorker:
     async def _poll_once(self) -> None:
         """Fetch one batch of messages from SQS and process them."""
         try:
+<<<<<<< Updated upstream
             messages = self.sqs_service.receive_messages(
                 queue_url=self.queue_url, 
                 max_messages=5,
                 visibility_timeout=settings.sqs_visibility_timeout_seconds
             )
+=======
+            messages = self.sqs_service.receive_messages(queue_url=self.queue_url, max_messages=settings.sqs_max_receive_count)
+>>>>>>> Stashed changes
             for message in messages:
                 import json
                 body_raw = message.get("Body", "{}")

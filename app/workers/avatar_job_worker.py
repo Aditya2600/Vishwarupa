@@ -105,7 +105,7 @@ class AvatarJobWorker:
                 response = await asyncio.to_thread(
                     self.sqs_service.client.receive_message,
                     QueueUrl=self.queue_url,
-                    MaxNumberOfMessages=5,
+                    MaxNumberOfMessages=settings.sqs_max_receive_count,
                     WaitTimeSeconds=max(1, settings.sqs_wait_time_seconds),
                     VisibilityTimeout=max(1, settings.sqs_visibility_timeout_seconds),
                     AttributeNames=['ApproximateReceiveCount'],
