@@ -59,7 +59,7 @@ class RemotionJobWorker:
             messages = self.sqs_service.receive_messages(
                 queue_url=self.queue_url, 
                 max_messages=5,
-                visibility_timeout=600 # 10 minute protection for long renders
+                visibility_timeout=settings.sqs_visibility_timeout_seconds
             )
             for message in messages:
                 import json
