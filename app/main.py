@@ -877,7 +877,7 @@ async def generate_remotion_video(
 
         # 3. Enqueue to SQS
         sqs_payload = {
-            "video_id": video_id,
+            "_id": video_id,
             "request_mode": "remotion"
         }
         sqs_service = SQSService()
@@ -885,7 +885,7 @@ async def generate_remotion_video(
         logger.info(f"ENQUEUED {video_id} to SQS.")
 
         # 4. Optimized Polling Loop (Restored & Clean)
-        max_wait_seconds = 300
+        max_wait_seconds = settings.poll_timeout_seconds
         poll_interval = 2
         waited = 0
 
