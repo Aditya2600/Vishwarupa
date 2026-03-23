@@ -825,12 +825,18 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 @app.post("/generate/remotion", response_model=VideoJobResult)
 async def generate_remotion_video(
     request: Request,
-    logo_file: UploadFile | None = File(None),
-    user: dict = Depends(get_current_user)
+    current_user: str = Depends(get_current_user)
 ):
     form_data = await request.form()
     data_dict = dict(form_data)
-    data_dict.pop("logo_file", None)
+    
+    logo_file_param = data_dict.pop("logo_file", None)
+    # also remove logoFile if frontend sent it by that name conceptually:
+    logo_file_param = data_dict.pop("logoFile", logo_file_param)
+    
+    # In Starlette, form_data gets are UploadFile objects if it's a file
+    from starlette.datastructures import UploadFile as StarletteUploadFile
+    from fastapi import UploadFile
 
     try:
         remotion_req = RemotionVideoRequest(**data_dict)
@@ -838,9 +844,9 @@ async def generate_remotion_video(
         logger.error(f"Validation error: {e}")
         raise HTTPException(status_code=422, detail=str(e))
 
-    if logo_file:
-        remotion_req.logo_bytes = await logo_file.read()
-        remotion_req.logo_filename = logo_file.filename
+    if isinstance(logo_file_param, (UploadFile, StarletteUploadFile)):
+        remotion_req.logo_bytes = await logo_file_param.read()
+        remotion_req.logo_filename = logo_file_param.filename
 
     """
     Standard production flow for Remotion video generation:
@@ -853,13 +859,13 @@ async def generate_remotion_video(
         # 1. Generate unique video_id
         import uuid
         video_id = str(uuid.uuid4())
-        logger.info(f"INITIATING Remotion generation: {video_id} for user {user.get('email')}")
+        logger.info(f"INITIATING Remotion generation: {video_id} for user {current_user}")
 
         # 2. Record initial job in MongoDB
         video_record = {
             "video_id": video_id,
             "status": "queued",
-            "user_id": str(user["_id"]),
+            "user_id": current_user,
             "job_data": {
                 "request_payload": remotion_req.model_dump(mode="python"),
                 "request_mode": "remotion"
