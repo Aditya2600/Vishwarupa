@@ -1067,7 +1067,7 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         return VideoJobResult(**job_data)
 
     embeddable_job_data = {
-        'payload_hash': payload_hash,
+        'payload_hash': f"{payload_hash}_{time.time()}",
         'request_payload': _to_mongo_safe(payload),
         'request_mode': 'remotion'
     }
@@ -1122,33 +1122,6 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         await videos_collection.delete_one({'_id': _mongo_id(video_id)})
         raise HTTPException(status_code=500, detail=f"Failed to enqueue remotion video generation: {e}")
 
-    import asyncio
-    max_wait = settings.poll_timeout_seconds
-    waited = 0
-    final_status = "queued"
-    final_url = None
-    
-    logger.info(f"STARTING BLOCKING WAIT FOR REMOTION {video_id}")
-    while waited < max_wait:
-        await asyncio.sleep(2)
-        waited += 2
-        check_doc = await videos_collection.find_one({"video_id": video_id})
-        if check_doc:
-            st = check_doc.get("status")
-            logger.info(f"WAITING for {video_id} - {st} ({waited}s)")
-            if st in ("completed", "failed"):
-                final_status = st
-                final_url = check_doc.get("video_url")
-                if st == "failed":
-                    msg = str(check_doc.get("error_message", "Unknown render error"))
-                    logger.error(f"Remotion backend failed: {msg}")
-                    raise HTTPException(status_code=500, detail=msg)
-                break
-
-    logger.info(f"FINISHED WAIT FOR {video_id} -> {final_status}")
-    job_result.status = final_status
-    if final_url:
-        job_result.video_url = final_url
     return job_result
 
 @app.get('/my-videos')
