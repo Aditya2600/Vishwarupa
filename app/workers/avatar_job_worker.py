@@ -105,7 +105,7 @@ class AvatarJobWorker:
                 response = await asyncio.to_thread(
                     self.sqs_service.client.receive_message,
                     QueueUrl=self.queue_url,
-                    MaxNumberOfMessages=settings.sqs_max_receive_count,
+                    MaxNumberOfMessages=5,
                     WaitTimeSeconds=max(1, settings.sqs_wait_time_seconds),
                     VisibilityTimeout=max(1, settings.sqs_visibility_timeout_seconds),
                     AttributeNames=['ApproximateReceiveCount'],
@@ -144,13 +144,7 @@ class AvatarJobWorker:
                 await asyncio.to_thread(self.sqs_service.delete_message, receipt_handle, self.queue_url)
             return
 
-        # NEW: Ignore messages intended for the Remotion worker by handling them instantly
-        if str(video.get("request_mode", "")).startswith("remotion"):
-            logger.info("AvatarWorker intercepting and instantly routing Remotion job %s", video_id)
-            from app.workers.remotion_job_worker import RemotionJobWorker
-            await RemotionJobWorker()._process_job(video_id, receipt_handle)
-            return
-    
+
         current_status = str(video.get('status') or 'queued').lower()
         if current_status in {'processing', 'completed', 'failed'}:
             logger.info('Video %s already in terminal/in-flight state (%s); deleting duplicate message.', video_id, current_status)
