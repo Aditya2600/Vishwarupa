@@ -57,7 +57,7 @@ class RemotionJobWorker:
     async def _poll_once(self) -> None:
         """Fetch one batch of messages from SQS and process them."""
         try:
-            messages = self.sqs_service.receive_messages(queue_url=self.queue_url, max_messages=settings.sqs_max_receive_count)
+            messages = self.sqs_service.receive_messages(queue_url=self.queue_url, max_messages=5)
             for message in messages:
                 import json
                 body_raw = message.get("Body", "{}")
@@ -66,8 +66,7 @@ class RemotionJobWorker:
                 except Exception:
                     body = {}
 
-                # STANDARD: use video_id consistently
-                video_id = body.get('video_id') or body.get('job_id') or body.get('_id')
+                video_id = body.get('_id')
                 receipt_handle = message.get("ReceiptHandle")
 
                 if not video_id:
