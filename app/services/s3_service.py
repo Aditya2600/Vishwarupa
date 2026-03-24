@@ -37,3 +37,33 @@ class S3Service:
         except Exception as e:
             logger.error(f"Failed to upload to S3: {e}")
             return None
+
+    def generate_presigned_video_url(self, s3_key: str, expires_in: int = 3600) -> str | None:
+        """Returns a temporary download URL for a private S3 object."""
+        if not self.s3 or not self.bucket:
+            logger.info("S3 credentials or bucket missing. Skipping presigned URL generation.")
+            return None
+
+        try:
+            return self.s3.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': self.bucket, 'Key': s3_key},
+                ExpiresIn=expires_in,
+            )
+        except Exception as e:
+            logger.error(f"Failed to generate presigned URL for {s3_key}: {e}")
+            return None
+
+    def presign_video_url(self, video_url: str | None) -> str | None:
+        if not video_url:
+            return video_url
+
+        prefix = f"https://{self.bucket}.s3.{settings.aws_region}.amazonaws.com/"
+        if not video_url.startswith(prefix):
+            return video_url
+
+        s3_key = video_url[len(prefix):]
+        if not s3_key:
+            return video_url
+
+        return self.generate_presigned_video_url(s3_key) or video_url

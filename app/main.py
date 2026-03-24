@@ -1,6 +1,7 @@
 import asyncio
 import sys
-
+import hashlib
+import json
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
@@ -154,6 +155,20 @@ def _to_mongo_safe(value: object) -> object:
     return value
 
 
+def _response_video_job_result(result: VideoJobResult) -> VideoJobResult:
+    presigned_video_url = s3_service.presign_video_url(result.video_url)
+    if presigned_video_url == result.video_url:
+        return result
+    return result.model_copy(update={'video_url': presigned_video_url})
+
+
+def _response_styled_video_result(result: StyledVideoResult) -> StyledVideoResult:
+    presigned_video_url = s3_service.presign_video_url(result.final_video_url)
+    if presigned_video_url == result.final_video_url:
+        return result
+    return result.model_copy(update={'final_video_url': presigned_video_url})
+
+
 async def _persist_video_job_result(current_user: str, result: VideoJobResult) -> None:
     update_fields: dict[str, object] = {
         "status": _normalize_video_status(result.status),
@@ -212,7 +227,9 @@ def _build_avatar_job_status_response(job: dict) -> AvatarJobStatusResponse:
     return AvatarJobStatusResponse(
         _id=video_id,
         status=status_value,
-        video_url=str(response_payload.get('video_url') or job.get('video_url')) if (response_payload.get('video_url') or job.get('video_url')) else None,
+        video_url=s3_service.presign_video_url(
+            str(response_payload.get('video_url') or job.get('video_url'))
+        ) if (response_payload.get('video_url') or job.get('video_url')) else None,
         thumbnail_url=str(response_payload.get('thumbnail_url')) if response_payload.get('thumbnail_url') else None,
         title=str(response_payload.get('title') or job.get('title')) if (response_payload.get('title') or job.get('title')) else None,
         error=error,
@@ -887,8 +904,8 @@ async def generate_direct(request: DirectVideoRequest, wait: bool = True, curren
         job_data=_to_mongo_safe(result)
     )
     await videos_collection.insert_one(_to_mongo_safe(video_record))
-
-    return result
+    
+    return _response_video_job_result(result)
 
 
 @app.get('/videos/{video_id}/status')
@@ -914,13 +931,12 @@ async def get_video_status(
             "video_id": str(doc["_id"]),
             "_id": str(doc["_id"]),
             "status": doc.get("status", "pending"),
-            "video_url": doc.get("video_url"),
-            "error": doc.get("error_message", "Unknown backend remotion error")
+            "video_url": s3_service.presign_video_url(doc.get("video_url"))
         }
 
     result = service.get_video_status_result(video_id, request_mode=request_mode)
     await _persist_video_job_result(current_user, result)
-    return result
+    return _response_video_job_result(result)
 
 
 @app.post('/videos/{video_id}/stylize', response_model=StyledVideoResult)
@@ -1002,7 +1018,7 @@ async def stylize_video(
         }}
     )
     print(f"DEBUG: Stylize completed and updated in DB for video {video_id}")
-    return result
+    return _response_styled_video_result(result)
 
 
 @app.post('/generate/template')
@@ -1025,13 +1041,12 @@ async def generate_template(request: TemplateVideoRequest, wait: bool = True, cu
     )
     await videos_collection.insert_one(_to_mongo_safe(video_record))
     print(f"DEBUG: Template generation saved to DB")
-    return result
+    return _response_video_job_result(result)
 
 
 @app.post('/generate/remotion', response_model=VideoJobResult)
 async def generate_remotion(request: Request, current_user: str = Depends(get_current_user)):
-    import hashlib
-    import json
+
     payload = await _parse_remotion_payload(request)
     logger.info(f"Remotion video payload ended:")
     # 1. Create a deterministic hash of the entire configuration payload
@@ -1049,15 +1064,27 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         "job_data.payload_hash": payload_hash
     })
 
-    if cached_record:
-        return VideoJobResult(
-            request_mode="remotion",
-            video_id=str(cached_record["_id"]),
-            status=cached_record.get("status", "completed"),
-            video_url=cached_record.get("video_url"),
-            thumbnail_url=cached_record.get("thumbnail_url"),
-            title=cached_record.get("title"),
-        )
+    if cached_record and cached_record.get('job_data'):
+        # Reconstruct the VideoJobResult from the stored dataset directly
+        job_data = cached_record['job_data'].copy()
+        job_data.pop('payload_hash', None)
+        return _response_video_job_result(VideoJobResult(**job_data))
+
+    from bson import ObjectId
+    video_id = str(ObjectId())
+    logger.info(f"Initialized new Remotion video job with ID: {video_id}")
+
+    # Build the queued result
+    job_result = VideoJobResult(
+        request_mode='remotion',
+        video_id=video_id,
+        status='queued',
+        video_url=None,
+        thumbnail_url=None,
+        title=f"{payload.title_prefix} - {payload.customer_name} - {payload.lan}",
+        raw_response={},
+        saved_to=None,
+    )
 
     embeddable_job_data = {
         'payload_hash': f"{payload_hash}_{time.time()}",
@@ -1115,7 +1142,34 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         await videos_collection.delete_one({'_id': _mongo_id(video_id)})
         raise HTTPException(status_code=500, detail=f"Failed to enqueue remotion video generation: {e}")
 
-    return job_result
+    import asyncio
+    max_wait = 300
+    waited = 0
+    final_status = "queued"
+    final_url = None
+    
+    logger.info(f"STARTING BLOCKING WAIT FOR REMOTION {video_id}")
+    while waited < max_wait:
+        await asyncio.sleep(2)
+        waited += 2
+        check_doc = await videos_collection.find_one({"video_id": video_id})
+        if check_doc:
+            st = check_doc.get("status")
+            logger.info(f"WAITING for {video_id} - {st} ({waited}s)")
+            if st in ("completed", "failed"):
+                final_status = st
+                final_url = check_doc.get("video_url")
+                if st == "failed":
+                    msg = str(check_doc.get("error_message", "Unknown render error"))
+                    logger.error(f"Remotion backend failed: {msg}")
+                    raise HTTPException(status_code=500, detail=msg)
+                break
+
+    logger.info(f"FINISHED WAIT FOR {video_id} -> {final_status}")
+    job_result.status = final_status
+    if final_url:
+        job_result.video_url = final_url
+    return _response_video_job_result(job_result)
 
 @app.get('/my-videos')
 async def get_my_videos(current_user: str = Depends(get_current_user)):
@@ -1139,6 +1193,8 @@ async def get_my_videos(current_user: str = Depends(get_current_user)):
         url = video.get("video_url")
         if url and isinstance(url, str) and "/artifacts/" in url:
             video["video_url"] = "/api/artifacts/" + url.split("/artifacts/", 1)[1]
+        elif isinstance(url, str):
+            video["video_url"] = s3_service.presign_video_url(url)
 
         video.pop("job_data", None)
         video.pop("request_payload", None)
