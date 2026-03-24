@@ -287,6 +287,34 @@ async def _refresh_processing_video(video: dict[str, Any], current_user: str) ->
     video["job_data"] = _to_mongo_safe(refreshed)
 
 
+def _serialize_my_video(video: dict[str, Any]) -> dict[str, Any]:
+    raw_id = video.get("_id")
+    video_id = str(raw_id) if raw_id is not None else ""
+
+    raw_url = video.get("video_url")
+    video_url: str | None
+    if isinstance(raw_url, str) and "/artifacts/" in raw_url:
+        video_url = "/api/artifacts/" + raw_url.split("/artifacts/", 1)[1]
+    elif isinstance(raw_url, str):
+        video_url = s3_service.presign_video_url(raw_url)
+    else:
+        video_url = None
+
+    created_at = video.get("created_at")
+    updated_at = video.get("updated_at")
+
+    return {
+        "_id": video_id,
+        "title": str(video.get("title") or ""),
+        "status": str(video.get("status") or "queued"),
+        "request_mode": str(video.get("request_mode") or ""),
+        "video_url": video_url,
+        "thumbnail_url": str(video.get("thumbnail_url")) if video.get("thumbnail_url") else None,
+        "created_at": created_at.isoformat() if isinstance(created_at, datetime) else created_at,
+        "updated_at": updated_at.isoformat() if isinstance(updated_at, datetime) else updated_at,
+    }
+
+
 def _form_text(value: object) -> str | None:
     if value is None:
         return None
@@ -1185,22 +1213,21 @@ async def get_my_videos(current_user: str = Depends(get_current_user)):
         refresh_results = await asyncio.gather(*refresh_tasks, return_exceptions=True)
         for refresh_result in refresh_results:
             if isinstance(refresh_result, Exception):
-                logger.error(f"Failed to refresh background direct video: {refresh_result}")
+                logger.exception("Failed to refresh background direct video: %s", refresh_result)
 
+    serialized_videos: list[dict[str, Any]] = []
     for video in videos:
-        video["_id"] = str(video["_id"])
-        
-        url = video.get("video_url")
-        if url and isinstance(url, str) and "/artifacts/" in url:
-            video["video_url"] = "/api/artifacts/" + url.split("/artifacts/", 1)[1]
-        elif isinstance(url, str):
-            video["video_url"] = s3_service.presign_video_url(url)
+        try:
+            serialized_videos.append(_serialize_my_video(video))
+        except Exception as exc:
+            logger.exception(
+                "Failed to serialize /my-videos item for user %s and video %s: %s",
+                current_user,
+                str(video.get("_id") or ""),
+                exc,
+            )
 
-        video.pop("job_data", None)
-        video.pop("request_payload", None)
-        video.pop("result_payload", None)
-
-    return videos
+    return serialized_videos
 
 @app.get('/custom-avatars')
 async def get_custom_avatars():
