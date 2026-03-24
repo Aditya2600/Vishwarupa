@@ -5,6 +5,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from bson import ObjectId
 
 from app.config import settings
 from app.constants import SQS_QUEUE_URL
@@ -15,6 +16,13 @@ from app.services.remotion_service import RemotionService
 from app.services.s3_service import S3Service
 
 logger = logging.getLogger("app")
+
+
+def _mongo_id(value: str) -> ObjectId | str:
+    cleaned = str(value)
+    if ObjectId.is_valid(cleaned):
+        return ObjectId(cleaned)
+    return cleaned
 
 
 def _to_mongo_safe(obj: Any) -> Any:
@@ -56,7 +64,11 @@ class RemotionJobWorker:
     async def _poll_once(self) -> None:
         """Fetch one batch of messages from SQS and process them."""
         try:
-            messages = self.sqs_service.receive_messages(queue_url=self.queue_url, max_messages=5)
+            messages = await asyncio.to_thread(
+                self.sqs_service.receive_messages,
+                self.queue_url,
+                max_messages=5
+            )
             for message in messages:
                 import json
                 body_raw = message.get("Body", "{}")
@@ -65,35 +77,29 @@ class RemotionJobWorker:
                 except Exception:
                     body = {}
 
-                request_mode = body.get("request_mode")
-
-                # Only handle remotion jobs in this worker
-                if request_mode != "remotion":
-                    continue
-
-                job_id = body.get("job_id") or body.get("_id")
+                video_id = body.get('_id')
                 receipt_handle = message.get("ReceiptHandle")
 
-                if not job_id:
-                    logger.warning(f"RemotionJobWorker: Received message with no job_id/id: {body}, skipping.")
+                if not video_id:
+                    logger.warning(f"RemotionJobWorker: Received message with no video_id/job_id: {body}, skipping.")
                     if receipt_handle:
                         self.sqs_service.delete_message(receipt_handle, self.queue_url)
                     continue
 
-                await self._process_job(job_id, receipt_handle)
+                await self._process_job(str(video_id), receipt_handle)
 
         except Exception as exc:
             logger.error(f"RemotionJobWorker: Error processing message: {exc}")
 
-    async def _process_job(self, job_id: str, receipt_handle: str | None) -> None:
+    async def _process_job(self, video_id: str, receipt_handle: str | None) -> None:
         """Fetch job from MongoDB, run Remotion generation, and update the record."""
         # 1. Fetch full job document from MongoDB
         job_doc = await self.videos_collection_ref.find_one(
-            {"video_id": job_id, "request_mode": "remotion_async"}
+            {"_id": _mongo_id(video_id)}
         )
 
         if not job_doc:
-            logger.warning(f"RemotionJobWorker: No job found for job_id={job_id}. It may have been processed already.")
+            logger.warning(f"RemotionJobWorker: No job found for video_id={video_id}. It may have been processed already.")
             if receipt_handle:
                 self.sqs_service.delete_message(receipt_handle, self.queue_url)
             return
@@ -101,7 +107,7 @@ class RemotionJobWorker:
         # 2. Check if already completed/processing
         current_status = job_doc.get("status", "queued")
         if current_status in ("completed", "failed"):
-            logger.info(f"RemotionJobWorker: job_id={job_id} already in status={current_status}. Deleting from SQS.")
+            logger.info(f"RemotionJobWorker: video_id={video_id} already in status={current_status}. Deleting from SQS.")
             if receipt_handle:
                 self.sqs_service.delete_message(receipt_handle, self.queue_url)
             return
@@ -109,7 +115,7 @@ class RemotionJobWorker:
         # 3. Mark as processing
         now = datetime.utcnow()
         await self.videos_collection_ref.update_one(
-            {"video_id": job_id},
+            {"_id": _mongo_id(video_id)},
             {"$set": {
                 "status": "processing",
                 "updated_at": now,
@@ -121,16 +127,17 @@ class RemotionJobWorker:
             raw_payload = job_doc.get("job_data", {}).get("request_payload", {})
             remotion_req = RemotionVideoRequest(**raw_payload)
             
-            result_payload = await self.remotion_service.generate_video(remotion_req)
+            # Pass the video_id down to consolidate all file naming
+            result_payload = await self.remotion_service.generate_video(remotion_req, video_id=video_id)
             result_path = result_payload["video_path"]
             
             # 5. Upload to S3
-            s3_key = f"videos/{job_id}.mp4"
+            s3_key = f"videos/{video_id}.mp4"
             final_url = self.s3_service.upload_video(result_path, s3_key)
             
             # 6. Update MongoDB to completed
             await self.videos_collection_ref.update_one(
-                {"video_id": job_id},
+                {"_id": _mongo_id(video_id)},
                 {"$set": {
                     "status": "completed",
                     "video_url": final_url,
@@ -143,9 +150,9 @@ class RemotionJobWorker:
                 self.sqs_service.delete_message(receipt_handle, self.queue_url)
 
         except Exception as exc:
-            logger.error(f"RemotionJobWorker: Failed to process job_id={job_id}: {exc}")
+            logger.error(f"RemotionJobWorker: Failed to process video_id={video_id}: {exc}")
             await self.videos_collection_ref.update_one(
-                {"video_id": job_id},
+                {"_id": _mongo_id(video_id)},
                 {"$set": {
                     "status": "failed",
                     "error_message": str(exc),
@@ -154,3 +161,15 @@ class RemotionJobWorker:
             )
             if receipt_handle:
                 self.sqs_service.delete_message(receipt_handle, self.queue_url)
+
+
+def main():
+    worker = RemotionJobWorker()
+    try:
+        asyncio.run(worker.run_forever())
+    except KeyboardInterrupt:
+        logger.info("Worker stopped by user.")
+
+
+if __name__ == "__main__":
+    main()

@@ -75,6 +75,7 @@ function hasMeaningfulDraft(state: WizardState | null): state is WizardState {
 
   return Boolean(
     state.currentStep > 0 ||
+    state.generatedVideo?._id ||
     state.generatedVideo?.video_id ||
     state.generationStatus !== "idle" ||
     state.customerName.trim() ||
@@ -103,7 +104,7 @@ function buildLocalDraftItem(): VideoListItem | null {
   const flowLabel = draft.videoType === "remotion" ? "Text video" : "Avatar video";
 
   return {
-    _id: draft.generatedVideo?.video_id ?? `local-draft-${draft.videoType}`,
+    _id: draft.generatedVideo?._id ?? draft.generatedVideo?.video_id ?? `local-draft-${draft.videoType}`,
     title: draft.generatedVideo?.title ?? `${draft.customerName.trim() || flowLabel} draft`,
     status,
     request_mode: `${draft.videoType} (local draft)`,

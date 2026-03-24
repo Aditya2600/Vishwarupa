@@ -149,7 +149,7 @@ function restoreSavedState(savedState: Partial<WizardState>): WizardState {
       restored.styledVideoPath = "";
       restored.subtitleSource = "disabled";
       restored.generationError = "";
-    } else if (restored.generatedVideo?.video_id) {
+    } else if (restored.generatedVideo?._id || restored.generatedVideo?.video_id) {
       restored.generationStatus = "submitting";
       restored.styledVideoUrl = "";
       restored.styledVideoPath = "";
@@ -165,7 +165,7 @@ function restoreSavedState(savedState: Partial<WizardState>): WizardState {
 
   if (
     restored.generationStatus === "submitting" &&
-    !restored.generatedVideo?.video_id &&
+    !(restored.generatedVideo?._id || restored.generatedVideo?.video_id) &&
     !(restored.videoType === "avatar" && restored.avatarJobId.trim())
   ) {
     restored.generationStatus = "failed";

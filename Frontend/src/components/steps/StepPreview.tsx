@@ -194,7 +194,7 @@ export function StepPreview({ state, update }: StepPreviewProps) {
           <SummaryRow label="Aspect Ratio" value={state.aspectRatio} />
           <SummaryRow label="Status" value={statusLabel} />
           {state.styledVideoUrl ? <SummaryRow label="Styled Output" value={state.subtitleSource} /> : null}
-          {generatedVideo?.video_id ? <SummaryRow label="Video ID" value={generatedVideo.video_id} /> : null}
+          {(generatedVideo?._id || generatedVideo?.video_id) ? <SummaryRow label="Video ID" value={generatedVideo._id || generatedVideo.video_id!} /> : null}
         </div>
       </div>
     </div>

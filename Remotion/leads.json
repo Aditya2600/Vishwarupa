@@ -1,100 +1,85 @@
 [
   {
-    "id": "LAN1234_1773919364",
-    "language": "Hindi",
+    "id": "69c2397d5fedf83a122cfb4f",
+    "language": null,
     "video_variety": "personalized",
-    "audio_url": "/audio/LAN1234_1773919364.mp3",
+    "audio_url": "/audio/69c2397d5fedf83a122cfb4f.mp3",
     "subtitles": [
       {
-        "text": "नमस्ते Khushi।",
+        "text": "Hello Customer. 2",
         "start": 0.05,
-        "end": 2.175
+        "end": 2.012
       },
       {
-        "text": "मैं TVS की ओर से आपके loan खाते के संबंध में एक महत्वपूर्ण औपचारिक सूचना साझा कर रही हूँ।",
-        "start": 2.175,
-        "end": 10.9
+        "text": "I am calling from Bank regarding your loan account. 3",
+        "start": 2.012,
+        "end": 6.125
       },
       {
-        "text": "हमारी जानकारी के अनुसार इस खाते की मूल राशि थी और वर्तमान कुल बकाया राशि 34 हजार 567 है।",
-        "start": 10.9,
-        "end": 20.237
+        "text": "The total outstanding balance is None. 4",
+        "start": 6.125,
+        "end": 9.5
       },
       {
-        "text": "खाता संख्या पर लंबित भुगतान के बारे में पहले भी सूचित किया गया था, लेकिन स्थिति अभी तक सामान्य नहीं हुई है।",
-        "start": 20.237,
-        "end": 28.95
-      },
-      {
-        "text": "कृपया इस सूचना को गंभीरता से लें और भुगतान अथवा पुनर्भुगतान विकल्प पर चर्चा के लिए तुरंत एक आठ शून्य शून्य पाँच पाँच पाँच नौ नौ नौ पर संपर्क करें।",
-        "start": 28.95,
-        "end": 41.912
-      },
-      {
-        "text": "समय पर प्रतिक्रिया देने से आगे की एस्कलेशन से बचने में मदद मिल सकती है।",
-        "start": 41.912,
-        "end": 48.25
-      },
-      {
-        "text": "धन्यवाद।",
-        "start": 48.25,
-        "end": 50.15
+        "text": "Please contact us at None to discuss repayment options.",
+        "start": 9.5,
+        "end": 14.1
       }
     ],
-    "customer_name": "Khushi",
-    "lan": "LAN1234",
-    "client_name": "TVS",
-    "tos": "34567",
-    "loan_amount": "2345678",
+    "customer_name": "Customer",
+    "lan": "N/A",
+    "client_name": "Bank",
+    "tos": "",
+    "loan_amount": "",
     "scene_payload": {
       "opening": {
-        "eyebrow": "औपचारिक सूचना",
-        "headline": "Khushi जी, आपके ऋण खाता पर सूचना",
-        "subheadline": "TVS | खाता LAN1234"
+        "eyebrow": "Formal Notice",
+        "headline": "Customer, notice for your Loan Account",
+        "subheadline": "Bank | Account N/A"
       },
       "account": {
-        "eyebrow": "लोन भुगतान स्थिति",
-        "headline": "खाता LAN1234",
-        "supporting": "कुल बकाया 34567",
+        "eyebrow": "Loan Payment Status",
+        "headline": "Account N/A",
+        "supporting": "Total Outstanding 0",
         "badge": "Formal Notice"
       },
       "context": {
-        "eyebrow": "स्थिति सारांश",
+        "eyebrow": "Status Summary",
         "headline": "Account Overdue",
-        "body": "TVS में लोन का भुगतान लंबित है। बकाया राशि: 34567।"
+        "body": "Payment for Loan at Bank is overdue. Balance: 0."
       },
       "amounts": {
         "eyebrow": "Financials",
         "headline": "Amount Summary",
-        "body": "Principal: 2345678",
+        "body": "Payment delay",
         "note": "Discuss options."
       },
       "action": {
         "eyebrow": "Next Step",
         "headline": "Contact Today",
-        "body": "समाधान के लिए अभी 1800-555-999 पर संपर्क करें।",
+        "body": "Contact None now for repayment options.",
         "cta_label": "Call Now",
-        "cta_value": "1800-555-999"
+        "cta_value": null
       },
       "closing": {
         "eyebrow": "Resolution",
         "headline": "Act Now",
-        "body": "TVS is waiting."
+        "body": "Bank is waiting."
       },
-      "headline_text": "Khushi जी, आपके ऋण खाता पर सूचना",
-      "cta_text": "समाधान के लिए अभी 1800-555-999 पर संपर्क करें।",
+      "headline_text": "Customer, notice for your Loan Account",
+      "cta_text": "Contact None now for repayment options.",
       "ui_copy": {
-        "formalNotice": "औपचारिक सूचना",
-        "accountStatus": "खाता स्थिति",
-        "financialHighlights": "वित्तीय मुख्य बिंदु",
-        "immediateNextStep": "तत्काल अगला कदम",
-        "resolutionStillPossible": "समाधान अभी भी संभव है",
-        "customerLabel": "ग्राहक",
-        "clientLabel": "बैंक",
-        "productLabel": "उत्पाद",
-        "outstandingLabel": "कुल बकाया",
-        "finalSummary": "अंतिम सारांश",
-        "contactLabel": "संपर्क"
+        "formalNotice": "Formal Notice",
+        "accountStatus": "Account Status",
+        "financialHighlights": "Financial Highlights",
+        "immediateNextStep": "Next Step",
+        "resolutionStillPossible": "Possible Solution",
+        "customerLabel": "Customer",
+        "clientLabel": "Client",
+        "productLabel": "Product",
+        "outstandingLabel": "Outstanding",
+        "finalSummary": "Summary",
+        "contactLabel": "Contact"
       }
     },
     "branding": {

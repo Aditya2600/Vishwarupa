@@ -69,3 +69,7 @@ find_avatars.py
 find_voices*.py
 test_remotion.py
 lipsync_poc/
+
+# Remotion JSON artifacts
+Remotion/leads.json
+Remotion/props_*.json
