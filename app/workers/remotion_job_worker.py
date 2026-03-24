@@ -18,6 +18,13 @@ from app.services.s3_service import S3Service
 logger = logging.getLogger("app")
 
 
+def _mongo_id(value: str) -> ObjectId | str:
+    cleaned = str(value)
+    if ObjectId.is_valid(cleaned):
+        return ObjectId(cleaned)
+    return cleaned
+
+
 def _to_mongo_safe(obj: Any) -> Any:
     """Recursively convert Pydantic models and Paths to JSON-safe types."""
     if hasattr(obj, "model_dump"):
@@ -84,7 +91,7 @@ class RemotionJobWorker:
         """Fetch job from MongoDB, run Remotion generation, and update the record."""
         # 1. Fetch full job document from MongoDB
         job_doc = await self.videos_collection_ref.find_one(
-            {"_id": ObjectId(video_id)}
+            {"_id": _mongo_id(video_id)}
         )
 
         if not job_doc:
@@ -104,7 +111,7 @@ class RemotionJobWorker:
         # 3. Mark as processing
         now = datetime.utcnow()
         await self.videos_collection_ref.update_one(
-            {"_id": ObjectId(video_id)},
+            {"_id": _mongo_id(video_id)},
             {"$set": {
                 "status": "processing",
                 "updated_at": now,
@@ -126,7 +133,7 @@ class RemotionJobWorker:
             
             # 6. Update MongoDB to completed
             await self.videos_collection_ref.update_one(
-                {"_id": ObjectId(video_id)},
+                {"_id": _mongo_id(video_id)},
                 {"$set": {
                     "status": "completed",
                     "video_url": final_url,
@@ -141,7 +148,7 @@ class RemotionJobWorker:
         except Exception as exc:
             logger.error(f"RemotionJobWorker: Failed to process video_id={video_id}: {exc}")
             await self.videos_collection_ref.update_one(
-                {"_id": ObjectId(video_id)},
+                {"_id": _mongo_id(video_id)},
                 {"$set": {
                     "status": "failed",
                     "error_message": str(exc),
