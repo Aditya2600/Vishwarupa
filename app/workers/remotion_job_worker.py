@@ -64,7 +64,11 @@ class RemotionJobWorker:
     async def _poll_once(self) -> None:
         """Fetch one batch of messages from SQS and process them."""
         try:
-            messages = self.sqs_service.receive_messages(queue_url=self.queue_url, max_messages=5)
+            messages = await asyncio.to_thread(
+                self.sqs_service.receive_messages,
+                self.queue_url,
+                max_messages=5
+            )
             for message in messages:
                 import json
                 body_raw = message.get("Body", "{}")
