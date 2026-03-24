@@ -144,6 +144,12 @@ class AvatarJobWorker:
                 await asyncio.to_thread(self.sqs_service.delete_message, receipt_handle, self.queue_url)
             return
 
+        # NEW: Ignore messages intended for the Remotion worker by handling them instantly
+        if str(video.get("request_mode", "")).startswith("remotion"):
+            logger.info("AvatarWorker intercepting and routing Remotion job %s", video_id)
+            from app.workers.remotion_job_worker import RemotionJobWorker
+            await RemotionJobWorker()._process_job(video_id, receipt_handle)
+            return
 
         current_status = str(video.get('status') or 'queued').lower()
         if current_status in {'processing', 'completed', 'failed'}:
