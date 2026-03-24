@@ -64,7 +64,8 @@ export interface AvatarJobStatus {
 
 export interface VideoJobResult {
   request_mode: "direct" | "template" | "remotion";
-  video_id: string;
+  video_id?: string;
+  _id?: string;
   status: string;
   video_url: string | null;
   thumbnail_url: string | null;
@@ -73,6 +74,7 @@ export interface VideoJobResult {
   saved_to: string | null;
   video_path?: string | null;
   audio_path?: string | null;
+  error?: string | null;
 }
 
 export interface StyledVideoResult {

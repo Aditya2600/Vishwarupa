@@ -46,7 +46,7 @@ class SQSService:
         response = self.client.receive_message(
             QueueUrl=queue_url,
             MaxNumberOfMessages=max_messages,
-            WaitTimeSeconds=5,
+            WaitTimeSeconds=settings.sqs_wait_time_seconds,
         )
         return response.get('Messages', [])
 

@@ -262,7 +262,7 @@ export function StepShare({ state, update }: StepShareProps) {
           <Meta label="Language" value={state.language} />
           {state.videoType === "avatar" ? <Meta label="Avatar" value={avatarName} /> : null}
           <Meta label="Status" value={statusText} />
-          <Meta label="Video ID" value={generatedVideo?.video_id ?? "Pending"} />
+          <Meta label="Video ID" value={generatedVideo?._id ?? generatedVideo?.video_id ?? "Pending"} />
           {state.videoType === "remotion" ? <Meta label="Logo" value={state.logoFileName || "None"} /> : null}
           <HighlightedOutputLink
             href={videoUrl}

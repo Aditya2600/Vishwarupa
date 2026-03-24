@@ -35,6 +35,7 @@ import {
   type RemotionVideoPayload,
   fetchAvatars,
   fetchVoices,
+  fetchVideoStatus,
   generateRemotionVideo,
   isVoiceCompatibleWithLanguage,
   saveDraft,
@@ -149,6 +150,7 @@ function mapAvatarJobToVideoResult(job: {
   const videoId = (job._id ?? "").trim();
   return {
     request_mode: "direct",
+    _id: videoId,
     video_id: videoId,
     status: job.status,
     video_url: job.video_url ?? null,
@@ -209,6 +211,13 @@ const Index = () => {
     refetchInterval: 5000,
   });
 
+  const remotionJobStatusQuery = useQuery({
+    queryKey: ["remotion-job-status", state.generatedVideo?._id ?? state.generatedVideo?.video_id],
+    queryFn: () => fetchVideoStatus(state.generatedVideo?._id ?? state.generatedVideo?.video_id ?? "", "remotion"),
+    enabled: state.videoType === "remotion" && Boolean(state.generatedVideo?._id || state.generatedVideo?.video_id) && state.generationStatus === "submitting",
+    refetchInterval: 5000,
+  });
+
   const generateVideoMutation = useMutation({
     mutationFn: (payload: DirectVideoPayload) => createAvatarJob(payload),
     onMutate: () => {
@@ -263,11 +272,10 @@ const Index = () => {
       statusPollingWarningShownRef.current = false;
       update({
         generatedVideo: result,
-        generationStatus: "completed",
+        generationStatus: "submitting",
         generationError: "",
       });
-      toast.success("Text to Video render generated successfully.");
-      goToStep(5);
+      toast.success("Text to Video render queued automatically. We'll notify you when it's ready.");
     },
     onError: (error) => {
       update({
@@ -346,10 +354,10 @@ const Index = () => {
     if (requestedFreshDraft) {
       // 1. Clear any stuck state from localStorage
       reset();
-      
+
       // 2. Apply the specific pipeline they asked for
       update({ videoType: requestedMode === "remotion" ? "remotion" : "avatar" });
-      
+
       // 3. Silently scrub '?fresh=1' from the URL so it doesn't trigger again on normal re-renders
       const newParams = new URLSearchParams(searchParams);
       newParams.delete("fresh");
@@ -479,6 +487,59 @@ const Index = () => {
       toast.error(errorMessage);
     }
   }, [avatarJobStatusQuery.data, goToStep, state.generationStatus, state.videoType, update]);
+
+  useEffect(() => {
+    if (!remotionJobStatusQuery.data || state.generationStatus !== "submitting" || state.videoType !== "remotion") {
+      return;
+    }
+
+    const nextStatus = remotionJobStatusQuery.data.status.toLowerCase();
+    if (nextStatus === "completed") {
+      statusPollingWarningShownRef.current = false;
+      update({
+        generatedVideo: remotionJobStatusQuery.data,
+        generationStatus: "completed",
+        generationError: "",
+      });
+      toast.success("Text to Video generation successfully completed.");
+      goToStep(5);
+      return;
+    }
+
+    if (nextStatus === "failed") {
+      statusPollingWarningShownRef.current = false;
+      const errorMessage = remotionJobStatusQuery.data.error || "Unexpected error while generating the text video.";
+      update({
+        generationStatus: "failed",
+        generationError: errorMessage,
+      });
+      toast.error(errorMessage);
+    }
+  }, [remotionJobStatusQuery.data, state.generationStatus, state.videoType, update]);
+
+  useEffect(() => {
+    if (!remotionJobStatusQuery.error || state.generationStatus !== "submitting" || state.videoType !== "remotion") {
+      return;
+    }
+
+    if (isConnectivityError(remotionJobStatusQuery.error)) {
+      if (!statusPollingWarningShownRef.current) {
+        statusPollingWarningShownRef.current = true;
+        toast.info("Connection lost while checking text video status. We'll keep your draft and resume polling when the server is reachable again.");
+      }
+      return;
+    }
+
+    const errorMessage =
+      remotionJobStatusQuery.error instanceof Error
+        ? remotionJobStatusQuery.error.message
+        : "Unexpected error while checking text video status.";
+    update({
+      generationStatus: "failed",
+      generationError: errorMessage,
+    });
+    toast.error(errorMessage);
+  }, [remotionJobStatusQuery.error, state.generationStatus, state.videoType, update]);
 
   useEffect(() => {
     if (!avatarJobStatusQuery.error || state.generationStatus !== "submitting" || state.videoType !== "avatar") {

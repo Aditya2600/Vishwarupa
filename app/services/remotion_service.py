@@ -3,6 +3,10 @@ import json
 import logging
 import os
 import re
+import shutil
+import subprocess
+import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
@@ -48,7 +52,8 @@ class RemotionService:
         self.public_path = self.remotion_path / "public"
         self.assets_path = self.public_path / "assets"
         self.assets_path.mkdir(parents=True, exist_ok=True)
-        self.vtt_pattern = re.compile(r"(\d{2}:\d{2}:\d{2}[,.]\d{3}) --> (\d{2}:\d{2}:\d{2}[,.]\d{3})\s+(.*?)(?=\n\n|\Z)", re.DOTALL)
+        # Support both . and , as millisecond separators since edge-tts uses commas (SRT style)
+        self.vtt_pattern = re.compile(r'(\d{2}:\d{2}:\d{2}[.,]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[.,]\d{3})\s*(.+?)(?=\n\d{2}:\d{2}|$)', re.DOTALL)
         
 
 
@@ -83,13 +88,16 @@ class RemotionService:
         product_map = translations.get(product_type, translations['loan'])
         return product_map.get(language, product_map['English'])
 
-    async def generate_tts(self, request: RemotionVideoRequest) -> dict[str, Any]:
-        video_id = f"{request.lan or 'preview'}_{int(datetime.now().timestamp())}"
+    async def generate_tts(self, request: RemotionVideoRequest, video_id: str | None = None) -> dict[str, Any]:
+        voice_gender = (request.voice_gender or "female").lower()
+        effective_video_id = video_id or f"{request.language or 'remotion'}_{int(time.time())}"
+        
+        output_filename = f"{effective_video_id}.mp3"
         # Save to public/audio as expected by TemplateVideo.jsx
         audio_dir = self.remotion_path / "public" / "audio"
         audio_dir.mkdir(exist_ok=True)
-        audio_file = audio_dir / f"{video_id}.mp3"
-        vtt_file = self.assets_path / f"{video_id}.vtt"
+        audio_file = audio_dir / output_filename
+        vtt_file = self.assets_path / f"{effective_video_id}.vtt"
         
         voice_key = f"{request.language}-{request.voice_gender.capitalize()}"
         voice = VOICE_MAP.get(voice_key, VOICE_MAP.get("Hindi-Female"))
@@ -125,18 +133,25 @@ class RemotionService:
             f.write(tts_text)
             temp_text_file = f.name
 
-        command = f'edge-tts --voice "{voice}" --file "{temp_text_file}" --write-media "{audio_file}" --write-subtitles "{vtt_file}"'
+        import sys
+        command = f'"{sys.executable}" -m edge_tts --voice "{voice}" --file "{temp_text_file}" --write-media "{audio_file}" --write-subtitles "{vtt_file}"'
         
         def run_tts():
             import subprocess
-            return subprocess.run(command, shell=True, capture_output=True, text=True)
+            import tempfile
+            with tempfile.NamedTemporaryFile() as out_f, tempfile.NamedTemporaryFile() as err_f:
+                result = subprocess.run(command, shell=True, stdout=out_f, stderr=err_f)
+                out_f.seek(0)
+                err_f.seek(0)
+                stdout_text = out_f.read().decode('utf-8', errors='ignore')
+                stderr_text = err_f.read().decode('utf-8', errors='ignore')
+                if result.returncode != 0:
+                    logger.error(f"TTS Process Error: {stderr_text}")
+                    raise Exception(f"TTS Error: {stderr_text}")
+                return result
 
         try:
             result_process = await asyncio.to_thread(run_tts)
-            
-            if result_process.returncode != 0:
-                logger.error(f"TTS Process Error: {result_process.stderr}")
-                raise Exception(f"TTS Error: {result_process.stderr}")
 
             # Give a small buffer for file to be finalized on disk
             for _ in range(10):
@@ -369,55 +384,73 @@ class RemotionService:
         leads_path.write_text(json.dumps(leads, ensure_ascii=False, indent=2), encoding='utf-8')
         
         output_name = f"{video_id}.mp4"
-        # Render directly into output_dir so it's handled properly by artifacts mount
         output_path = settings.output_dir / output_name
         output_path.parent.mkdir(exist_ok=True)
         
-        # On Windows, 'npx' often needs to be 'npx.cmd'
-        npx_bin = settings.remotion_npx_binary
-        if os.name == 'nt' and npx_bin == 'npx':
-            npx_bin = 'npx.cmd'
-
         props_path = self.remotion_path / f"props_{video_id}.json"
         props_path.write_text(json.dumps({"leadId": video_id}, ensure_ascii=False), encoding='utf-8')
         logger.info("Render video started command")
-        # Ensure we specify the entry point 'src/index.jsx' and the composition ID 'main'
-        command = [
-            npx_bin, "remotion", "render", "src/index.jsx", "main",
-            str(output_path),
-            f"--props={str(props_path).replace(os.sep, '/')}",
-            "--overwrite"
-        ]
-        
-        if settings.remotion_browser_executable:
-            command.extend(["--browser-executable", settings.remotion_browser_executable])
         
         def run_render():
             import subprocess
-            # Remove shell=True because command is a list; otherwise npx hangs on Windows
-            return subprocess.run(command, cwd=str(self.remotion_path), capture_output=True, text=True)
+            import uuid
+            
+            npx = "npx.cmd" if os.name == 'nt' else "npx"
+            c = f'{npx} --yes remotion render src/index.jsx main "{output_path}" --props="{str(props_path).replace(os.sep, "/")}" --overwrite'
+            if settings.remotion_browser_executable:
+                c += f' --browser-executable="{settings.remotion_browser_executable}"'
+            
+            # Pure file handle without tempfile locking mechanics
+            out_file = self.remotion_path / f"out_{uuid.uuid4().hex}.log"
+            
+            with open(out_file, "w", encoding="utf-8") as out_f:
+                try:
+                    result = subprocess.run(
+                        c, 
+                        cwd=str(self.remotion_path), 
+                        shell=True, 
+                        stdout=out_f, 
+                        stderr=subprocess.STDOUT,
+                        stdin=subprocess.DEVNULL,
+                        timeout=600 # 10 minute absolute limit to prevent queue deadlock
+                    )
+                except subprocess.TimeoutExpired:
+                    logger.error("Remotion completely timed out after 10 minutes!")
+                    raise ValueError("Remotion process permanently froze and timed out.")            
+            # Read after process safely completes
+            if out_file.exists():
+                stdout_text = out_file.read_text(encoding="utf-8", errors="ignore")
+                try: out_file.unlink() # Cleanup silently
+                except: pass
+            else:
+                stdout_text = ""
+                
+            if result.returncode != 0:
+                logger.error(f"Remotion render failed with code {result.returncode}")
+                logger.error(f"Remotion output: {stdout_text}")
+                raise ValueError(f"Remotion render failed: {stdout_text}")
+            return result
 
         try:
             result_process = await asyncio.to_thread(run_render)
-            
-            if result_process.returncode != 0:
-                logger.error(f"Remotion render failed with code {result_process.returncode}")
-                if result_process.stderr: logger.error(f"Remotion stderr: {result_process.stderr}")
-                raise ValueError(f"Remotion render failed: {result_process.stderr}")
         except Exception as e:
             logger.error(f"Failed to start Remotion rendering: {e}")
             raise e
 
-        return f"/{output_name}" 
+        # Final check if output actually exists
+        if not output_path.exists():
+            raise ValueError("Remotion render exited completely but output video was NOT created on disk.")
 
-    async def generate_video(self, request: RemotionVideoRequest) -> dict[str, Any]:
+        return f"/{output_name}"
+
+    async def generate_video(self, request: RemotionVideoRequest, video_id: str | None = None) -> dict[str, Any]:
         # Save logo asset if present
         if request.logo_bytes and request.logo_filename:
             await self._persist_logo_asset(request.logo_bytes, request.logo_filename)
 
         is_universal = (request.video_variety or "personalized") == "universal"
 
-        tts = await self.generate_tts(request)
+        tts = await self.generate_tts(request, video_id=video_id)
         # Universal mode: use generic scene cards so no empty customer data leaks
         # into the Remotion visual scenes.
         if is_universal:
