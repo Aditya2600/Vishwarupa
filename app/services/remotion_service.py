@@ -404,15 +404,19 @@ class RemotionService:
             out_file = self.remotion_path / f"out_{uuid.uuid4().hex}.log"
             
             with open(out_file, "w", encoding="utf-8") as out_f:
-                result = subprocess.run(
-                    c, 
-                    cwd=str(self.remotion_path), 
-                    shell=True, 
-                    stdout=out_f, 
-                    stderr=subprocess.STDOUT,
-                    stdin=subprocess.DEVNULL # Prevent headless prompts from freezing terminal
-                )
-            
+                try:
+                    result = subprocess.run(
+                        c, 
+                        cwd=str(self.remotion_path), 
+                        shell=True, 
+                        stdout=out_f, 
+                        stderr=subprocess.STDOUT,
+                        stdin=subprocess.DEVNULL,
+                        timeout=600 # 10 minute absolute limit to prevent queue deadlock
+                    )
+                except subprocess.TimeoutExpired:
+                    logger.error("Remotion completely timed out after 10 minutes!")
+                    raise ValueError("Remotion process permanently froze and timed out.")            
             # Read after process safely completes
             if out_file.exists():
                 stdout_text = out_file.read_text(encoding="utf-8", errors="ignore")

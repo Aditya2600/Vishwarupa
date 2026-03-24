@@ -91,6 +91,7 @@ class AvatarJobWorker:
         self.s3_service = s3_service or S3Service()
         self.videos_collection = videos_collection
         self.max_receive_count = max(1, int(max_receive_count or settings.sqs_max_receive_count))
+        self.background_tasks = set()
 
     async def _find_video(self, video_id: str) -> dict[str, Any] | None:
         return await self.videos_collection.find_one({'_id': _mongo_id(video_id)})
@@ -120,7 +121,10 @@ class AvatarJobWorker:
             if not messages:
                 continue
 
-            await asyncio.gather(*(self._process_message_safe(message) for message in messages))
+            for message in messages:
+                task = asyncio.create_task(self._process_message_safe(message))
+                self.background_tasks.add(task)
+                task.add_done_callback(self.background_tasks.discard)
 
     async def _process_message_safe(self, message: dict[str, Any]) -> None:
         try:
