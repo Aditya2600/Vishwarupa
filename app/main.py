@@ -1131,7 +1131,7 @@ async def get_my_videos(current_user: str = Depends(get_current_user)):
         refresh_results = await asyncio.gather(*refresh_tasks, return_exceptions=True)
         for refresh_result in refresh_results:
             if isinstance(refresh_result, Exception):
-                raise refresh_result
+                logger.error(f"Failed to refresh background direct video: {refresh_result}")
 
     for video in videos:
         video["_id"] = str(video["_id"])
@@ -1139,6 +1139,10 @@ async def get_my_videos(current_user: str = Depends(get_current_user)):
         url = video.get("video_url")
         if url and isinstance(url, str) and "/artifacts/" in url:
             video["video_url"] = "/api/artifacts/" + url.split("/artifacts/", 1)[1]
+
+        video.pop("job_data", None)
+        video.pop("request_payload", None)
+        video.pop("result_payload", None)
 
     return videos
 
@@ -1196,7 +1200,6 @@ async def preview_voice(
         from app.models import LeadRecord, DirectVideoRequest
         from app.services.script_renderer import build_context, _normalize_placeholder_syntax
         from jinja2 import Environment
-        from app.constants import VOICE_MAP
         
         # Safe defaults for the preview context
         dummy_lead = LeadRecord(
@@ -1220,26 +1223,42 @@ async def preview_voice(
         except Exception:
             final_text = preview_text
 
-        remotion_service = RemotionService() # Initialize here
+        import tempfile
+        import subprocess
+        import os
+        from app.services.remotion_service import normalize_hindi_numbers, VOICE_MAP
         
-        dummy_request = RemotionVideoRequest( # Changed from DirectVideoRequest
-            customer_name=dummy_lead.customer_name,
-            lan=dummy_lead.lan,
-            client_name=dummy_lead.client_name,
-            tos=dummy_lead.tos,
-            loan_amount=dummy_lead.loan_amount,
-            contact_details=dummy_lead.contact_details,
-            product_type=dummy_lead.product_type,
-            language=language,
-            voice_gender=gender,
-            script_text=final_text,
-            video_variety="personalized"
-        )
+        voice_key = f"{language}-{gender.capitalize()}"
+        voice = VOICE_MAP.get(voice_key, "hi-IN-SwaraNeural")
         
-        result = await remotion_service.generate_tts(dummy_request)
-        audio_path = Path(result['full_audio_path'])
+        if language == "Hindi":
+            final_text = normalize_hindi_numbers(final_text)
+
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt', encoding='utf-8') as f:
+            f.write(final_text)
+            temp_text_file = f.name
+            
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as out_f:
+            audio_path = out_f.name
+
+        import sys
+        command = f'"{sys.executable}" -m edge_tts --voice "{voice}" --file "{temp_text_file}" --write-media "{audio_path}"'
         
-        if not audio_path.exists():
+        def run_tts():
+            with tempfile.NamedTemporaryFile() as out_l, tempfile.NamedTemporaryFile() as err_l:
+                result = subprocess.run(command, shell=True, stdout=out_l, stderr=err_l, stdin=subprocess.DEVNULL)
+                err_l.seek(0)
+                if result.returncode != 0:
+                    raise Exception(f"Voice preview TTS failed: {err_l.read().decode('utf-8', errors='ignore')}")
+
+        await asyncio.to_thread(run_tts)
+        
+        try:
+            os.remove(temp_text_file)
+        except:
+            pass
+            
+        if not Path(audio_path).exists():
             raise HTTPException(status_code=500, detail="Generated audio file not found")
 
         return FileResponse(

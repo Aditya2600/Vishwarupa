@@ -52,7 +52,8 @@ class RemotionService:
         self.public_path = self.remotion_path / "public"
         self.assets_path = self.public_path / "assets"
         self.assets_path.mkdir(parents=True, exist_ok=True)
-        self.vtt_pattern = re.compile(r"(\d{2}:\d{2}:\d{2}[,.]\d{3}) --> (\d{2}:\d{2}:\d{2}[,.]\d{3})\s+(.*?)(?=\n\n|\Z)", re.DOTALL)
+        # Support both . and , as millisecond separators since edge-tts uses commas (SRT style)
+        self.vtt_pattern = re.compile(r'(\d{2}:\d{2}:\d{2}[.,]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[.,]\d{3})\s*(.+?)(?=\n\d{2}:\d{2}|$)', re.DOTALL)
         
 
 
@@ -132,7 +133,8 @@ class RemotionService:
             f.write(tts_text)
             temp_text_file = f.name
 
-        command = f'edge-tts --voice "{voice}" --file "{temp_text_file}" --write-media "{audio_file}" --write-subtitles "{vtt_file}"'
+        import sys
+        command = f'"{sys.executable}" -m edge_tts --voice "{voice}" --file "{temp_text_file}" --write-media "{audio_file}" --write-subtitles "{vtt_file}"'
         
         def run_tts():
             import subprocess
