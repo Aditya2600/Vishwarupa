@@ -1,11 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { HeaderBar } from "@/components/HeaderBar";
 import {
-  Upload,
-  FileSpreadsheet,
-  Play,
-  CheckCircle2,
-  AlertCircle,
   Sparkles,
   MessageSquare,
   Settings2,
@@ -14,7 +9,13 @@ import {
   ChevronRight,
   ArrowLeft,
   Smartphone,
-  Info
+  Info,
+  Pause,
+  LoaderCircle,
+  Play,
+  CheckCircle2,
+  AlertCircle,
+  FileSpreadsheet
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -25,7 +26,8 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
-import { fetchAvatars, fetchVoices, isVoiceCompatibleWithLanguage, type AvatarOption, type VoiceOption } from "@/lib/api";
+import { fetchAvatars, fetchVoices, isVoiceCompatibleWithLanguage, compareVoicesForLanguage, type AvatarOption, type VoiceOption } from "@/lib/api";
+import { useRef } from "react";
 import { cn } from "@/lib/utils";
 
 type Step = "config" | "assets" | "upload" | "mapping" | "preview" | "launch";
@@ -47,6 +49,14 @@ export default function BulkSend() {
   );
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [selectedMsgTemplate, setSelectedMsgTemplate] = useState<string>("reminder");
+  const [playingVoiceId, setPlayingVoiceId] = useState("");
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const INDIAN_SEARCH_NAMES = [
+    "Shruti", "Aditi", "Priya", "Aakash", "Mohan", "Abhishek", "Sneha", "Ananya",
+    "Vihaan", "Arjun", "Karan", "Ishani", "Sanjay", "Ankit", "Rohan", "Maya",
+    "Kavya", "Diya", "Ishita", "Ansh", "Kabir"
+  ];
 
   const CAMPAIGN_STRATEGIES = [
     {
@@ -100,14 +110,66 @@ export default function BulkSend() {
   const avatarsQuery = useQuery({
     queryKey: ["avatars"],
     queryFn: fetchAvatars,
-    enabled: engine === "avatar",
+    enabled: true,
   });
 
   const voicesQuery = useQuery({
     queryKey: ["voices"],
     queryFn: fetchVoices,
-    enabled: engine === "avatar",
+    enabled: true,
   });
+
+  const handlePreviewVoice = async (voice: VoiceOption) => {
+    if (playingVoiceId === voice.id) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+      setPlayingVoiceId("");
+      return;
+    }
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+
+    setPlayingVoiceId(voice.id);
+    
+    try {
+      let audioSrc = "";
+      if (voice.previewUrl) {
+        audioSrc = `/api/proxy-audio?url=${encodeURIComponent(voice.previewUrl)}`;
+      } else {
+        const form = new FormData();
+        form.set("language", selectedLanguage);
+        form.set("gender", voice.gender || "female");
+        form.set("text", selectedLanguage?.toLowerCase().includes("hi")
+          ? "नमस्ते, यह मेरी आवाज़ का एक नमूना है।"
+          : "Hello, this is a sample of my voice."
+        );
+        form.set("voice_id", voice.id);
+
+        const res = await fetch("/api/preview/voice", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+          body: form,
+        });
+        if (!res.ok) throw new Error("TTS failed");
+        const blob = await res.blob();
+        audioSrc = URL.createObjectURL(blob);
+      }
+
+      const audio = new Audio(audioSrc);
+      audioRef.current = audio;
+      audio.onended = () => setPlayingVoiceId("");
+      audio.onerror = () => setPlayingVoiceId("");
+      await audio.play();
+    } catch (err) {
+      setPlayingVoiceId("");
+      toast.error("Voice preview unavailable");
+    }
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -247,122 +309,202 @@ export default function BulkSend() {
       {engine === "avatar" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div className="space-y-4">
-            <Label>Select Avatar</Label>
+            <div className="flex items-center justify-between">
+              <Label className="text-base font-bold">Select Avatar</Label>
+              <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Indian Presenters</span>
+            </div>
             <div className="grid grid-cols-3 gap-3">
-              {(avatarsQuery.data || [])
-                .filter((av: any) => av.gender?.toLowerCase() === genderFilter)
-                .slice(0, 6)
-                .map((av: any) => (
-                <div
-                  key={av.id}
-                  onClick={() => setSelectedAvatar(av.id)}
-                  className={cn(
-                    "relative aspect-[3/4] rounded-lg overflow-hidden border-2 cursor-pointer transition-all hover:scale-105",
-                    selectedAvatar === av.id ? "border-primary" : "border-transparent"
-                  )}
-                >
-                  <img src={av.preview_image_url} alt={av.name} className="w-full h-full object-cover" />
-                  {selectedAvatar === av.id && (
-                    <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
-                      <CheckCircle2 className="w-8 h-8 text-white drop-shadow-md" />
+              {(() => {
+                const uniqueAvatarNames = new Set<string>();
+                return (avatarsQuery.data || [])
+                  .filter((avatar: any) => {
+                    const targetGender = genderFilter.toLowerCase();
+                    if (!avatar.gender || avatar.gender.toLowerCase() !== targetGender) return false;
+                    
+                    const name = (avatar.name || "").toLowerCase().trim();
+                    if (uniqueAvatarNames.has(name) || name === "riya" || name === "meera" || name === "aditya k" || name === "karan" || name === "priya" || name === "rohan" || name === "kabir") return false;
+                    
+                    uniqueAvatarNames.add(name);
+                    return true;
+                  })
+                  .sort((a, b) => {
+                    const getRank = (avatar: any) => {
+                      const name = (avatar.name || "").toLowerCase();
+                      const isMale = avatar.gender && avatar.gender.toLowerCase() === "male";
+                      if (isMale) {
+                        if (name.includes("aditya")) return 1;
+                        if (name.includes("arjun")) return 2;
+                        if (name.includes("mahesh")) return 3;
+                        if (name.includes("rahul")) return 4;
+                        return 99;
+                      } else {
+                        if (name.includes("kavya")) return 1;
+                        if (name.includes("adv. aditi")) return 2;
+                        if (name.includes("shruti")) return 3;
+                        if (name.includes("sneha")) return 4;
+                        return 99;
+                      }
+                    };
+                    return getRank(a) - getRank(b);
+                  })
+                  .slice(0, 6);
+              })().map((av: any) => (
+                  <div
+                    key={av.id}
+                    onClick={() => setSelectedAvatar(av.id)}
+                    className={cn(
+                      "relative aspect-[3/4] rounded-lg overflow-hidden border-2 cursor-pointer transition-all hover:scale-105",
+                      selectedAvatar === av.id ? "border-primary" : "border-transparent"
+                    )}
+                  >
+                    <img src={av.previewImageUrl || (av as any).preview_image_url || ""} alt={av.name} className="w-full h-full object-cover" />
+                    {selectedAvatar === av.id && (
+                      <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
+                        <CheckCircle2 className="w-8 h-8 text-white drop-shadow-md" />
+                      </div>
+                    )}
+                    <div className="absolute bottom-0 inset-x-0 p-1 bg-black/60 text-[10px] text-white truncate text-center font-bold">
+                      {av.name}
                     </div>
-                  )}
-                  <div className="absolute bottom-0 inset-x-0 p-1 bg-black/60 text-[10px] text-white truncate text-center">
-                    {av.name}
                   </div>
-                </div>
-              ))}
+                ))}
             </div>
           </div>
           <div className="space-y-4">
-            <Label>Select Voice</Label>
+            <div className="flex items-center justify-between">
+              <Label className="text-base font-bold">Select Voice</Label>
+              {voicesQuery.isLoading && <LoaderCircle className="w-4 h-4 animate-spin text-primary" />}
+            </div>
             <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-              {(voicesQuery.data || [])
-                .filter((v: any) => v.gender?.toLowerCase() === genderFilter && isVoiceCompatibleWithLanguage(v, selectedLanguage))
-                .slice(0, 15).map((v: any) => (
-                <div
-                  key={v.id}
-                  onClick={() => setSelectedVoice(v.id)}
-                  className={cn(
-                    "p-3 rounded-lg border text-sm cursor-pointer transition-colors flex items-center justify-between",
-                    selectedVoice === v.id ? "border-primary bg-primary/5" : "hover:bg-secondary/50"
-                  )}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center">
-                      <Play className="w-3 h-3 text-muted-foreground" />
+              {(() => {
+                const uniqueVoiceNames = new Set<string>();
+                return (voicesQuery.data || [])
+                  .filter((voice: any) => {
+                    const isLangCompatible = isVoiceCompatibleWithLanguage(voice, selectedLanguage);
+                    if (!isLangCompatible) return false;
+                    
+                    const vName = voice.name.toLowerCase().trim();
+                    // Aggressively deduplicate 'peppy priya' variants as in main flow
+                    if (vName.includes("peppy priya")) {
+                      if (uniqueVoiceNames.has("peppy priya")) return false;
+                      uniqueVoiceNames.add("peppy priya");
+                    } else {
+                      if (uniqueVoiceNames.has(vName)) return false;
+                      uniqueVoiceNames.add(vName);
+                    }
+                    
+                    const voiceGen = (voice.gender || "").toLowerCase();
+                    if (voiceGen !== genderFilter) return false;
+
+                    // Indian specific whitelists for Hindi ONLY
+                    if (selectedLanguage.toLowerCase().includes("hi")) {
+                      if (voiceGen === "male") {
+                        const allowedMales = ["aaditya k", "caremelo la rosa", "manu", "niraj", "raju", "ranbir m", "ranga", "rick", "viraj"];
+                        if (!allowedMales.some(allowed => vName.includes(allowed))) return false;
+                      } else {
+                        const allowedFemales = ["adv. aditi mehra", "devi", "kanika", "monika sogam", "muskaan", "saira"];
+                        if (!allowedFemales.some(allowed => vName.includes(allowed.toLowerCase()))) return false;
+                      }
+                    }
+                    return true;
+                  })
+                  .sort((left, right) => compareVoicesForLanguage(left, right, selectedLanguage))
+                  .slice(0, 20);
+              })().map((v: any) => (
+                  <div
+                    key={v.id}
+                    className={cn(
+                      "p-3 rounded-xl border-2 text-sm transition-all flex items-center justify-between group",
+                      selectedVoice === v.id ? "border-primary bg-primary/5" : "hover:border-secondary-foreground/20 bg-background hover:bg-secondary/50"
+                    )}
+                  >
+                    <div className="flex items-center gap-3 cursor-pointer flex-1" onClick={() => setSelectedVoice(v.id)}>
+                      <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center transition-transform group-hover:scale-110">
+                        <Users className="w-4 h-4 text-primary" />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="font-bold text-xs">{v.name}</span>
+                        <span className="text-[10px] text-muted-foreground uppercase">{selectedLanguage.split('-')[0]} Voice</span>
+                      </div>
                     </div>
-                    <span>{v.name}</span>
+                    <div className="flex items-center gap-2">
+                       <Button
+                          size="icon"
+                          variant="ghost"
+                          className="w-8 h-8 rounded-full"
+                          onClick={() => handlePreviewVoice(v)}
+                       >
+                          {playingVoiceId === v.id ? <Pause className="w-3 h-3 text-primary" /> : <Play className="w-3 h-3 text-muted-foreground" />}
+                       </Button>
+                       {selectedVoice === v.id && <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />}
+                    </div>
                   </div>
-                  {selectedVoice === v.id && <CheckCircle2 className="w-4 h-4 text-primary" />}
+                ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="space-y-6 pt-6 border-t mt-8 animate-in fade-in duration-700">
+        <Label className="text-base font-bold flex items-center gap-2">
+           <Settings2 className="w-4 h-4 text-primary" />
+           Campaign Strategy Template
+        </Label>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {CAMPAIGN_STRATEGIES.map((tmpl) => (
+            <Card 
+              key={tmpl.id}
+              className={cn(
+                "cursor-pointer border-2 transition-all hover:shadow-lg h-full group relative overflow-hidden",
+                selectedMsgTemplate === tmpl.id ? "border-primary bg-primary/5 shadow-md" : "border-border hover:border-primary/30"
+              )}
+              onClick={() => handleTemplateSelect(tmpl.id)}
+            >
+              <CardContent className="pt-6 text-center space-y-2">
+                <div className={cn("w-12 h-12 rounded-full mx-auto flex items-center justify-center transition-transform group-hover:scale-110",
+                    tmpl.color === 'blue' ? "bg-blue-100 text-blue-600 shadow-sm shadow-blue-200" :
+                    tmpl.color === 'green' ? "bg-green-100 text-green-600 shadow-sm shadow-green-200" : 
+                    tmpl.color === 'red' ? "bg-red-100 text-red-600 shadow-sm shadow-red-200" : 
+                    "bg-purple-100 text-purple-600 shadow-sm shadow-purple-200"
+                )}>
+                  <Settings2 className="w-6 h-6" />
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          <Label className="text-base font-bold">Campaign Strategy Template</Label>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {CAMPAIGN_STRATEGIES.map((tmpl) => (
-              <Card 
-                key={tmpl.id}
-                className={cn(
-                  "cursor-pointer border-2 transition-all hover:shadow-md h-full",
-                  selectedMsgTemplate === tmpl.id ? "border-primary bg-primary/5 shadow-md" : "border-border"
-                )}
-                onClick={() => handleTemplateSelect(tmpl.id)}
-              >
-                <CardContent className="pt-6 text-center space-y-2">
-                  <div className={cn("w-10 h-10 rounded-full mx-auto flex items-center justify-center",
-                      tmpl.color === 'blue' ? "bg-blue-100 text-blue-600" :
-                      tmpl.color === 'green' ? "bg-green-100 text-green-600" : 
-                      tmpl.color === 'red' ? "bg-red-100 text-red-600" : "bg-purple-100 text-purple-600"
-                  )}>
-                    <Settings2 className="w-5 h-5" />
-                  </div>
-                  <h4 className="font-bold text-sm">{tmpl.name}</h4>
-                  <p className="text-[10px] text-muted-foreground leading-tight">{tmpl.desc}</p>
-                  <div className="flex items-center justify-center gap-1 mt-2">
-                    <div className="text-[8px] px-1 bg-secondary rounded text-muted-foreground uppercase font-bold tracking-widest">{genderFilter + " only"}</div>
-                  </div>
-                  {selectedMsgTemplate === tmpl.id && (
-                    <div className="pt-2">
-                      <CheckCircle2 className="w-5 h-5 text-primary mx-auto" />
+                <h4 className="font-bold text-sm tracking-tight">{tmpl.name}</h4>
+                <p className="text-[10px] text-muted-foreground leading-tight px-1 line-clamp-2">{tmpl.desc}</p>
+                
+                <div className="inline-flex items-center gap-1 mt-2 px-2 py-0.5 bg-secondary/50 rounded-full border border-border/50">
+                    <div className="w-1 h-1 rounded-full bg-primary animate-pulse" />
+                    <span className="text-[8px] uppercase font-bold tracking-widest text-muted-foreground">{genderFilter} script</span>
+                </div>
+
+                {selectedMsgTemplate === tmpl.id && (
+                  <div className="absolute top-2 right-2 scale-in duration-200">
+                    <div className="bg-primary text-white p-1 rounded-full shadow-lg">
+                       <CheckCircle2 className="w-3 h-3" />
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
 
-          <div className="bg-secondary/10 p-4 rounded-xl border border-dashed animate-in fade-in duration-300">
-            <Label className="text-[10px] uppercase font-bold text-muted-foreground mb-2 block tracking-widest">
-               {engine === "remotion" ? "AI Video Script Preview" : "WhatsApp Message Preview"}
-            </Label>
-            <div className="text-xs text-foreground bg-background p-3 rounded-lg border leading-relaxed italic whitespace-pre-wrap opacity-80">
-              {engine === "remotion" 
-                ? (mode === "personalized" 
-                    ? (CAMPAIGN_STRATEGIES.find(t => t.id === selectedMsgTemplate)?.scriptPersonalized || "Select strategy") 
-                    : (CAMPAIGN_STRATEGIES.find(t => t.id === selectedMsgTemplate)?.scriptUniversal || "Select strategy"))
-                : (CAMPAIGN_STRATEGIES.find(t => t.id === selectedMsgTemplate)?.whatsapp || "Select strategy")
-              }
-            </div>
+        <div className="bg-secondary/5 p-5 rounded-2xl border-2 border-dashed border-primary/10 relative">
+          <div className="absolute -top-2 left-6 px-2 bg-background border rounded text-[8px] uppercase font-black tracking-widest text-primary">
+            AI Video Script Preview
           </div>
-
-          <div className="p-4 bg-primary/5 rounded-xl border border-primary/20 flex items-center gap-3">
-            <Info className="w-5 h-5 text-primary shrink-0" />
-            <p className="text-xs text-muted-foreground">Choosing a strategy here will automatically pre-fill your WhatsApp message and video layout later.</p>
+          <div className="text-xs text-foreground/80 bg-background/50 p-4 rounded-xl border-2 border-border/50 leading-relaxed italic whitespace-pre-wrap font-serif">
+            {mode === "personalized" 
+              ? (CAMPAIGN_STRATEGIES.find(t => t.id === selectedMsgTemplate)?.scriptPersonalized || "Select strategy") 
+              : (CAMPAIGN_STRATEGIES.find(t => t.id === selectedMsgTemplate)?.scriptUniversal || "Select strategy")
+            }
           </div>
-
-          <div className="pt-4 border-t space-y-4">
-             <p className="text-[10px] text-muted-foreground ml-1">
-               <Info className="w-3 h-3 inline mr-1 text-primary" />
-               The system will automatically select the best professional **{genderFilter}** voice for your chosen language ({selectedLanguage}).
-             </p>
+          <div className="mt-3 flex items-center gap-2 px-1">
+             <Info className="w-3 h-3 text-primary animate-bounce-slow" />
+             <p className="text-[9px] text-muted-foreground">The AI will use this transcript to generate the speech for your **{selectedLanguage}** video.</p>
           </div>
         </div>
-      )}
+      </div>
 
       <div className="flex justify-between">
         <Button variant="ghost" onClick={() => setCurrentStep("config")}>

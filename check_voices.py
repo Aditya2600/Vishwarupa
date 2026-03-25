@@ -1,23 +1,11 @@
-import asyncio
-from app.services.heygen_client import HeyGenClient
+import requests
+import json
 
-def check():
-    client = HeyGenClient()
-    res = client.list_voices()
-    voices = res.get('data', {}).get('voices', [])
-    
-    langs = {'Bengali': 0, 'Malayalam': 0, 'Punjabi': 0}
-    
+try:
+    res = requests.get("http://127.0.0.1:8000/api/meta/voices")
+    data = res.json()
+    voices = data.get("data", {}).get("voices", []) if isinstance(data, dict) else data
     for v in voices:
-        s = str(v).lower()
-        if 'bengali' in s or 'bn-in' in s:
-            langs['Bengali'] += 1
-        if 'malayalam' in s or 'ml-in' in s:
-            langs['Malayalam'] += 1
-        if 'punjabi' in s or 'pa-in' in s:
-            langs['Punjabi'] += 1
-            
-    print(langs)
-
-if __name__ == '__main__':
-    check()
+        print(f"ID: {v.get('id')}, Name: {v.get('name')}, Gender: {v.get('gender')}, Lang: {v.get('language')} / {v.get('languages')}")
+except Exception as e:
+    print(f"Error: {e}")
