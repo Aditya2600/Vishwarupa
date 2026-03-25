@@ -42,38 +42,58 @@ export default function BulkSend() {
   const [whatsappTemplate, setWhatsappTemplate] = useState<string>(
     "Hello {{name}},\n\nThis is a friendly reminder from CredResolve regarding your outstanding balance for LAN: {{lan}}. We have prepared a brief explanation for you here: {{video_url}}\n\nPlease resolve the amount of {{loan_amount}} at your earliest convenience to avoid further action.\n\nRegards,\nTeam CredResolve"
   );
+  const [videoScript, setVideoScript] = useState<string>(
+    "Hello {{customer_name}}. I am calling from {{client_name}} regarding your {{product_type}} account. The total outstanding balance is {{tos}}. Please contact us at {{contact_details}} to discuss repayment options."
+  );
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [selectedMsgTemplate, setSelectedMsgTemplate] = useState<string>("reminder");
 
-  const WHATSAPP_TEMPLATES = [
+  const CAMPAIGN_STRATEGIES = [
     {
       id: "reminder",
-      name: "Standard Payment Reminder",
-      content: "Hello {{name}},\n\nThis is a friendly reminder from CredResolve regarding your outstanding balance for LAN: {{lan}}. We have prepared a brief explanation for you here: {{video_url}}\n\nPlease resolve the amount of {{loan_amount}} at your earliest convenience to avoid further action.\n\nRegards,\nTeam CredResolve"
+      name: "Standard Recall",
+      desc: "Gentle reminder for initial follow-ups.",
+      color: "blue",
+      whatsapp: "Hello {{name}},\n\nThis is a friendly reminder from CredResolve regarding your outstanding balance for LAN: {{lan}}. We have prepared a brief explanation for you here: {{video_url}}\n\nPlease resolve the amount of {{loan_amount}} at your earliest convenience to avoid further action.\n\nRegards,\nTeam CredResolve",
+      scriptPersonalized: "Hello {{customer_name}}. I am calling from {{client_name}} regarding your {{product_type}} account. The total outstanding balance is {{tos}}. Please contact us at {{contact_details}} to discuss repayment options.",
+      scriptUniversal: "Hello. I am calling from your service provider regarding your account. This is a formal notification regarding an outstanding balance. Please contact our recovery department at your earliest convenience to discuss repayment options."
     },
     {
       id: "settlement",
-      name: "Exclusive Settlement Offer",
-      content: "Hi {{name}},\n\nGood news! CredResolve has an exclusive one-time settlement offer for your account {{lan}}. Watch this video to see your discounted amount: {{video_url}}\n\nReply 'YES' to avail this offer today.\n\nBest,\nCredResolve Recovery Team"
+      name: "Settlement Offer",
+      desc: "One-time discounts to resolve debts.",
+      color: "green",
+      whatsapp: "Hi {{name}},\n\nGood news! CredResolve has an exclusive one-time settlement offer for your account {{lan}}. Watch this video to see your discounted amount: {{video_url}}\n\nReply 'YES' to avail this offer today.\n\nBest,\nCredResolve Recovery Team",
+      scriptPersonalized: "Greetings {{customer_name}}. We have a special settlement offer for your {{product_type}} account with {{client_name}}. You can now settle your total dues of {{tos}} with a significant discount. Watch the details in this video and contact us immediately.",
+      scriptUniversal: "Greetings. We are pleased to inform you that a special settlement offer is now available for your account. You can now settle your outstanding dues with a significant discount. Please watch the details in this video and contact our team to avail of this one-time offer."
     },
     {
       id: "escort",
-      name: "Legal Escalation Notice",
-      content: "URGENT: {{name}},\n\nYour account {{lan}} with CredResolve is now under review for legal escalation. Before we proceed, we've shared a final message for you: {{video_url}}\n\nPlease settle the dues of {{loan_amount}} immediately to halt any further proceedings.\n\nFinal Call,\nLegal Dept, CredResolve"
+      name: "Legal Notice",
+      desc: "Final escalation for non-cooperative leads.",
+      color: "red",
+      whatsapp: "URGENT: {{name}},\n\nYour account {{lan}} with CredResolve is now under review for legal escalation. Before we proceed, we've shared a final message for you: {{video_url}}\n\nPlease settle the dues of {{loan_amount}} immediately to halt any further proceedings.\n\nFinal Call,\nLegal Dept, CredResolve",
+      scriptPersonalized: "This is a formal legal notice for {{customer_name}} regarding your unpaid {{product_type}} balance at {{client_name}}. Your account is now being reviewed for legal escalation. This is your final opportunity to resolve the outstanding amount of {{tos}} before we proceed.",
+      scriptUniversal: "This is a formal legal notification regarding an unpaid balance on your account. Please be advised that your file is now being reviewed for further escalation. This is your final opportunity to resolve the outstanding amount and avoid recovery proceedings. Please contact us immediately."
     },
     {
       id: "success",
-      name: "Payment Acknowledgment",
-      content: "Thank you {{name}}!\n\nCredResolve has successfully received your payment for LAN: {{lan}}. Your account status has been updated. Watch the summary here: {{video_url}}\n\nWe appreciate your cooperation.\n\nGlobal Collections, CredResolve"
+      name: "Acknowledgment",
+      desc: "Confirming receipt of payment.",
+      color: "purple",
+      whatsapp: "Thank you {{name}}!\n\nCredResolve has successfully received your payment for LAN: {{lan}}. Your account status has been updated. Watch the summary here: {{video_url}}\n\nWe appreciate your cooperation.\n\nGlobal Collections, CredResolve",
+      scriptPersonalized: "Thank you {{customer_name}}. We have successfully received your payment for your {{product_type}} account with {{client_name}}. Your records are now being updated. We appreciate your prompt action.",
+      scriptUniversal: "Thank you for your recent payment. We have successfully received the funds and your account records are being updated accordingly. We appreciate your prompt action and cooperation."
     }
   ];
 
   const handleTemplateSelect = (id: string) => {
-    const template = WHATSAPP_TEMPLATES.find(t => t.id === id);
-    if (template) {
-      setWhatsappTemplate(template.content);
+    const strategy = CAMPAIGN_STRATEGIES.find(s => s.id === id);
+    if (strategy) {
+      setWhatsappTemplate(strategy.whatsapp);
+      setVideoScript(mode === "personalized" ? strategy.scriptPersonalized : strategy.scriptUniversal);
       setSelectedMsgTemplate(id);
-      toast.success(`Switched to ${template.name} template`);
+      toast.success(`Switched to ${strategy.name} strategy`);
     }
   };
 
@@ -216,10 +236,10 @@ export default function BulkSend() {
               <option value="ta-IN">Tamil</option>
               <option value="te-IN">Telugu</option>
               <option value="kn-IN">Kannada</option>
-              <option value="bn-IN">Bengali</option>
+              {engine === "remotion" && <option value="bn-IN">Bengali</option>}
               <option value="gu-IN">Gujarati</option>
-              <option value="ml-IN">Malayalam</option>
-              <option value="pa-IN">Punjabi</option>
+              {engine === "remotion" && <option value="ml-IN">Malayalam</option>}
+              {/* Punjabi removed from both */}
             </select>
         </div>
       </div>
@@ -283,34 +303,28 @@ export default function BulkSend() {
       ) : (
         <div className="space-y-6">
           <Label className="text-base font-bold">Campaign Strategy Template</Label>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[
-              { id: "reminder", name: "Standard Recall", desc: "Gentle reminder for initial follow-ups.", color: "blue" },
-              { id: "settlement", name: "Settlement Offer", desc: "One-time discounts to resolve debts.", color: "green" },
-              { id: "escort", name: "Legal Notice", desc: "Final escalation for non-cooperative leads.", color: "red" }
-            ].map((tmpl) => (
-              <Card
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {CAMPAIGN_STRATEGIES.map((tmpl) => (
+              <Card 
                 key={tmpl.id}
-                onClick={() => {
-                  handleTemplateSelect(tmpl.id);
-                  toast.success(`Strategy set to ${tmpl.name}`);
-                }}
                 className={cn(
-                  "cursor-pointer border-2 transition-all hover:shadow-md",
-                  selectedMsgTemplate === tmpl.id ? "border-primary bg-primary/5 shadow-inner" : "border-border"
+                  "cursor-pointer border-2 transition-all hover:shadow-md h-full",
+                  selectedMsgTemplate === tmpl.id ? "border-primary bg-primary/5 shadow-md" : "border-border"
                 )}
+                onClick={() => handleTemplateSelect(tmpl.id)}
               >
                 <CardContent className="pt-6 text-center space-y-2">
                   <div className={cn("w-10 h-10 rounded-full mx-auto flex items-center justify-center",
-                    tmpl.color === 'blue' ? "bg-blue-100 text-blue-600" :
-                    tmpl.color === 'green' ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600"
+                      tmpl.color === 'blue' ? "bg-blue-100 text-blue-600" :
+                      tmpl.color === 'green' ? "bg-green-100 text-green-600" : 
+                      tmpl.color === 'red' ? "bg-red-100 text-red-600" : "bg-purple-100 text-purple-600"
                   )}>
                     <Settings2 className="w-5 h-5" />
                   </div>
                   <h4 className="font-bold text-sm">{tmpl.name}</h4>
                   <p className="text-[10px] text-muted-foreground leading-tight">{tmpl.desc}</p>
                   <div className="flex items-center justify-center gap-1 mt-2">
-                     <div className="text-[8px] px-1 bg-secondary rounded text-muted-foreground uppercase font-bold tracking-widest">{genderFilter + " only"}</div>
+                    <div className="text-[8px] px-1 bg-secondary rounded text-muted-foreground uppercase font-bold tracking-widest">{genderFilter + " only"}</div>
                   </div>
                   {selectedMsgTemplate === tmpl.id && (
                     <div className="pt-2">
@@ -323,9 +337,16 @@ export default function BulkSend() {
           </div>
 
           <div className="bg-secondary/10 p-4 rounded-xl border border-dashed animate-in fade-in duration-300">
-            <Label className="text-[10px] uppercase font-bold text-muted-foreground mb-2 block tracking-widest">WhatsApp Message Preview</Label>
+            <Label className="text-[10px] uppercase font-bold text-muted-foreground mb-2 block tracking-widest">
+               {engine === "remotion" ? "AI Video Script Preview" : "WhatsApp Message Preview"}
+            </Label>
             <div className="text-xs text-foreground bg-background p-3 rounded-lg border leading-relaxed italic whitespace-pre-wrap opacity-80">
-              {WHATSAPP_TEMPLATES.find(t => t.id === selectedMsgTemplate)?.content || "Select a strategy to see the message preview."}
+              {engine === "remotion" 
+                ? (mode === "personalized" 
+                    ? (CAMPAIGN_STRATEGIES.find(t => t.id === selectedMsgTemplate)?.scriptPersonalized || "Select strategy") 
+                    : (CAMPAIGN_STRATEGIES.find(t => t.id === selectedMsgTemplate)?.scriptUniversal || "Select strategy"))
+                : (CAMPAIGN_STRATEGIES.find(t => t.id === selectedMsgTemplate)?.whatsapp || "Select strategy")
+              }
             </div>
           </div>
 
@@ -375,9 +396,17 @@ export default function BulkSend() {
         </div>
       </div>
 
-      <div className="flex justify-start">
-        <Button variant="ghost" onClick={() => setCurrentStep("assets")}>
-          <ArrowLeft className="mr-2 w-4 h-4" /> Back
+      <div className="flex justify-between items-center bg-secondary/10 p-4 rounded-2xl border-2 border-dashed border-secondary">
+        <Button variant="ghost" onClick={() => setCurrentStep("assets")} className="rounded-xl font-bold">
+          <ArrowLeft className="mr-2 w-4 h-4" /> Back to Assets
+        </Button>
+        <Button 
+          size="lg" 
+          disabled={!file}
+          onClick={() => setCurrentStep("mapping")} 
+          className="rounded-xl font-black shadow-lg shadow-primary/20 transition-all active:scale-95"
+        >
+          Continue to Mapping <ChevronRight className="ml-2 w-4 h-4" />
         </Button>
       </div>
     </div>
