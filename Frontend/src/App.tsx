@@ -11,6 +11,7 @@ import NotFound from "./pages/NotFound.tsx";
 import TemplateLibrary from "./pages/TemplateLibrary.tsx";
 import Login from "./pages/Login.tsx";
 import Signup from "./pages/Signup.tsx";
+import BulkSend from "./pages/BulkSend.tsx";
 
 const queryClient = new QueryClient();
 
@@ -38,6 +39,11 @@ const App = () => (
             <Route path="/create" element={
               <ProtectedRoute>
                 <Index />
+              </ProtectedRoute>
+            } />
+            <Route path="/bulk" element={
+              <ProtectedRoute>
+                <BulkSend />
               </ProtectedRoute>
             } />
             
