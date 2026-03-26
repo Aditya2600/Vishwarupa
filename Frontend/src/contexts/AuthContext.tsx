@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 interface User {
   fullName: string | null;
   email: string;
+  isAdmin?: boolean;
 }
 
 interface AuthContextType {
@@ -50,12 +51,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return;
         }
 
-        const parsedUser = JSON.parse(savedUser) as Partial<User> & { username?: string };
+        const parsedUser = JSON.parse(savedUser) as Partial<User> & { username?: string, is_admin?: boolean };
         if (parsedUser.email) {
           setToken(savedToken);
           setUser({
             email: parsedUser.email,
             fullName: parsedUser.fullName ?? parsedUser.username ?? null,
+            isAdmin: parsedUser.isAdmin ?? parsedUser.is_admin ?? false,
           });
         } else {
           localStorage.removeItem('token');
@@ -81,6 +83,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('is_admin');
   };
 
   return (
