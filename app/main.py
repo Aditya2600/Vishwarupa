@@ -1566,20 +1566,6 @@ async def get_all_videos(search: str = "", status: str = "", admin: dict = Depen
         v.pop('job_data', None)
     return videos
 
-@app.patch('/admin/users/{user_id}/disable')
-async def disable_user(user_id: str, admin: dict = Depends(get_current_admin)):
-    """Toggle user disabled status."""
-    try:
-        oid = ObjectId(user_id) if ObjectId.is_valid(user_id) else user_id
-        user = await users_collection.find_one({"_id": oid})
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        new_status = not user.get("disabled", False)
-        await users_collection.update_one({"_id": oid}, {"$set": {"disabled": new_status}})
-        return {"disabled": new_status}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
 @app.delete('/admin/videos/{video_id}')
 async def admin_delete_video(video_id: str, admin: dict = Depends(get_current_admin)):
     """Admin can delete any video."""
@@ -1587,3 +1573,80 @@ async def admin_delete_video(video_id: str, admin: dict = Depends(get_current_ad
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Video not found")
     return {"status": "deleted"}
+
+# --- WhatsApp Campaign Analytics & Webhooks ---
+
+@app.post('/meta/whatsapp-webhook')
+async def whatsapp_webhook(request: Request):
+    """Receives delivery status updates from Infobip Bridge."""
+    try:
+        data = await request.json()
+        # Infobip format: { "results": [ { "messageId": "...", "status": { "groupName": "DELIVERED" } } ] }
+        results = data.get("results", [])
+        for res in results:
+            m_id = res.get("messageId")
+            status_group = res.get("status", {}).get("groupName", "UNKNOWN")
+            if m_id:
+                from app.database import whatsapp_logs_collection
+                await whatsapp_logs_collection.update_one(
+                    {"message_id": m_id},
+                    {"$set": {
+                        "status": status_group,
+                        "updated_at": datetime.utcnow()
+                    }}
+                )
+        return {"status": "ok"}
+    except Exception as e:
+        logger.error(f"Webhook error: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.get('/admin/campaign-analytics')
+async def get_campaign_analytics(admin: dict = Depends(get_current_admin)):
+    """Aggregates WhatsApp logs for the admin dashboard."""
+    try:
+        from app.database import whatsapp_logs_collection
+        pipeline = [
+            {"$group": {
+                "_id": "$status",
+                "count": {"$sum": 1}
+            }}
+        ]
+        cursor = whatsapp_logs_collection.aggregate(pipeline)
+        stats = await cursor.to_list(length=20)
+        
+        # Format as dictionary for easier charting
+        formatted = {s["_id"]: s["count"] for s in stats}
+        
+        # Recent logs for the table
+        recent_cursor = whatsapp_logs_collection.find({}).sort("created_at", -1).limit(50)
+        recent_logs = await recent_cursor.to_list(length=50)
+        for log in recent_logs:
+            log["_id"] = str(log["_id"])
+            
+        return {
+            "summary": formatted,
+            "recent": recent_logs
+        }
+    except Exception as e:
+        logger.error(f"Analytics error: {e}")
+        return {"summary": {}, "recent": []}
+
+@app.post('/admin/whatsapp-logs')
+async def log_whatsapp_attempt(data: dict, admin: dict = Depends(get_current_admin)):
+    """Helper to log a new send attempt from the frontend."""
+    try:
+        from app.database import whatsapp_logs_collection
+        log_entry = {
+            "message_id": data.get("message_id"),
+            "phone": data.get("phone"),
+            "customer_name": data.get("customer_name"),
+            "template_id": data.get("template_id"),
+            "status": "SENT",
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        }
+        await whatsapp_logs_collection.insert_one(log_entry)
+        return {"status": "logged"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+

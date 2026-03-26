@@ -41,16 +41,29 @@ const Login: React.FC = () => {
         access_token: string;
         email?: string;
         full_name?: string | null;
+        is_admin?: boolean;
       }>('/auth/login', {
         method: 'POST',
         body: formData,
       });
+
+      if (data.is_admin) {
+        toast({
+          title: 'Access Denied',
+          description: 'Admin accounts must login through the secure admin link.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
       login(data.access_token, {
         email: data.email ?? email.trim().toLowerCase(),
         fullName: typeof data.full_name === 'string' && data.full_name.trim() ? data.full_name.trim() : null,
+        isAdmin: false,
       });
       toast({ title: 'Login Successful', description: 'Welcome back!', duration: 3000 });
       navigate('/');
+
     } catch (error) {
       const description = getFriendlyLoginErrorMessage(error);
       toast({

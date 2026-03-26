@@ -34,13 +34,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef } from "react";
 import { cn } from "@/lib/utils";
+import { requestJson } from "@/lib/api";
 
 type Step = "config" | "assets" | "upload" | "mapping" | "preview" | "launch";
 
 export default function BulkSend() {
+  const qc = useQueryClient();
   const [searchParams] = useSearchParams();
   const videoIdFromUrl = searchParams.get("video_id");
   const isFromVideo = !!videoIdFromUrl;
@@ -71,13 +73,19 @@ export default function BulkSend() {
   const [playingVoiceId, setPlayingVoiceId] = useState("");
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Fetch the specific reference video details
+  // Fetch the specific reference video details - using placeholderData for instant load
   const referenceVideoQuery = useQuery({
     queryKey: ["video", videoIdFromUrl],
     queryFn: () => fetchVideo(videoIdFromUrl!),
     enabled: !!videoIdFromUrl,
     retry: 1,
+    placeholderData: () => {
+      // Instant load if this exists in our main videos cache
+      const myVideos = qc.getQueryData<any[]>(["my-videos"]);
+      return myVideos?.find(v => (v._id || v.video_id) === videoIdFromUrl);
+    }
   });
+
 
   useEffect(() => {
     if (videoIdFromUrl && referenceVideoQuery.data) {
@@ -230,20 +238,33 @@ export default function BulkSend() {
               throw new Error("No reference video URL found for universal send.");
             }
 
-            await sendWhatsAppTemplate({
+            const resp = await sendWhatsAppTemplate({
               name: selectedMsgTemplate,
-              fromNumber: "919220697744",
+              fromNumber: mappedPhone,
               vendor: "INFOBIP",
+
               templateExtraData: {
                 mediaUrl: referenceVideoQuery.data.video_url
               },
-              bodyParams: {
-                "1": mappedName || "Customer",
-                "2": mappedLoan || "your dues",
-                "3": mappedLan || ""
-              }
+              bodyParams: {} // Matches static 'cpstest' on Infobip
             });
+
+
+            // Log for Analytics
+            const msgId = resp.data?.[0]?.messageId;
+            if (msgId) {
+              await requestJson("/admin/whatsapp-logs", {
+                method: "POST",
+                body: JSON.stringify({
+                  message_id: msgId,
+                  phone: mappedPhone,
+                  customer_name: mappedName || "Customer",
+                  template_id: selectedMsgTemplate
+                })
+              });
+            }
           } else {
+
             // Personalized Mode: Create NEW video for every lead
             if (engine === "avatar") {
               await generateDirectVideo({

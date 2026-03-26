@@ -186,7 +186,7 @@ const AdminDashboard = () => {
   const { logout, user } = useAuth();
   const token = localStorage.getItem("token") || "";
   const isAdmin = user?.isAdmin || localStorage.getItem("is_admin") === "true";
-  const [tab, setTab] = useState<"overview" | "users" | "videos">("overview");
+  const [tab, setTab] = useState<"overview" | "users" | "videos" | "campaigns">("overview");
   const [videoSearch, setVideoSearch] = useState("");
   const [videoStatus, setVideoStatus] = useState("");
   const [playingVideo, setPlayingVideo] = useState<any>(null);
@@ -198,6 +198,13 @@ const AdminDashboard = () => {
   const statsQuery = useQuery({
     queryKey: ["admin-stats"],
     queryFn: () => authFetch("/api/admin/stats", token).then((r) => r.json()),
+  });
+
+  const campaignsQuery = useQuery({
+    queryKey: ["admin-campaigns"],
+    queryFn: () => authFetch("/api/admin/campaign-analytics", token).then((r) => r.json()),
+    enabled: tab === "campaigns",
+    refetchInterval: 5000,
   });
 
   const usersQuery = useQuery({
@@ -229,7 +236,11 @@ const AdminDashboard = () => {
     { id: "overview", label: "Overview", icon: BarChart3 },
     { id: "users", label: "Users", icon: Users },
     { id: "videos", label: "All Videos", icon: Video },
+    { id: "campaigns", label: "Campaigns", icon: Activity },
   ] as const;
+
+  const campaignStats = campaignsQuery.data?.summary || {};
+  const recentCampaigns = campaignsQuery.data?.recent || [];
 
   return (
     <div className="min-h-screen bg-[#faf8ff] text-slate-800 pb-16" style={{ fontFamily: "'Inter', sans-serif" }}>
@@ -313,6 +324,7 @@ const AdminDashboard = () => {
             </button>
           ))}
         </div>
+
 
         {/* ── OVERVIEW TAB ── */}
         {tab === "overview" && (
@@ -471,7 +483,68 @@ const AdminDashboard = () => {
             )}
           </div>
         )}
+
+        {/* ── CAMPAIGNS TAB ── */}
+        {tab === "campaigns" && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Card className="bg-white p-4 rounded-2xl border border-purple-100 shadow-none">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Delivered</p>
+                <p className="text-2xl font-black text-emerald-600 mt-1">{campaignStats.DELIVERED || 0}</p>
+              </Card>
+              <Card className="bg-white p-4 rounded-2xl border border-purple-100 shadow-none">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Seen / Read</p>
+                <p className="text-2xl font-black text-blue-600 mt-1">{campaignStats.READ || 0}</p>
+              </Card>
+              <Card className="bg-white p-4 rounded-2xl border border-purple-100 shadow-none">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Failed / Rejected</p>
+                <p className="text-2xl font-black text-red-500 mt-1">{(campaignStats.FAILED || 0) + (campaignStats.REJECTED || 0)}</p>
+              </Card>
+              <Card className="bg-white p-4 rounded-2xl border border-purple-100 shadow-none">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pending</p>
+                <p className="text-2xl font-black text-amber-500 mt-1">{campaignStats.PENDING || 0}</p>
+              </Card>
+            </div>
+
+            <Card className="bg-white border border-purple-100 rounded-3xl overflow-hidden shadow-sm">
+              <Table>
+                <TableHeader className="bg-purple-50/30">
+                  <TableRow className="border-purple-100">
+                    <TableHead className="text-slate-400 font-black uppercase text-[10px] px-6">Customer</TableHead>
+                    <TableHead className="text-slate-400 font-black uppercase text-[10px]">Phone Number</TableHead>
+                    <TableHead className="text-slate-400 font-black uppercase text-[10px]">Status</TableHead>
+                    <TableHead className="text-slate-400 font-black uppercase text-[10px] pr-6 text-right">Time</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {campaignsQuery.isLoading ? [1, 2, 3].map(i => (
+                    <TableRow key={i}><TableCell colSpan={4}><Skeleton className="h-10 w-full" /></TableCell></TableRow>
+                  )) : recentCampaigns.length === 0 ? (
+                    <TableRow><TableCell colSpan={4} className="text-center py-10 text-slate-300 font-bold">No campaign logs yet.</TableCell></TableRow>
+                  ) : recentCampaigns.map((log: any) => (
+                    <TableRow key={log._id} className="border-purple-50">
+                      <TableCell className="px-6 font-bold text-slate-700">{log.customer_name}</TableCell>
+                      <TableCell className="text-slate-500 text-sm">{log.phone}</TableCell>
+                      <TableCell>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black tracking-tight ${
+                          log.status === "DELIVERED" || log.status === "READ" ? "bg-emerald-50 text-emerald-600" :
+                          log.status === "FAILED" || log.status === "REJECTED" ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600"
+                        }`}>
+                          {log.status}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right text-[10px] text-slate-400 pr-6">
+                        {new Date(log.created_at).toLocaleString()}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
+          </div>
+        )}
       </main>
+
     </div>
   );
 };

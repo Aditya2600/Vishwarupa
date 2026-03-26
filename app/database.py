@@ -14,3 +14,5 @@ videos_collection = db.videos
 drafts_collection = db['drafts']
 custom_avatars_collection = db['custom_avatars']
 whatsapp_templates_collection = db['whatsapp_templates']
+whatsapp_logs_collection = db['whatsapp_logs']
+
