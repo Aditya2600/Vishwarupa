@@ -1177,6 +1177,11 @@ export async function fetchMyVideos(): Promise<any[]> {
   return requestJson<any[]>("/my-videos");
 }
 
+export async function fetchVideo(id: string): Promise<any> {
+  return requestJson<any>(`/videos/${id}`);
+}
+
+
 export async function saveDraft(draft: any): Promise<{ status: string; draft_id: string }> {
   return requestJson<{ status: string; draft_id: string }>("/drafts/save", {
     method: "POST",
@@ -1186,6 +1191,37 @@ export async function saveDraft(draft: any): Promise<{ status: string; draft_id:
 
 export async function fetchDrafts(): Promise<any[]> {
   return requestJson<any[]>("/drafts");
+}
+
+export interface WhatsAppTemplatePayload {
+  name: string;
+  fromNumber: string;
+  templateExtraData: {
+    mediaUrl: string;
+  };
+  vendor: string;
+  bodyParams: Record<string, string>;
+  headerParams?: Record<string, string>;
+  buttonParams?: Array<Record<string, string>>;
+}
+
+export async function sendWhatsAppTemplate(payload: WhatsAppTemplatePayload): Promise<any> {
+  const response = await fetch("https://api-stage.credresolve.com/cpaas/api/v1/whatsapp-templates", {
+    method: "POST",
+    headers: {
+      "accept": "*/*",
+      "API-AUTH-TOKEN": "viswarupa",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({}));
+    throw new Error(errorBody.message || "Failed to send WhatsApp template");
+  }
+  
+  return response.json();
 }
 
 export async function deleteVideo(id: string): Promise<{ status: string; message: string }> {

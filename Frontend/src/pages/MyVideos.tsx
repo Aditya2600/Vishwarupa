@@ -1,4 +1,4 @@
-import { Film, PlayCircle, Sparkles, Clock, CheckCircle, ExternalLink, AlertCircle, RotateCcw, Trash2, Download, Share2 } from "lucide-react";
+import { Film, PlayCircle, Sparkles, Clock, CheckCircle, ExternalLink, AlertCircle, RotateCcw, Trash2, Download, Share2, Users, Send, Link, ChevronDown } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -9,6 +9,12 @@ import { fetchMyVideos, deleteVideo } from "@/lib/api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { WIZARD_STORAGE_KEY, type WizardState } from "@/store/wizardStore";
 import { toast } from "sonner";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const SOFT_DELETED_DRAFT_STORAGE_KEY = `${WIZARD_STORAGE_KEY}-deleted`;
 
@@ -483,34 +489,66 @@ export default function MyVideos() {
                       ) : null}
                     </div>
                     <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>{video.request_mode.toLowerCase().includes("remotion") ? "Text to Video" : "Avatar Video"}</span>
+                      <span>{video.request_mode.toLowerCase().includes("remotion") ? "Text to Video" : "AI Avatar"}</span>
                       <span>{video.isLocalDraft ? "Saved in browser" : new Date(video.created_at).toLocaleDateString()}</span>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex items-center gap-2 pt-1">
                       {video.isLocalDraft && !video.video_url && (
-                        <Button variant="outline" className="flex-1 border-border text-xs" onClick={() => navigate("/create")}>
+                        <Button variant="outline" size="sm" className="flex-1 border-border text-[11px] h-8" onClick={() => navigate("/create")}>
                           Resume Draft
                         </Button>
                       )}
                       
                       {video.video_url ? (
                         <>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="flex-1 border-border text-[11px] h-8 group/share relative hover:border-primary/50"
+                              >
+                                <Share2 className="mr-1.5 h-3.5 w-3.5" />
+                                Share
+                                <ChevronDown className="ml-1 h-3 w-3 opacity-50" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48 p-1.5 rounded-xl border-border/80 shadow-xl backdrop-blur-md bg-card/95">
+                              <DropdownMenuItem 
+                                onClick={() => void handleShare(video)}
+                                className="flex items-center gap-2 rounded-lg py-2 cursor-pointer transition-colors"
+                              >
+                                <div className="p-1.5 rounded-md bg-primary/5 text-primary group-data-[highlighted]:bg-primary group-data-[highlighted]:text-white transition-colors">
+                                  <Link className="w-3.5 h-3.5" />
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-[13px] font-semibold">Share Link</span>
+                                  <span className="text-[10px] text-muted-foreground">Copy url to clipboard</span>
+                                </div>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => navigate(`/bulk?video_id=${video._id}`)}
+                                className="flex items-center gap-2 rounded-lg py-2 cursor-pointer transition-colors"
+                              >
+                                <div className="p-1.5 rounded-md bg-indigo-500/5 text-indigo-500 group-data-[highlighted]:bg-indigo-500 group-data-[highlighted]:text-white transition-colors">
+                                  <Users className="w-3.5 h-3.5" />
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-[13px] font-semibold">Share in Bulk</span>
+                                  <span className="text-[10px] text-muted-foreground">Send to multiple contacts</span>
+                                </div>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                           <Button
                             type="button"
                             variant="outline"
-                            className="flex-1 border-border text-xs"
-                            onClick={() => void handleShare(video)}
-                          >
-                            <Share2 className="mr-1 h-3.5 w-3.5" />
-                            Share
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="flex-1 border-border text-xs"
+                            size="sm"
+                            className="flex-1 border-border text-[11px] h-8"
                             onClick={() => void handleDownload(video)}
                           >
-                            <Download className="mr-1 h-3.5 w-3.5" />
+                            <Download className="mr-1.5 h-3.5 w-3.5" />
                             Download
                           </Button>
                         </>
@@ -519,11 +557,12 @@ export default function MyVideos() {
                       <Button
                         type="button"
                         variant="ghost"
-                        className="px-3 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive shrink-0"
                         onClick={() => handleVideoDelete(video)}
+                        title="Delete video"
                       >
-                        <Trash2 className="mr-1 h-3.5 w-3.5" />
-                        Delete
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
 
