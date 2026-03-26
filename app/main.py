@@ -1499,7 +1499,9 @@ async def get_admin_stats(admin: dict = Depends(get_current_admin)):
         'status': 'online'
     }
 
+
 @app.get('/admin/users')
+
 async def get_admin_users(admin: dict = Depends(get_current_admin)):
     cursor = users_collection.find({})
     users = await cursor.to_list(length=500)
