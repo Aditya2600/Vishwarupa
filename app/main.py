@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 from bson import ObjectId
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, Depends, status
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, Depends, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -844,6 +844,59 @@ async def delete_whatsapp_template(template_id: str, admin_user: dict = Depends(
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail=f"Template '{template_id}' not found.")
     return {"status": "deleted", "id": template_id}
+
+
+async def _proxy_cpaas_request(method: str, path: str, payload: Any | None = None) -> JSONResponse:
+    if not settings.cpaas_api_auth_token:
+        raise HTTPException(status_code=500, detail="CPAAS_API_AUTH_TOKEN is not configured.")
+
+    import httpx
+
+    url = f"{settings.cpaas_api_base_url.rstrip('/')}/{path.lstrip('/')}"
+    headers = {
+        "Accept": "application/json",
+        "API-AUTH-TOKEN": settings.cpaas_api_auth_token,
+    }
+
+    if payload is not None:
+        headers["Content-Type"] = "application/json"
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.request(method, url, headers=headers, json=payload)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to reach CPAAS service: {exc}") from exc
+
+    content_type = response.headers.get("content-type", "")
+    if "application/json" in content_type.lower():
+        body: Any = response.json()
+    else:
+        body = {
+            "success": response.is_success,
+            "status": response.status_code,
+            "message": response.text,
+        }
+
+    return JSONResponse(status_code=response.status_code, content=body)
+
+
+@app.post('/cpaas/campaigns')
+async def create_cpaas_campaign(payload: dict, current_user: str = Depends(get_current_user)):
+    return await _proxy_cpaas_request("POST", "/campaigns", payload)
+
+
+@app.post('/cpaas/campaigns/push-lead')
+async def push_cpaas_campaign_leads(payload: dict, current_user: str = Depends(get_current_user)):
+    return await _proxy_cpaas_request("POST", "/campaigns/push-lead", payload)
+
+
+@app.post('/cpaas/campaigns/{campaign_code}/status')
+async def update_cpaas_campaign_status(
+    campaign_code: str,
+    status: str = Query(...),
+    current_user: str = Depends(get_current_user),
+):
+    return await _proxy_cpaas_request("POST", f"/campaigns/{campaign_code}/status?status={status}")
 
 
 # --- Authentication Endpoints ---

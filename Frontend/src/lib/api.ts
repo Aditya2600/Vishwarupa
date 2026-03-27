@@ -117,8 +117,6 @@ export interface AppConfig {
 }
 
 export const API_BASE_URL = "/api";
-const CPAAS_API_BASE_URL = "https://api-stage.credresolve.com/cpaas/api/v1";
-const CPAAS_API_AUTH_TOKEN = "viswarupa";
 const GENERATION_FAILED_MESSAGE = "We couldn't generate the video right now. Please try again.";
 const GENERATION_TIMEOUT_MESSAGE = "The video is taking longer than expected. Please try again in a moment.";
 const SERVER_UNREACHABLE_MESSAGE = "Could not reach the server. Check that the backend is running and try again.";
@@ -1254,27 +1252,7 @@ export interface CpaasApiResponse<T = unknown> {
 }
 
 async function requestCpaasJson<T>(path: string, init: RequestInit): Promise<T> {
-  const response = await fetch(`${CPAAS_API_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      accept: "*/*",
-      "API-AUTH-TOKEN": CPAAS_API_AUTH_TOKEN,
-      "Content-Type": "application/json",
-      ...init.headers,
-    },
-  });
-
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const errorRecord = asRecord(payload);
-    throw new Error(
-      asString(errorRecord.message)
-      ?? asString(errorRecord.detail)
-      ?? `Request failed with status ${response.status}`,
-    );
-  }
-
-  return payload as T;
+  return requestJson<T>(`/cpaas${path}`, init);
 }
 
 export async function sendWhatsAppTemplate(payload: WhatsAppTemplatePayload): Promise<any> {

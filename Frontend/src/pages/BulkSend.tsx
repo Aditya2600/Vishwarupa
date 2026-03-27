@@ -122,7 +122,10 @@ function buildVideoLinkPreview(
   referenceVideoUrl?: string | null,
 ): string {
   const origin = typeof window !== "undefined" ? window.location.origin : "https://vishvarupa.credresolve.com";
-  const csvVideoUrl = getRowValue(row, headers, mapping, "video_url");
+  const csvVideoUrl =
+    getRowValue(row, headers, mapping, "video_url")
+    || getRowValue(row, headers, mapping, "final_video_url")
+    || getRowValue(row, headers, mapping, "source_video_url");
 
   if (csvVideoUrl) {
     return csvVideoUrl;
@@ -153,7 +156,11 @@ function getVideoLinkPreviewLabel(
   mode: "personalized" | "universal",
   referenceVideoUrl?: string | null,
 ): string {
-  if (getRowValue(row, headers, mapping, "video_url")) {
+  if (
+    getRowValue(row, headers, mapping, "video_url")
+    || getRowValue(row, headers, mapping, "final_video_url")
+    || getRowValue(row, headers, mapping, "source_video_url")
+  ) {
     return "CSV Video URL";
   }
 
@@ -258,8 +265,10 @@ export default function BulkSend() {
         const isRemotion = refVideo.request_mode === "remotion" || (refVideo.request_mode as string)?.includes("remotion");
         setEngine(isRemotion ? "remotion" : "avatar");
         
-        // Auto-detect variety
-        if (refVideo.raw_response?.input_params?.video_variety) {
+        // Existing-video flow should send the chosen video to WhatsApp, not generate new drafts.
+        if (isFromVideo) {
+          setMode("universal");
+        } else if (refVideo.raw_response?.input_params?.video_variety) {
           setMode(refVideo.raw_response.input_params.video_variety);
         }
 
@@ -383,9 +392,15 @@ export default function BulkSend() {
     setIsLaunching(true);
     let successCount = 0;
     let failCount = 0;
+    const shouldUseCampaignSend = mode === "universal" || isFromVideo;
+    const referenceVideoUrl = referenceVideoQuery.data?.video_url ?? null;
 
     const promise = (async () => {
-      if (mode === "universal") {
+      if (shouldUseCampaignSend) {
+        if (isFromVideo && !referenceVideoUrl) {
+          throw new Error("The selected video is not ready yet. Wait for the video URL to be available before sending it to WhatsApp.");
+        }
+
         const strategy = CAMPAIGN_STRATEGIES.find((s: any) => s.id === selectedMsgTemplate);
         const now = Date.now();
         const campaignResponse = await createCampaign({
@@ -413,7 +428,7 @@ export default function BulkSend() {
           return [{
             phoneNumber: mappedPhone,
             name: String(mappedName || "Customer"),
-            metaData: buildLeadMetaData(row, referenceVideoQuery.data?.video_url),
+            metaData: buildLeadMetaData(row, referenceVideoUrl),
           }];
         });
 
@@ -429,7 +444,7 @@ export default function BulkSend() {
         await updateCampaignStatus(campaignCode, "STARTED");
 
         successCount = leads.length;
-        return { successCount, failCount, mode };
+        return { successCount, failCount, mode, launchType: "campaign" as const };
       }
 
       for (const row of csvData) {
@@ -485,11 +500,13 @@ export default function BulkSend() {
     })();
 
     toast.promise(promise, {
-      loading: mode === "universal" 
-        ? `Creating campaign and pushing ${csvData.length} leads...`
+      loading: shouldUseCampaignSend
+        ? isFromVideo
+          ? `Creating WhatsApp campaign and sending the selected video to ${csvData.length} leads...`
+          : `Creating campaign and pushing ${csvData.length} leads...`
         : `Queuing ${csvData.length} personalized AI video jobs...`,
-      success: (data) => data.mode === "universal"
-        ? `Campaign created and ${data.successCount} leads pushed. ${data.failCount} skipped.`
+      success: (data) => data.launchType === "campaign"
+        ? `WhatsApp campaign started for ${data.successCount} leads. ${data.failCount} skipped.`
         : `${data.successCount} Personalization jobs queued! They will be sent to WhatsApp as they finish.`,
       error: "Campaign failed to start.",
     });
@@ -1174,7 +1191,10 @@ export default function BulkSend() {
     </div>
   );
 
-  const renderLaunch = () => (
+  const renderLaunch = () => {
+    const shouldUseCampaignSend = mode === "universal" || isFromVideo;
+
+    return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <section className="rounded-[2rem] border border-border/70 bg-gradient-to-br from-card via-card to-primary/[0.04] p-8 shadow-xl">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -1261,20 +1281,20 @@ export default function BulkSend() {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="p-0">
-            <Table>
+          <CardContent className="overflow-x-auto p-0">
+            <Table className="min-w-[1200px]">
               <TableHeader className="bg-secondary/10">
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="w-14 text-[10px] font-black uppercase tracking-widest text-muted-foreground">#</TableHead>
                   {orderPreviewHeaders(csvHeaders, mapping).map((header) => (
                     <TableHead
                       key={header}
-                      className="text-[10px] font-black uppercase tracking-widest text-muted-foreground"
+                      className="min-w-[160px] text-[10px] font-black uppercase tracking-widest text-muted-foreground"
                     >
                       {header}
                     </TableHead>
                   ))}
-                  <TableHead className="sticky right-0 min-w-[280px] border-l bg-secondary/10 text-[10px] font-black uppercase tracking-widest text-primary">
+                  <TableHead className="sticky right-0 z-20 min-w-[320px] border-l bg-secondary/95 text-[10px] font-black uppercase tracking-widest text-primary shadow-[-16px_0_20px_-18px_rgba(15,23,42,0.35)] backdrop-blur">
                     Video Link Preview
                   </TableHead>
                 </TableRow>
@@ -1309,14 +1329,14 @@ export default function BulkSend() {
                               : String(row[header]);
 
                         return (
-                          <TableCell key={`${header}-${index}`} className="max-w-[180px]">
+                          <TableCell key={`${header}-${index}`} className="min-w-[160px] max-w-[180px]">
                             <div className="truncate text-sm text-foreground" title={cellValue || "-"}>
                               {cellValue || <span className="text-muted-foreground">-</span>}
                             </div>
                           </TableCell>
                         );
                       })}
-                      <TableCell className="sticky right-0 min-w-[280px] border-l bg-background/95 backdrop-blur">
+                      <TableCell className="sticky right-0 z-10 min-w-[320px] border-l bg-background/95 shadow-[-16px_0_20px_-18px_rgba(15,23,42,0.22)] backdrop-blur">
                         <div className="space-y-1">
                           <div className="break-all font-mono text-xs text-foreground">{previewLink}</div>
                           <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
@@ -1345,9 +1365,9 @@ export default function BulkSend() {
           <div className="space-y-1">
             <p className="text-sm font-bold text-foreground">Video link guidance</p>
             <p className="text-sm leading-6 text-muted-foreground">
-              {mode === "universal" && referenceVideoQuery.data?.video_url
+              {shouldUseCampaignSend && referenceVideoQuery.data?.video_url
                 ? "All recipients will receive the same video link."
-                : mode === "universal"
+                : shouldUseCampaignSend
                   ? "A shared preview link is shown here. The same video link will be used for every recipient."
                   : "Preview links are for review only. Final video URLs are created after generation."}
             </p>
@@ -1358,8 +1378,9 @@ export default function BulkSend() {
       <div className="bg-amber-500/5 border border-amber-500/20 p-4 rounded-xl flex items-start gap-4">
         <AlertCircle className="w-6 h-6 text-amber-500 shrink-0" />
         <p className="text-sm text-amber-700/80">
-          <strong>Important:</strong> Launching this campaign will immediately queue all jobs to AWS SQS.
-          Avatar videos can take 2-10 mins each to process depending on length. Text renders are usually faster (~45s each).
+          <strong>Important:</strong> {shouldUseCampaignSend
+            ? "Launching this campaign will push the selected video to the mapped WhatsApp numbers immediately."
+            : "Launching this campaign will immediately queue all jobs to AWS SQS. Avatar videos can take 2-10 mins each to process depending on length. Text renders are usually faster (~45s each)."}
         </p>
       </div>
 
@@ -1377,7 +1398,8 @@ export default function BulkSend() {
 
       </div>
     </div>
-  );
+    );
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
