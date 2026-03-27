@@ -177,38 +177,60 @@ function normalizePhoneNumber(value: unknown): string {
     return "";
   }
 
-  if (rawValue.startsWith("+")) {
-    return rawValue;
-  }
-
   const digits = rawValue.replace(/\D/g, "");
   if (digits.length === 10) {
-    return `+91${digits}`;
+    return digits;
   }
   if (digits.length === 12 && digits.startsWith("91")) {
-    return `+${digits}`;
+    return digits.slice(2);
   }
-  return rawValue;
+  if (digits.length === 11 && digits.startsWith("0")) {
+    return digits.slice(1);
+  }
+  return digits || rawValue;
 }
 
-function buildLeadMetaData(row: Record<string, unknown>, videoUrl?: string | null): Record<string, unknown> {
-  const metaData: Record<string, unknown> = {};
+function buildLeadVariables(row: Record<string, unknown>, videoUrl?: string | null): Record<string, string> {
+  const variables: Record<string, string> = {};
 
   for (const [key, value] of Object.entries(row)) {
     if (value == null) {
       continue;
     }
-    if (typeof value === "string" && !value.trim()) {
+    const normalizedValue = typeof value === "string" ? value.trim() : String(value);
+    if (!normalizedValue) {
       continue;
     }
-    metaData[key] = value;
+    variables[key] = normalizedValue;
   }
 
   if (videoUrl) {
-    metaData.video_url = videoUrl;
+    variables.video_url = videoUrl;
   }
 
-  return metaData;
+  return variables;
+}
+
+function extractCampaignCode(data: unknown): string {
+  if (typeof data === "string") {
+    return data.trim();
+  }
+
+  if (!data || typeof data !== "object") {
+    return "";
+  }
+
+  const record = data as Record<string, unknown>;
+  const candidateKeys = ["campaignCode", "campaign_code", "code", "id", "campaignId"];
+
+  for (const key of candidateKeys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return "";
 }
 
 export default function BulkSend() {
@@ -403,15 +425,21 @@ export default function BulkSend() {
 
         const strategy = CAMPAIGN_STRATEGIES.find((s: any) => s.id === selectedMsgTemplate);
         const now = Date.now();
-        const campaignResponse = await createCampaign({
+        const campaignPayload = {
           name: `${strategy?.name || selectedMsgTemplate} ${new Date(now).toLocaleDateString("en-GB")}`,
           description: `Bulk send campaign for ${strategy?.name || selectedMsgTemplate} in ${selectedLanguage}.`,
           startDate: new Date(now + 60_000).toISOString(),
           endDate: new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          templateId: selectedMsgTemplate || "cpstest",
+          communicationType: "WHATSAPP",
           campaignType: "WHATSAPP",
-        });
+        };
+        console.info("[bulk-send] createCampaign payload", campaignPayload);
+        const campaignResponse = await createCampaign(campaignPayload);
+        console.info("[bulk-send] createCampaign response", campaignResponse);
 
-        const campaignCode = campaignResponse.data;
+        const campaignCode = extractCampaignCode(campaignResponse.data);
+        console.info("[bulk-send] extracted campaignCode", campaignCode, campaignResponse.data);
         if (!campaignCode) {
           throw new Error("Campaign code was not returned after campaign creation.");
         }
@@ -419,16 +447,19 @@ export default function BulkSend() {
         const leads = csvData.flatMap((row) => {
           const mappedPhone = normalizePhoneNumber(row[mapping["phone"]]);
           const mappedName = row[mapping["name"]];
+          const mappedLan = row[mapping["lan"]];
 
           if (!mappedPhone) {
             failCount++;
             return [];
           }
 
+          const uniqueId = String(mappedLan || mappedName || mappedPhone || "Customer").trim();
+
           return [{
             phoneNumber: mappedPhone,
-            name: String(mappedName || "Customer"),
-            metaData: buildLeadMetaData(row, referenceVideoUrl),
+            uniqueId: uniqueId || "Customer",
+            variables: buildLeadVariables(row, referenceVideoUrl),
           }];
         });
 

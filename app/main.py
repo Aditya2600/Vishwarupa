@@ -852,6 +852,15 @@ async def _proxy_cpaas_request(method: str, path: str, payload: Any | None = Non
 
     import httpx
 
+    payload_summary = payload
+    if isinstance(payload, dict):
+        payload_summary = dict(payload)
+        leads = payload_summary.get("leads")
+        if isinstance(leads, list):
+            payload_summary["leadCount"] = len(leads)
+            payload_summary["firstLead"] = leads[0] if leads else None
+            payload_summary.pop("leads", None)
+
     url = f"{settings.cpaas_api_base_url.rstrip('/')}/{path.lstrip('/')}"
     headers = {
         "Accept": "application/json",
@@ -861,28 +870,55 @@ async def _proxy_cpaas_request(method: str, path: str, payload: Any | None = Non
     if payload is not None:
         headers["Content-Type"] = "application/json"
 
+    logger.info(
+        "CPAAS request | method=%s | path=%s | payload=%s",
+        method,
+        path,
+        json.dumps(payload_summary, default=str),
+    )
+
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.request(method, url, headers=headers, json=payload)
     except httpx.HTTPError as exc:
+        logger.exception("CPAAS transport failure | method=%s | path=%s", method, path)
         raise HTTPException(status_code=502, detail=f"Failed to reach CPAAS service: {exc}") from exc
 
     content_type = response.headers.get("content-type", "")
+    response_text = response.text
     if "application/json" in content_type.lower():
-        body: Any = response.json()
+        try:
+            body: Any = response.json()
+        except ValueError:
+            body = {
+                "success": response.is_success,
+                "status": response.status_code,
+                "message": response_text,
+            }
     else:
         body = {
             "success": response.is_success,
             "status": response.status_code,
-            "message": response.text,
+            "message": response_text,
         }
+
+    logger.info(
+        "CPAAS response | method=%s | path=%s | status=%s | body=%s",
+        method,
+        path,
+        response.status_code,
+        json.dumps(body, default=str)[:4000],
+    )
 
     return JSONResponse(status_code=response.status_code, content=body)
 
 
 @app.post('/cpaas/campaigns')
 async def create_cpaas_campaign(payload: dict, current_user: str = Depends(get_current_user)):
-    return await _proxy_cpaas_request("POST", "/campaigns", payload)
+    upstream_payload = dict(payload)
+    if not upstream_payload.get("communicationType") and upstream_payload.get("campaignType"):
+        upstream_payload["communicationType"] = upstream_payload["campaignType"]
+    return await _proxy_cpaas_request("POST", "/campaigns", upstream_payload)
 
 
 @app.post('/cpaas/campaigns/push-lead')

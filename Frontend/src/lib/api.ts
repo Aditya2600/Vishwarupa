@@ -1223,8 +1223,8 @@ export interface WhatsAppTemplatePayload {
 
 export interface CampaignLeadPayload {
   phoneNumber: string;
-  name: string;
-  metaData?: Record<string, unknown>;
+  uniqueId: string;
+  variables?: Record<string, string>;
 }
 
 export interface PushCampaignLeadsPayload {
@@ -1237,7 +1237,9 @@ export interface CreateCampaignPayload {
   description: string;
   startDate: string;
   endDate: string;
-  campaignType: "WHATSAPP";
+  templateId: string;
+  communicationType: "WHATSAPP";
+  campaignType?: "WHATSAPP";
 }
 
 export type CampaignStatus = "CREATED" | "PAUSED" | "RESUMED" | "STARTED";
@@ -1264,8 +1266,8 @@ export async function sendWhatsAppTemplate(payload: WhatsAppTemplatePayload): Pr
 
 export async function createCampaign(
   payload: CreateCampaignPayload,
-): Promise<CpaasApiResponse<string>> {
-  return requestCpaasJson<CpaasApiResponse<string>>("/campaigns", {
+): Promise<CpaasApiResponse<unknown>> {
+  return requestCpaasJson<CpaasApiResponse<unknown>>("/campaigns", {
     method: "POST",
     body: JSON.stringify(payload),
   });
