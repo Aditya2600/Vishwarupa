@@ -42,4 +42,4 @@ services:
     environment:
       BACKEND_ORIGIN: http://backend:8000
     ports:
-      - "8080:80"
+      - "8081:80"

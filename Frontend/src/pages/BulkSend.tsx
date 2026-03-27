@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { HeaderBar } from "@/components/HeaderBar";
 import { useSearchParams } from "react-router-dom";
-import { fetchAvatars, fetchVoices, isVoiceCompatibleWithLanguage, compareVoicesForLanguage, type AvatarOption, type VoiceOption, fetchMyVideos, sendWhatsAppTemplate, fetchVideo, generateDirectVideo, generateRemotionVideo } from "@/lib/api";
+import { fetchAvatars, fetchVoices, isVoiceCompatibleWithLanguage, compareVoicesForLanguage, type AvatarOption, type VoiceOption, fetchMyVideos, createCampaign, pushCampaignLeads, updateCampaignStatus, fetchVideo, generateDirectVideo, generateRemotionVideo } from "@/lib/api";
 import {
   Sparkles,
   MessageSquare,
@@ -34,12 +34,175 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef } from "react";
 import { cn } from "@/lib/utils";
 import { requestJson } from "@/lib/api";
 
 type Step = "config" | "assets" | "upload" | "mapping" | "preview" | "launch";
+const SAMPLE_BULK_CSV_URL = "/api/sample-csvs/bulk-campaign";
+const CSV_PREVIEW_ROW_LIMIT = 8;
+const PRIORITY_PREVIEW_COLUMNS = [
+  "name",
+  "phone",
+  "lan",
+  "client_name",
+  "language",
+  "total_outstanding_amount",
+  "loan_amount",
+];
+
+function normalizeCsvKey(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function resolveCsvHeader(
+  headers: string[],
+  mapping: Record<string, string>,
+  systemKey: string,
+): string | null {
+  const mappedHeader = mapping[systemKey];
+  if (mappedHeader) {
+    return mappedHeader;
+  }
+
+  const normalizedSystemKey = normalizeCsvKey(systemKey);
+  const exactHeader = headers.find((header) => normalizeCsvKey(header) === normalizedSystemKey);
+  if (exactHeader) {
+    return exactHeader;
+  }
+
+  return headers.find((header) => normalizeCsvKey(header).includes(normalizedSystemKey)) ?? null;
+}
+
+function orderPreviewHeaders(headers: string[], mapping: Record<string, string>): string[] {
+  const prioritizedHeaders = PRIORITY_PREVIEW_COLUMNS
+    .map((systemKey) => resolveCsvHeader(headers, mapping, systemKey))
+    .filter((header): header is string => Boolean(header));
+
+  const seen = new Set(prioritizedHeaders.map((header) => normalizeCsvKey(header)));
+  const remainingHeaders = headers.filter((header) => !seen.has(normalizeCsvKey(header)));
+
+  return [...prioritizedHeaders, ...remainingHeaders];
+}
+
+function getRowValue(
+  row: Record<string, unknown>,
+  headers: string[],
+  mapping: Record<string, string>,
+  systemKey: string,
+): string {
+  const header = resolveCsvHeader(headers, mapping, systemKey);
+  if (!header) {
+    return "";
+  }
+
+  const value = row[header];
+  return typeof value === "string" ? value.trim() : value == null ? "" : String(value);
+}
+
+function slugifyPreviewValue(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+}
+
+function buildVideoLinkPreview(
+  row: Record<string, unknown>,
+  index: number,
+  headers: string[],
+  mapping: Record<string, string>,
+  mode: "personalized" | "universal",
+  referenceVideoUrl?: string | null,
+): string {
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://vishvarupa.credresolve.com";
+  const csvVideoUrl = getRowValue(row, headers, mapping, "video_url");
+
+  if (csvVideoUrl) {
+    return csvVideoUrl;
+  }
+
+  if (mode === "universal" && referenceVideoUrl) {
+    return referenceVideoUrl;
+  }
+
+  if (mode === "universal") {
+    return `${origin}/bulk/preview/reference/universal`;
+  }
+
+  const leadKey = slugifyPreviewValue(
+    getRowValue(row, headers, mapping, "lan")
+      || getRowValue(row, headers, mapping, "phone")
+      || getRowValue(row, headers, mapping, "name")
+      || `lead-${index + 1}`,
+  );
+
+  return `${origin}/bulk/preview/generated/${leadKey || `lead-${index + 1}`}`;
+}
+
+function getVideoLinkPreviewLabel(
+  row: Record<string, unknown>,
+  headers: string[],
+  mapping: Record<string, string>,
+  mode: "personalized" | "universal",
+  referenceVideoUrl?: string | null,
+): string {
+  if (getRowValue(row, headers, mapping, "video_url")) {
+    return "CSV Video URL";
+  }
+
+  if (mode === "universal" && referenceVideoUrl) {
+    return "Live reference URL";
+  }
+
+  return "Preview URL";
+}
+
+function normalizePhoneNumber(value: unknown): string {
+  const rawValue = typeof value === "string" ? value.trim() : value == null ? "" : String(value).trim();
+  if (!rawValue) {
+    return "";
+  }
+
+  if (rawValue.startsWith("+")) {
+    return rawValue;
+  }
+
+  const digits = rawValue.replace(/\D/g, "");
+  if (digits.length === 10) {
+    return `+91${digits}`;
+  }
+  if (digits.length === 12 && digits.startsWith("91")) {
+    return `+${digits}`;
+  }
+  return rawValue;
+}
+
+function buildLeadMetaData(row: Record<string, unknown>, videoUrl?: string | null): Record<string, unknown> {
+  const metaData: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(row)) {
+    if (value == null) {
+      continue;
+    }
+    if (typeof value === "string" && !value.trim()) {
+      continue;
+    }
+    metaData[key] = value;
+  }
+
+  if (videoUrl) {
+    metaData.video_url = videoUrl;
+  }
+
+  return metaData;
+}
 
 export default function BulkSend() {
   const qc = useQueryClient();
@@ -222,6 +385,53 @@ export default function BulkSend() {
     let failCount = 0;
 
     const promise = (async () => {
+      if (mode === "universal") {
+        const strategy = CAMPAIGN_STRATEGIES.find((s: any) => s.id === selectedMsgTemplate);
+        const now = Date.now();
+        const campaignResponse = await createCampaign({
+          name: `${strategy?.name || selectedMsgTemplate} ${new Date(now).toLocaleDateString("en-GB")}`,
+          description: `Bulk send campaign for ${strategy?.name || selectedMsgTemplate} in ${selectedLanguage}.`,
+          startDate: new Date(now + 60_000).toISOString(),
+          endDate: new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          campaignType: "WHATSAPP",
+        });
+
+        const campaignCode = campaignResponse.data;
+        if (!campaignCode) {
+          throw new Error("Campaign code was not returned after campaign creation.");
+        }
+
+        const leads = csvData.flatMap((row) => {
+          const mappedPhone = normalizePhoneNumber(row[mapping["phone"]]);
+          const mappedName = row[mapping["name"]];
+
+          if (!mappedPhone) {
+            failCount++;
+            return [];
+          }
+
+          return [{
+            phoneNumber: mappedPhone,
+            name: String(mappedName || "Customer"),
+            metaData: buildLeadMetaData(row, referenceVideoQuery.data?.video_url),
+          }];
+        });
+
+        if (!leads.length) {
+          throw new Error("No valid leads with phone numbers were found in the uploaded CSV.");
+        }
+
+        await pushCampaignLeads({
+          campaignCode,
+          leads,
+        });
+
+        await updateCampaignStatus(campaignCode, "STARTED");
+
+        successCount = leads.length;
+        return { successCount, failCount, mode };
+      }
+
       for (const row of csvData) {
         try {
           const mappedName = row[mapping["name"]];
@@ -232,72 +442,38 @@ export default function BulkSend() {
 
           if (!mappedPhone) continue;
 
-          if (mode === "universal") {
-            // Universal Mode: Send existing video directly
-            if (!referenceVideoQuery.data?.video_url) {
-              throw new Error("No reference video URL found for universal send.");
-            }
-
-            const resp = await sendWhatsAppTemplate({
-              name: selectedMsgTemplate,
-              fromNumber: mappedPhone,
-              vendor: "INFOBIP",
-
-              templateExtraData: {
-                mediaUrl: referenceVideoQuery.data.video_url
-              },
-              bodyParams: {} // Matches static 'cpstest' on Infobip
+          // Personalized Mode: Create NEW video for every lead
+          if (engine === "avatar") {
+            await generateDirectVideo({
+              customer_name: mappedName || "Customer",
+              lan: mappedLan || "N/A",
+              client_name: mappedClient,
+              loan_amount: mappedLoan || "0",
+              avatar_id: selectedAvatar,
+              voice_id: selectedVoice,
+              language: selectedLanguage,
+              script_text: videoScript.replace(/{{customer_name}}/g, mappedName || "Customer")
+                            .replace(/{{loan_amount}}/g, mappedLoan || "0")
+                            .replace(/{{lan}}/g, mappedLan || "N/A"),
+              title_prefix: "Bulk Campaign"
+            }, false); // wait=false for speed
+          } else {
+            await generateRemotionVideo({
+              customer_name: mappedName || "Customer",
+              lan: mappedLan || "N/A",
+              client_name: mappedClient,
+              loan_amount: mappedLoan || "0",
+              language: selectedLanguage,
+              script_text: videoScript.replace(/{{customer_name}}/g, mappedName || "Customer")
+                            .replace(/{{loan_amount}}/g, mappedLoan || "0")
+                            .replace(/{{lan}}/g, mappedLan || "N/A"),
+              title_prefix: "Bulk Campaign",
+              subtitleColor: "White",
+              subtitlePosition: "Bottom",
+              logoPosition: "Top Right",
+              logoOpacity: 80
             });
 
-
-            // Log for Analytics
-            const msgId = resp.data?.[0]?.messageId;
-            if (msgId) {
-              await requestJson("/admin/whatsapp-logs", {
-                method: "POST",
-                body: JSON.stringify({
-                  message_id: msgId,
-                  phone: mappedPhone,
-                  customer_name: mappedName || "Customer",
-                  template_id: selectedMsgTemplate
-                })
-              });
-            }
-          } else {
-
-            // Personalized Mode: Create NEW video for every lead
-            if (engine === "avatar") {
-              await generateDirectVideo({
-                customer_name: mappedName || "Customer",
-                lan: mappedLan || "N/A",
-                client_name: mappedClient,
-                loan_amount: mappedLoan || "0",
-                avatar_id: selectedAvatar,
-                voice_id: selectedVoice,
-                language: selectedLanguage,
-                script_text: videoScript.replace(/{{customer_name}}/g, mappedName || "Customer")
-                              .replace(/{{loan_amount}}/g, mappedLoan || "0")
-                              .replace(/{{lan}}/g, mappedLan || "N/A"),
-                title_prefix: "Bulk Campaign"
-              }, false); // wait=false for speed
-            } else {
-              await generateRemotionVideo({
-                customer_name: mappedName || "Customer",
-                lan: mappedLan || "N/A",
-                client_name: mappedClient,
-                loan_amount: mappedLoan || "0",
-                language: selectedLanguage,
-                script_text: videoScript.replace(/{{customer_name}}/g, mappedName || "Customer")
-                              .replace(/{{loan_amount}}/g, mappedLoan || "0")
-                              .replace(/{{lan}}/g, mappedLan || "N/A"),
-                title_prefix: "Bulk Campaign",
-                subtitleColor: "White",
-                subtitlePosition: "Bottom",
-                logoPosition: "Top Right",
-                logoOpacity: 80
-              });
-
-            }
           }
           successCount++;
         } catch (err) {
@@ -310,10 +486,10 @@ export default function BulkSend() {
 
     toast.promise(promise, {
       loading: mode === "universal" 
-        ? `Sending individual videos to ${csvData.length} leads...`
+        ? `Creating campaign and pushing ${csvData.length} leads...`
         : `Queuing ${csvData.length} personalized AI video jobs...`,
       success: (data) => data.mode === "universal"
-        ? `Campaign finished! ${data.successCount} sent, ${data.failCount} failed.`
+        ? `Campaign created and ${data.successCount} leads pushed. ${data.failCount} skipped.`
         : `${data.successCount} Personalization jobs queued! They will be sent to WhatsApp as they finish.`,
       error: "Campaign failed to start.",
     });
@@ -811,8 +987,10 @@ export default function BulkSend() {
               {file ? "Change CSV File" : "Select CSV File"}
               <input type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
             </Label>
-            <Button variant="outline" className="h-14 w-full border-2 rounded-2xl font-bold">
-              Download Sample
+            <Button variant="outline" className="h-14 w-full border-2 rounded-2xl font-bold" asChild>
+              <a href={SAMPLE_BULK_CSV_URL} download="sample.csv">
+                Download Sample
+              </a>
             </Button>
           </div>
           {file && (
@@ -998,56 +1176,27 @@ export default function BulkSend() {
 
   const renderLaunch = () => (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* Visual Previews as per screenshot */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-        <div className="lg:col-span-3">
-          <div className="flex items-center justify-between mb-4">
-             <Label className="text-lg font-bold">Video Preview</Label>
-             <span className="text-[10px] px-2 py-1 rounded bg-red-100 text-red-600 font-black animate-pulse uppercase">Live Simulation</span>
-          </div>
-          <Card className="w-full bg-black border-none overflow-hidden relative shadow-2xl rounded-3xl">
-            <div className="aspect-video bg-slate-900 flex items-center justify-center relative">
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex flex-col justify-end p-8 text-white space-y-2">
-                <h2 className="text-3xl font-black italic uppercase tracking-tighter">Account: {mapping['lan'] || 'LANXXXX'}</h2>
-                <p className="text-xl font-medium text-white/90">Amount Due: <span className="text-primary font-bold">₹{mapping['loan_amount'] || '0,000'}</span></p>
-                <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between">
-                  <span className="text-xs uppercase font-bold tracking-widest text-white/40">CredResolve | {selectedMsgTemplate}</span>
-                  <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center border border-primary/40">
-                    <Video className="w-5 h-5 text-primary" />
-                  </div>
-                </div>
-              </div>
-              <Play className="w-12 h-12 text-white/20 animate-pulse" />
-              <div className="absolute top-8 left-8">
-                 <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center">
-                    <Sparkles className="w-5 h-5 text-primary" />
-                 </div>
-              </div>
+      <section className="rounded-[2rem] border border-border/70 bg-gradient-to-br from-card via-card to-primary/[0.04] p-8 shadow-xl">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-3">
+            <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-3 py-1 text-[10px] font-black uppercase tracking-[0.28em] text-primary">
+              <FileCheck className="w-3.5 h-3.5" />
+              Final Lead Review
             </div>
-          </Card>
-        </div>
-
-        <div className="lg:col-span-2 space-y-4">
-          <Label className="text-lg font-bold">WhatsApp Preview</Label>
-          <div className="bg-emerald-50 dark:bg-emerald-950/20 p-6 rounded-3xl border border-emerald-100 dark:border-emerald-900/40 relative min-h-[300px] flex flex-col shadow-sm">
-             <div className="flex-1 font-sans text-sm text-emerald-900 dark:text-emerald-100 leading-relaxed whitespace-pre-wrap">
-               {whatsappTemplate.replace('{{name}}', '[Customer Name]').replace('{{lan}}', mapping['lan'] || '[LAN]').replace('{{loan_amount}}', mapping['loan_amount'] || '[Amount]').replace('{{video_url}}', 'https://vishwarupe.ai/v/example')}
-             </div>
-             <div className="mt-6 pt-4 border-t border-emerald-200/50 dark:border-emerald-800/50">
-                <div className="flex items-center gap-2 text-[10px] text-emerald-600/70 font-bold uppercase tracking-widest">
-                   <Smartphone className="w-3 h-3" /> Sending to {mapping['phone'] || 'Mapped Column'}
-                </div>
-             </div>
-             <div className="absolute -top-3 -left-3">
-                <div className="bg-emerald-500 text-white p-2 rounded-full shadow-lg">
-                   <MessageSquare className="w-4 h-4" />
-                </div>
-             </div>
+            <div className="space-y-2">
+              <h2 className="text-3xl font-black tracking-tight text-foreground">CSV review before launch</h2>
+              <p className="max-w-2xl text-sm leading-7 text-muted-foreground">
+                Verify the first {CSV_PREVIEW_ROW_LIMIT} leads and the video link preview for each row before starting the campaign.
+              </p>
+            </div>
+          </div>
+          <div className="inline-flex rounded-full border border-primary/20 bg-primary/10 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-primary">
+            Pending Launch
           </div>
         </div>
-      </div>
+      </section>
 
-      <div className="bg-card rounded-2xl border-2 overflow-hidden shadow-xl mt-8">
+      <section className="rounded-2xl border-2 overflow-hidden shadow-xl bg-card">
         <div className="p-6 bg-primary/5 border-b flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center">
@@ -1055,17 +1204,17 @@ export default function BulkSend() {
             </div>
             <div>
               <h3 className="font-bold">Campaign Ready</h3>
-              <p className="text-xs text-muted-foreground">Review your settings before firing.</p>
+              <p className="text-xs text-muted-foreground">Review the summary below before firing.</p>
             </div>
           </div>
           <div className="px-3 py-1 rounded-full bg-primary text-white text-[10px] font-bold uppercase tracking-widest">
             Pending
           </div>
         </div>
-        <div className="p-8 grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="space-y-2">
+        <div className="grid gap-4 p-6 md:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-2xl border border-border/70 bg-background/80 p-4">
             <Label className="text-xs uppercase tracking-wider text-muted-foreground font-bold">Generation Engine</Label>
-            <div className="font-bold flex items-center gap-2">
+            <div className="mt-2 font-bold flex items-center gap-2">
               {engine === "avatar" ? (
                 <><Users className="w-4 h-4 text-purple-500" /> AI Presenter</>
               ) : (
@@ -1073,46 +1222,138 @@ export default function BulkSend() {
               )}
             </div>
           </div>
-          <div className="space-y-2">
+          <div className="rounded-2xl border border-border/70 bg-background/80 p-4">
             <Label className="text-xs uppercase tracking-wider text-muted-foreground font-bold">Total Recipients</Label>
-            <div className="font-bold flex items-center gap-2 text-primary font-black">
-              <FileSpreadsheet className="w-4 h-4 text-green-500" /> 1,248 Rows Detected
+            <div className="mt-2 font-bold flex items-center gap-2 text-primary">
+              <FileSpreadsheet className="w-4 h-4 text-green-500" /> {csvData.length} Rows Detected
             </div>
           </div>
-          <div className="space-y-2">
+          <div className="rounded-2xl border border-border/70 bg-background/80 p-4">
             <Label className="text-xs uppercase tracking-wider text-muted-foreground font-bold">Campaign Mode</Label>
-            <div className="font-bold flex items-center gap-2 capitalize">
+            <div className="mt-2 font-bold flex items-center gap-2 capitalize">
               <Play className="w-4 h-4 text-primary" /> {mode}
             </div>
           </div>
-          <div className="space-y-2">
+          <div className="rounded-2xl border border-border/70 bg-background/80 p-4">
             <Label className="text-xs uppercase tracking-wider text-muted-foreground font-bold">Primary Language</Label>
-            <div className="font-bold flex items-center gap-2">
+            <div className="mt-2 font-bold flex items-center gap-2">
               <Info className="w-4 h-4 text-blue-500" /> {selectedLanguage}
             </div>
           </div>
         </div>
-        <div className="flex-1 space-y-4">
-          <Label className="text-xs uppercase tracking-wider text-muted-foreground font-bold">WhatsApp Message Flow</Label>
-          <div className="p-4 bg-white rounded-2xl shadow-sm border border-border/50 max-w-sm relative group overflow-hidden">
-            <div className="flex items-center gap-3 mb-3 p-3 bg-secondary/10 rounded-xl border border-border/50">
-              <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                 <Video className="w-6 h-6 text-orange-600" />
+      </section>
+
+      {csvData.length > 0 ? (
+        <Card className="overflow-hidden border-2 shadow-xl bg-card/80 backdrop-blur-sm">
+          <CardHeader className="border-b bg-primary/5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="space-y-1">
+                <CardTitle className="text-2xl font-black tracking-tight">Preview your first leads</CardTitle>
+                <CardDescription>
+                  Showing the first {Math.min(csvData.length, CSV_PREVIEW_ROW_LIMIT)} rows with prioritized lead columns
+                  and a video link preview for each lead.
+                </CardDescription>
               </div>
-              <div className="flex flex-col">
-                 <span className="text-xs font-black uppercase tracking-tighter">Video</span>
-                 <span className="text-[9px] text-muted-foreground font-bold">Supported file types: MP4, 3GPP</span>
+              <div className="inline-flex rounded-full border border-border/70 bg-background/80 px-3 py-1 text-[11px] font-bold text-muted-foreground">
+                {csvData.length > CSV_PREVIEW_ROW_LIMIT
+                  ? `${csvData.length - CSV_PREVIEW_ROW_LIMIT} more leads follow the same mapping logic`
+                  : "All uploaded leads are shown below"}
               </div>
             </div>
-            <div className="text-[13px] text-slate-800 leading-relaxed font-semibold whitespace-pre-wrap">
-              {whatsappTemplate}
-            </div>
-            <div className="mt-4 flex justify-end">
-              <span className="text-[9px] text-muted-foreground font-bold italic">12:04 PM • Read ✓✓</span>
-            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader className="bg-secondary/10">
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="w-14 text-[10px] font-black uppercase tracking-widest text-muted-foreground">#</TableHead>
+                  {orderPreviewHeaders(csvHeaders, mapping).map((header) => (
+                    <TableHead
+                      key={header}
+                      className="text-[10px] font-black uppercase tracking-widest text-muted-foreground"
+                    >
+                      {header}
+                    </TableHead>
+                  ))}
+                  <TableHead className="sticky right-0 min-w-[280px] border-l bg-secondary/10 text-[10px] font-black uppercase tracking-widest text-primary">
+                    Video Link Preview
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {csvData.slice(0, CSV_PREVIEW_ROW_LIMIT).map((row, index) => {
+                  const previewLink = buildVideoLinkPreview(
+                    row,
+                    index,
+                    csvHeaders,
+                    mapping,
+                    mode,
+                    referenceVideoQuery.data?.video_url,
+                  );
+                  const previewLinkLabel = getVideoLinkPreviewLabel(
+                    row,
+                    csvHeaders,
+                    mapping,
+                    mode,
+                    referenceVideoQuery.data?.video_url,
+                  );
+
+                  return (
+                    <TableRow key={`launch-preview-${index}`} className="align-top">
+                      <TableCell className="font-black text-primary">{index + 1}</TableCell>
+                      {orderPreviewHeaders(csvHeaders, mapping).map((header) => {
+                        const cellValue =
+                          typeof row[header] === "string"
+                            ? row[header].trim()
+                            : row[header] == null
+                              ? ""
+                              : String(row[header]);
+
+                        return (
+                          <TableCell key={`${header}-${index}`} className="max-w-[180px]">
+                            <div className="truncate text-sm text-foreground" title={cellValue || "-"}>
+                              {cellValue || <span className="text-muted-foreground">-</span>}
+                            </div>
+                          </TableCell>
+                        );
+                      })}
+                      <TableCell className="sticky right-0 min-w-[280px] border-l bg-background/95 backdrop-blur">
+                        <div className="space-y-1">
+                          <div className="break-all font-mono text-xs text-foreground">{previewLink}</div>
+                          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                            {previewLinkLabel}
+                          </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="border-2 shadow-sm">
+          <CardContent className="p-8 text-center text-muted-foreground">
+            No CSV data available yet. Upload and map a CSV before launching the campaign.
+          </CardContent>
+        </Card>
+      )}
+
+      <section className="rounded-3xl border border-primary/15 bg-primary/[0.04] p-5">
+        <div className="flex items-start gap-3">
+          <Info className="w-5 h-5 shrink-0 text-primary mt-0.5" />
+          <div className="space-y-1">
+            <p className="text-sm font-bold text-foreground">Video link guidance</p>
+            <p className="text-sm leading-6 text-muted-foreground">
+              {mode === "universal" && referenceVideoQuery.data?.video_url
+                ? "All recipients will receive the same video link."
+                : mode === "universal"
+                  ? "A shared preview link is shown here. The same video link will be used for every recipient."
+                  : "Preview links are for review only. Final video URLs are created after generation."}
+            </p>
           </div>
         </div>
-      </div>
+      </section>
 
       <div className="bg-amber-500/5 border border-amber-500/20 p-4 rounded-xl flex items-start gap-4">
         <AlertCircle className="w-6 h-6 text-amber-500 shrink-0" />
@@ -1183,4 +1424,3 @@ export default function BulkSend() {
     </div>
   );
 }
-

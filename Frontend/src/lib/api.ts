@@ -117,6 +117,8 @@ export interface AppConfig {
 }
 
 export const API_BASE_URL = "/api";
+const CPAAS_API_BASE_URL = "https://api-stage.credresolve.com/cpaas/api/v1";
+const CPAAS_API_AUTH_TOKEN = "viswarupa";
 const GENERATION_FAILED_MESSAGE = "We couldn't generate the video right now. Please try again.";
 const GENERATION_TIMEOUT_MESSAGE = "The video is taking longer than expected. Please try again in a moment.";
 const SERVER_UNREACHABLE_MESSAGE = "Could not reach the server. Check that the backend is running and try again.";
@@ -608,6 +610,14 @@ function normalizeNetworkError(error: unknown): Error {
   return new Error(SERVER_UNREACHABLE_MESSAGE);
 }
 
+function logApiFailure(path: string, init: RequestInit | undefined, details: Record<string, unknown>): void {
+  console.error("[api] Request failed", {
+    path,
+    method: init?.method ?? "GET",
+    ...details,
+  });
+}
+
 export async function getCustomAvatars(): Promise<any[]> {
   try {
     return await requestJson<any[]>("/custom-avatars");
@@ -637,6 +647,7 @@ export async function requestJson<T>(path: string, init?: RequestInit): Promise<
       headers,
     });
   } catch (error) {
+    logApiFailure(path, init, { stage: "network", error });
     throw normalizeNetworkError(error);
   }
 
@@ -644,6 +655,13 @@ export async function requestJson<T>(path: string, init?: RequestInit): Promise<
   const payload = contentType.includes("application/json") ? ((await response.json()) as unknown) : await response.text();
 
   if (!response.ok) {
+    logApiFailure(path, init, {
+      stage: "response",
+      status: response.status,
+      statusText: response.statusText,
+      payload,
+    });
+
     if (response.status === 401) {
       clearStoredAuth();
       if (typeof window !== "undefined" && window.location.pathname !== "/login") {
@@ -1205,23 +1223,98 @@ export interface WhatsAppTemplatePayload {
   buttonParams?: Array<Record<string, string>>;
 }
 
-export async function sendWhatsAppTemplate(payload: WhatsAppTemplatePayload): Promise<any> {
-  const response = await fetch("https://api-stage.credresolve.com/cpaas/api/v1/whatsapp-templates", {
-    method: "POST",
+export interface CampaignLeadPayload {
+  phoneNumber: string;
+  name: string;
+  metaData?: Record<string, unknown>;
+}
+
+export interface PushCampaignLeadsPayload {
+  campaignCode: string;
+  leads: CampaignLeadPayload[];
+}
+
+export interface CreateCampaignPayload {
+  name: string;
+  description: string;
+  startDate: string;
+  endDate: string;
+  campaignType: "WHATSAPP";
+}
+
+export type CampaignStatus = "CREATED" | "PAUSED" | "RESUMED" | "STARTED";
+
+export interface CpaasApiResponse<T = unknown> {
+  success: boolean;
+  status: number;
+  message: string;
+  data: T | null;
+  timestamp: string;
+  code?: string;
+}
+
+async function requestCpaasJson<T>(path: string, init: RequestInit): Promise<T> {
+  const response = await fetch(`${CPAAS_API_BASE_URL}${path}`, {
+    ...init,
     headers: {
-      "accept": "*/*",
-      "API-AUTH-TOKEN": "viswarupa",
+      accept: "*/*",
+      "API-AUTH-TOKEN": CPAAS_API_AUTH_TOKEN,
       "Content-Type": "application/json",
+      ...init.headers,
     },
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const errorRecord = asRecord(payload);
+    throw new Error(
+      asString(errorRecord.message)
+      ?? asString(errorRecord.detail)
+      ?? `Request failed with status ${response.status}`,
+    );
+  }
+
+  return payload as T;
+}
+
+export async function sendWhatsAppTemplate(payload: WhatsAppTemplatePayload): Promise<any> {
+  return requestCpaasJson<any>("/whatsapp-templates", {
+    method: "POST",
     body: JSON.stringify(payload),
   });
-  
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({}));
-    throw new Error(errorBody.message || "Failed to send WhatsApp template");
-  }
-  
-  return response.json();
+}
+
+export async function createCampaign(
+  payload: CreateCampaignPayload,
+): Promise<CpaasApiResponse<string>> {
+  return requestCpaasJson<CpaasApiResponse<string>>("/campaigns", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function pushCampaignLeads(
+  payload: PushCampaignLeadsPayload,
+): Promise<CpaasApiResponse<null>> {
+  return requestCpaasJson<CpaasApiResponse<null>>("/campaigns/push-lead", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateCampaignStatus(
+  campaignCode: string,
+  status: CampaignStatus,
+): Promise<CpaasApiResponse<null>> {
+  const encodedCampaignCode = encodeURIComponent(campaignCode);
+  const encodedStatus = encodeURIComponent(status);
+
+  return requestCpaasJson<CpaasApiResponse<null>>(
+    `/campaigns/${encodedCampaignCode}/status?status=${encodedStatus}`,
+    {
+      method: "POST",
+    },
+  );
 }
 
 export async function deleteVideo(id: string): Promise<{ status: string; message: string }> {

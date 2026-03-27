@@ -52,6 +52,13 @@ logger.setLevel(logging.INFO)
 formatter = logging.Formatter(
     "%(asctime)s | %(levelname)s | %(message)s"
 )
+SAMPLE_BULK_CSV_PATH = (
+    Path(__file__).resolve().parent.parent
+    / "Remotion"
+    / "public"
+    / "assets"
+    / "sample.csv"
+)
 
 app = FastAPI(title='Personalized Video Generator', version='1.0.0')
 settings.output_dir.mkdir(parents=True, exist_ok=True)
@@ -117,6 +124,18 @@ sqs_service = SQSService()
 GENERIC_RUNTIME_ERROR = 'Something went wrong while processing your request. Please try again.'
 GENERIC_GENERATION_ERROR = "We couldn't generate the video right now. Please try again in a moment."
 GENERIC_GENERATION_TIMEOUT_ERROR = 'Video generation is taking longer than expected. Please try again shortly.'
+
+
+@app.get("/sample-csvs/bulk-campaign")
+async def download_bulk_campaign_sample_csv():
+    if not SAMPLE_BULK_CSV_PATH.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sample CSV not found")
+
+    return FileResponse(
+        SAMPLE_BULK_CSV_PATH,
+        media_type="text/csv",
+        filename=SAMPLE_BULK_CSV_PATH.name,
+    )
 
 
 def _is_generation_route(path: str) -> bool:
@@ -1226,8 +1245,10 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
 
 @app.get('/my-videos')
 async def get_my_videos(current_user: str = Depends(get_current_user)):
+    logger.info("Loading /my-videos for user %s", current_user)
     cursor = videos_collection.find({"user_id": current_user}).sort("created_at", -1)
     videos = await cursor.to_list(length=100)
+    logger.info("Loaded %d videos for user %s", len(videos), current_user)
 
     refresh_tasks = [
         _refresh_processing_video(video, current_user)
@@ -1257,7 +1278,8 @@ async def get_my_videos(current_user: str = Depends(get_current_user)):
         # video.pop("result_payload", None)
         video.pop("job_data", None)
 
-    return videos
+    logger.info("Returning %d serialized videos for user %s", len(serialized_videos), current_user)
+    return serialized_videos
     
 
 @app.get('/videos/{video_id}')
@@ -1661,4 +1683,3 @@ async def log_whatsapp_attempt(data: dict, admin: dict = Depends(get_current_adm
         return {"status": "logged"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
-

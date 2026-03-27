@@ -1,6 +1,6 @@
 import { Film, PlayCircle, Sparkles, Clock, CheckCircle, ExternalLink, AlertCircle, RotateCcw, Trash2, Download, Share2, Users, Send, Link, ChevronDown } from "lucide-react";
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { HeaderBar } from "@/components/HeaderBar";
 import { Button } from "@/components/ui/button";
@@ -172,6 +172,10 @@ function restoreSoftDeletedDraft(): boolean {
   }
 }
 
+function isServerUnreachableError(error: Error): boolean {
+  return /could not reach the server/i.test(error.message);
+}
+
 export default function MyVideos() {
   const navigate = useNavigate();
   const [localDraft, setLocalDraft] = useState<VideoListItem | null>(() => buildLocalDraftItem());
@@ -181,6 +185,17 @@ export default function MyVideos() {
     queryFn: fetchMyVideos,
     refetchInterval: 10000, // Poll every 10 seconds for status updates
   });
+
+  useEffect(() => {
+    if (!(error instanceof Error)) {
+      return;
+    }
+
+    console.error("[my-videos] Failed to load video library", {
+      message: error.message,
+      error,
+    });
+  }, [error]);
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteVideo(id),
@@ -295,6 +310,7 @@ export default function MyVideos() {
     ...(localDraft && !videos?.some((video: any) => video._id === localDraft._id) ? [localDraft] : []),
     ...((videos ?? []) as VideoListItem[]),
   ];
+  const isBackendUnreachable = error instanceof Error && isServerUnreachableError(error);
 
   const stats = {
     total: mergedVideos.length,
@@ -390,9 +406,11 @@ export default function MyVideos() {
               <section className="surface-card p-12 text-center flex flex-col items-center justify-center min-h-[320px]">
                 <AlertCircle className="h-12 w-12 text-destructive/70 mb-4" />
                 <div className="space-y-3 mb-6">
-                  <h2 className="font-display text-2xl font-semibold text-foreground">We couldn't reach your video library</h2>
+                  <h2 className="font-display text-2xl font-semibold text-foreground">We couldn't load your video library</h2>
                   <p className="text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
-                    The backend could not be reached, so cloud drafts and video jobs are temporarily unavailable.
+                    {isBackendUnreachable
+                      ? "The backend could not be reached, so cloud drafts and video jobs are temporarily unavailable."
+                      : error.message}
                   </p>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-3">
