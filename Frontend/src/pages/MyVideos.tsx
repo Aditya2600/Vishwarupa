@@ -1,6 +1,6 @@
-import { Film, PlayCircle, Sparkles, Clock, CheckCircle, ExternalLink, AlertCircle, RotateCcw, Trash2, Download, Share2 } from "lucide-react";
+import { Film, PlayCircle, Sparkles, Clock, CheckCircle, ExternalLink, AlertCircle, RotateCcw, Trash2, Download, Share2, Users, Send, Link, ChevronDown } from "lucide-react";
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { HeaderBar } from "@/components/HeaderBar";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,12 @@ import { fetchMyVideos, deleteVideo } from "@/lib/api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { WIZARD_STORAGE_KEY, type WizardState } from "@/store/wizardStore";
 import { toast } from "sonner";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const SOFT_DELETED_DRAFT_STORAGE_KEY = `${WIZARD_STORAGE_KEY}-deleted`;
 
@@ -24,6 +30,7 @@ interface VideoListItem {
   status: string;
   request_mode: string;
   video_url: string | null;
+  thumbnail_url?: string | null;
   created_at: string;
   isLocalDraft?: boolean;
 }
@@ -166,15 +173,34 @@ function restoreSoftDeletedDraft(): boolean {
   }
 }
 
+function isServerUnreachableError(error: Error): boolean {
+  return /could not reach the server/i.test(error.message);
+}
+
 export default function MyVideos() {
   const navigate = useNavigate();
   const [localDraft, setLocalDraft] = useState<VideoListItem | null>(() => buildLocalDraftItem());
   const [hasSoftDeletedDraft, setHasSoftDeletedDraft] = useState(() => Boolean(readSoftDeletedDraft()));
+  const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
+  const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
   const { data: videos, isLoading, error, refetch } = useQuery({
     queryKey: ["my-videos"],
     queryFn: fetchMyVideos,
-    refetchInterval: 10000, // Poll every 10 seconds for status updates
+    refetchInterval: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
+
+  useEffect(() => {
+    if (!(error instanceof Error)) {
+      return;
+    }
+
+    console.error("[my-videos] Failed to load video library", {
+      message: error.message,
+      error,
+    });
+  }, [error]);
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteVideo(id),
@@ -289,11 +315,28 @@ export default function MyVideos() {
     ...(localDraft && !videos?.some((video: any) => video._id === localDraft._id) ? [localDraft] : []),
     ...((videos ?? []) as VideoListItem[]),
   ];
+  const isBackendUnreachable = error instanceof Error && isServerUnreachableError(error);
 
   const stats = {
     total: mergedVideos.length,
     processing: mergedVideos.filter((video) => video.status === "processing").length,
     ready: mergedVideos.filter((video) => video.status === "completed" || video.status === "styled").length,
+  };
+
+  const handleCardVideoPlay = (videoId: string) => {
+    setActiveVideoId(videoId);
+    const element = videoRefs.current[videoId];
+    if (!element) {
+      return;
+    }
+
+    element.currentTime = 0;
+    const playPromise = element.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch(() => {
+        // Ignore autoplay interruptions and keep controls visible for manual retry.
+      });
+    }
   };
 
   return (
@@ -384,9 +427,11 @@ export default function MyVideos() {
               <section className="surface-card p-12 text-center flex flex-col items-center justify-center min-h-[320px]">
                 <AlertCircle className="h-12 w-12 text-destructive/70 mb-4" />
                 <div className="space-y-3 mb-6">
-                  <h2 className="font-display text-2xl font-semibold text-foreground">We couldn't reach your video library</h2>
+                  <h2 className="font-display text-2xl font-semibold text-foreground">We couldn't load your video library</h2>
                   <p className="text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
-                    The backend could not be reached, so cloud drafts and video jobs are temporarily unavailable.
+                    {isBackendUnreachable
+                      ? "The backend could not be reached, so cloud drafts and video jobs are temporarily unavailable."
+                      : error.message}
                   </p>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-3">
@@ -454,7 +499,34 @@ export default function MyVideos() {
                   <div className="aspect-video bg-slate-100 dark:bg-slate-900 relative overflow-hidden flex items-center justify-center">
                     {video.status === "completed" || video.status === "styled" ? (
                       video.video_url ? (
-                        <video src={video.video_url} className="w-full h-full object-cover" controls />
+                        <div className="relative h-full w-full overflow-hidden">
+                          <video
+                            ref={(element) => {
+                              videoRefs.current[video._id] = element;
+                            }}
+                            src={video.video_url}
+                            poster={video.thumbnail_url ?? undefined}
+                            className="h-full w-full object-cover"
+                            controls={activeVideoId === video._id}
+                            playsInline
+                            preload="metadata"
+                          />
+                          {activeVideoId !== video._id ? (
+                            <button
+                              type="button"
+                              className="absolute inset-0 h-full w-full overflow-hidden"
+                              onClick={() => handleCardVideoPlay(video._id)}
+                              aria-label={`Play ${video.title || "video"}`}
+                            >
+                              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
+                              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black/55 text-white shadow-lg ring-1 ring-white/30 transition-transform group-hover:scale-105">
+                                  <PlayCircle className="h-8 w-8" />
+                                </div>
+                              </div>
+                            </button>
+                          ) : null}
+                        </div>
                       ) : (
                         <PlayCircle className="h-12 w-12 text-primary opacity-50" />
                       )
@@ -483,34 +555,66 @@ export default function MyVideos() {
                       ) : null}
                     </div>
                     <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>{video.request_mode.toLowerCase().includes("remotion") ? "Text to Video" : "Avatar Video"}</span>
+                      <span>{video.request_mode.toLowerCase().includes("remotion") ? "Text to Video" : "AI Avatar"}</span>
                       <span>{video.isLocalDraft ? "Saved in browser" : new Date(video.created_at).toLocaleDateString()}</span>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex items-center gap-2 pt-1">
                       {video.isLocalDraft && !video.video_url && (
-                        <Button variant="outline" className="flex-1 border-border text-xs" onClick={() => navigate("/create")}>
+                        <Button variant="outline" size="sm" className="flex-1 border-border text-[11px] h-8" onClick={() => navigate("/create")}>
                           Resume Draft
                         </Button>
                       )}
                       
                       {video.video_url ? (
                         <>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="flex-1 border-border text-[11px] h-8 group/share relative hover:border-primary/50"
+                              >
+                                <Share2 className="mr-1.5 h-3.5 w-3.5" />
+                                Share
+                                <ChevronDown className="ml-1 h-3 w-3 opacity-50" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48 p-1.5 rounded-xl border-border/80 shadow-xl backdrop-blur-md bg-card/95">
+                              <DropdownMenuItem 
+                                onClick={() => void handleShare(video)}
+                                className="flex items-center gap-2 rounded-lg py-2 cursor-pointer transition-colors"
+                              >
+                                <div className="p-1.5 rounded-md bg-primary/5 text-primary group-data-[highlighted]:bg-primary group-data-[highlighted]:text-white transition-colors">
+                                  <Link className="w-3.5 h-3.5" />
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-[13px] font-semibold">Share Link</span>
+                                  <span className="text-[10px] text-muted-foreground">Copy url to clipboard</span>
+                                </div>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => navigate(`/bulk?video_id=${video._id}`)}
+                                className="flex items-center gap-2 rounded-lg py-2 cursor-pointer transition-colors"
+                              >
+                                <div className="p-1.5 rounded-md bg-indigo-500/5 text-indigo-500 group-data-[highlighted]:bg-indigo-500 group-data-[highlighted]:text-white transition-colors">
+                                  <Users className="w-3.5 h-3.5" />
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-[13px] font-semibold">Share in Bulk</span>
+                                  <span className="text-[10px] text-muted-foreground">Send to multiple contacts</span>
+                                </div>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                           <Button
                             type="button"
                             variant="outline"
-                            className="flex-1 border-border text-xs"
-                            onClick={() => void handleShare(video)}
-                          >
-                            <Share2 className="mr-1 h-3.5 w-3.5" />
-                            Share
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="flex-1 border-border text-xs"
+                            size="sm"
+                            className="flex-1 border-border text-[11px] h-8"
                             onClick={() => void handleDownload(video)}
                           >
-                            <Download className="mr-1 h-3.5 w-3.5" />
+                            <Download className="mr-1.5 h-3.5 w-3.5" />
                             Download
                           </Button>
                         </>
@@ -519,11 +623,12 @@ export default function MyVideos() {
                       <Button
                         type="button"
                         variant="ghost"
-                        className="px-3 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive shrink-0"
                         onClick={() => handleVideoDelete(video)}
+                        title="Delete video"
                       >
-                        <Trash2 className="mr-1 h-3.5 w-3.5" />
-                        Delete
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
 

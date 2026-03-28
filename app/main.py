@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 from bson import ObjectId
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, Depends, status
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, Depends, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -39,8 +39,8 @@ from app.services.remotion_service import RemotionService
 from app.services.sqs_service import SQSService
 from app.services.video_service import VideoService
 from app.services.s3_service import S3Service
-from app.database import users_collection, videos_collection, drafts_collection, custom_avatars_collection
-from app.auth import get_password_hash, verify_password, create_access_token, get_current_user
+from app.database import users_collection, videos_collection, drafts_collection, custom_avatars_collection, whatsapp_templates_collection
+from app.auth import get_password_hash, verify_password, create_access_token, get_current_user, get_current_admin
 from app.workers.avatar_job_worker import AvatarJobWorker
 from app.workers.remotion_job_worker import RemotionJobWorker
 
@@ -51,6 +51,13 @@ logger.setLevel(logging.INFO)
 
 formatter = logging.Formatter(
     "%(asctime)s | %(levelname)s | %(message)s"
+)
+SAMPLE_BULK_CSV_PATH = (
+    Path(__file__).resolve().parent.parent
+    / "Remotion"
+    / "public"
+    / "assets"
+    / "sample.csv"
 )
 
 app = FastAPI(title='Personalized Video Generator', version='1.0.0')
@@ -117,6 +124,18 @@ sqs_service = SQSService()
 GENERIC_RUNTIME_ERROR = 'Something went wrong while processing your request. Please try again.'
 GENERIC_GENERATION_ERROR = "We couldn't generate the video right now. Please try again in a moment."
 GENERIC_GENERATION_TIMEOUT_ERROR = 'Video generation is taking longer than expected. Please try again shortly.'
+
+
+@app.get("/sample-csvs/bulk-campaign")
+async def download_bulk_campaign_sample_csv():
+    if not SAMPLE_BULK_CSV_PATH.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sample CSV not found")
+
+    return FileResponse(
+        SAMPLE_BULK_CSV_PATH,
+        media_type="text/csv",
+        filename=SAMPLE_BULK_CSV_PATH.name,
+    )
 
 
 def _is_generation_route(path: str) -> bool:
@@ -285,6 +304,34 @@ async def _refresh_processing_video(video: dict[str, Any], current_user: str) ->
     video["title"] = refreshed.title or video.get("title")
     video["video_url"] = refreshed.video_url or video.get("video_url")
     video["job_data"] = _to_mongo_safe(refreshed)
+
+
+def _serialize_my_video(video: dict[str, Any]) -> dict[str, Any]:
+    raw_id = video.get("_id")
+    video_id = str(raw_id) if raw_id is not None else ""
+
+    raw_url = video.get("video_url")
+    video_url: str | None
+    if isinstance(raw_url, str) and "/artifacts/" in raw_url:
+        video_url = "/api/artifacts/" + raw_url.split("/artifacts/", 1)[1]
+    elif isinstance(raw_url, str):
+        video_url = s3_service.presign_video_url(raw_url)
+    else:
+        video_url = None
+
+    created_at = video.get("created_at")
+    updated_at = video.get("updated_at")
+
+    return {
+        "_id": video_id,
+        "title": str(video.get("title") or ""),
+        "status": str(video.get("status") or "queued"),
+        "request_mode": str(video.get("request_mode") or ""),
+        "video_url": video_url,
+        "thumbnail_url": str(video.get("thumbnail_url")) if video.get("thumbnail_url") else None,
+        "created_at": created_at.isoformat() if isinstance(created_at, datetime) else created_at,
+        "updated_at": updated_at.isoformat() if isinstance(updated_at, datetime) else updated_at,
+    }
 
 
 def _form_text(value: object) -> str | None:
@@ -744,7 +791,6 @@ async def proxy_audio(url: str):
             except Exception:
                 pass
 
-    # Note: Relying on the browser to infer the exact container type. audio/mpeg captures the fallback gracefully.
     return StreamingResponse(stream_audio(), media_type="audio/mpeg")
 
 
@@ -756,6 +802,137 @@ def list_templates(current_user: str = Depends(get_current_user)) -> dict:
 @app.get('/meta/template/{template_id}')
 def get_template_details(template_id: str, version: str = 'v3', current_user: str = Depends(get_current_user)) -> dict:
     return client.get_template_details(template_id, version=version)
+
+
+# ── WhatsApp Campaign Templates (DB-backed) ───────────────────────────────────
+
+@app.get('/meta/whatsapp-templates')
+async def list_whatsapp_templates(current_user: str = Depends(get_current_user)):
+    """Return all WhatsApp campaign templates stored in MongoDB."""
+    cursor = whatsapp_templates_collection.find({}, {"_id": 0})
+    templates = await cursor.to_list(length=200)
+    return templates
+
+
+@app.post('/admin/whatsapp-templates')
+async def create_whatsapp_template(payload: dict, admin_user: dict = Depends(get_current_admin)):
+    """Admin-only: insert a new WhatsApp campaign template."""
+    required = {"id", "name", "whatsapp"}
+    missing = required - payload.keys()
+    if missing:
+        raise HTTPException(status_code=422, detail=f"Missing required fields: {missing}")
+    existing = await whatsapp_templates_collection.find_one({"id": payload["id"]})
+    if existing:
+        raise HTTPException(status_code=409, detail=f"Template with id '{payload['id']}' already exists.")
+    await whatsapp_templates_collection.insert_one(payload)
+    return {"status": "created", "id": payload["id"]}
+
+
+@app.put('/admin/whatsapp-templates/{template_id}')
+async def update_whatsapp_template(template_id: str, payload: dict, admin_user: dict = Depends(get_current_admin)):
+    """Admin-only: update an existing WhatsApp campaign template."""
+    result = await whatsapp_templates_collection.update_one({"id": template_id}, {"$set": payload})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail=f"Template '{template_id}' not found.")
+    return {"status": "updated", "id": template_id}
+
+
+@app.delete('/admin/whatsapp-templates/{template_id}')
+async def delete_whatsapp_template(template_id: str, admin_user: dict = Depends(get_current_admin)):
+    """Admin-only: delete a WhatsApp campaign template."""
+    result = await whatsapp_templates_collection.delete_one({"id": template_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail=f"Template '{template_id}' not found.")
+    return {"status": "deleted", "id": template_id}
+
+
+async def _proxy_cpaas_request(method: str, path: str, payload: Any | None = None) -> JSONResponse:
+    if not settings.cpaas_api_auth_token:
+        raise HTTPException(status_code=500, detail="CPAAS_API_AUTH_TOKEN is not configured.")
+
+    import httpx
+
+    payload_summary = payload
+    if isinstance(payload, dict):
+        payload_summary = dict(payload)
+        leads = payload_summary.get("leads")
+        if isinstance(leads, list):
+            payload_summary["leadCount"] = len(leads)
+            payload_summary["firstLead"] = leads[0] if leads else None
+            payload_summary.pop("leads", None)
+
+    url = f"{settings.cpaas_api_base_url.rstrip('/')}/{path.lstrip('/')}"
+    headers = {
+        "Accept": "application/json",
+        "API-AUTH-TOKEN": settings.cpaas_api_auth_token,
+    }
+
+    if payload is not None:
+        headers["Content-Type"] = "application/json"
+
+    logger.info(
+        "CPAAS request | method=%s | path=%s | payload=%s",
+        method,
+        path,
+        json.dumps(payload_summary, default=str),
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.request(method, url, headers=headers, json=payload)
+    except httpx.HTTPError as exc:
+        logger.exception("CPAAS transport failure | method=%s | path=%s", method, path)
+        raise HTTPException(status_code=502, detail=f"Failed to reach CPAAS service: {exc}") from exc
+
+    content_type = response.headers.get("content-type", "")
+    response_text = response.text
+    if "application/json" in content_type.lower():
+        try:
+            body: Any = response.json()
+        except ValueError:
+            body = {
+                "success": response.is_success,
+                "status": response.status_code,
+                "message": response_text,
+            }
+    else:
+        body = {
+            "success": response.is_success,
+            "status": response.status_code,
+            "message": response_text,
+        }
+
+    logger.info(
+        "CPAAS response | method=%s | path=%s | status=%s | body=%s",
+        method,
+        path,
+        response.status_code,
+        json.dumps(body, default=str)[:4000],
+    )
+
+    return JSONResponse(status_code=response.status_code, content=body)
+
+
+@app.post('/cpaas/campaigns')
+async def create_cpaas_campaign(payload: dict, current_user: str = Depends(get_current_user)):
+    upstream_payload = dict(payload)
+    if not upstream_payload.get("communicationType") and upstream_payload.get("campaignType"):
+        upstream_payload["communicationType"] = upstream_payload["campaignType"]
+    return await _proxy_cpaas_request("POST", "/campaigns", upstream_payload)
+
+
+@app.post('/cpaas/campaigns/push-lead')
+async def push_cpaas_campaign_leads(payload: dict, current_user: str = Depends(get_current_user)):
+    return await _proxy_cpaas_request("POST", "/campaigns/push-lead", payload)
+
+
+@app.post('/cpaas/campaigns/{campaign_code}/status')
+async def update_cpaas_campaign_status(
+    campaign_code: str,
+    status: str = Query(...),
+    current_user: str = Depends(get_current_user),
+):
+    return await _proxy_cpaas_request("POST", f"/campaigns/{campaign_code}/status?status={status}")
 
 
 # --- Authentication Endpoints ---
@@ -813,6 +990,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         "token_type": "bearer",
         "email": user["email"],
         "full_name": user.get("full_name"),
+        "is_admin": user.get("is_admin", False),
     }
 
 
@@ -1142,39 +1320,24 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         await videos_collection.delete_one({'_id': _mongo_id(video_id)})
         raise HTTPException(status_code=500, detail=f"Failed to enqueue remotion video generation: {e}")
 
-    import asyncio
-    max_wait = 300
-    waited = 0
-    final_status = "queued"
-    final_url = None
-    
-    logger.info(f"STARTING BLOCKING WAIT FOR REMOTION {video_id}")
-    while waited < max_wait:
-        await asyncio.sleep(2)
-        waited += 2
-        check_doc = await videos_collection.find_one({"video_id": video_id})
-        if check_doc:
-            st = check_doc.get("status")
-            logger.info(f"WAITING for {video_id} - {st} ({waited}s)")
-            if st in ("completed", "failed"):
-                final_status = st
-                final_url = check_doc.get("video_url")
-                if st == "failed":
-                    msg = str(check_doc.get("error_message", "Unknown render error"))
-                    logger.error(f"Remotion backend failed: {msg}")
-                    raise HTTPException(status_code=500, detail=msg)
-                break
+    # Local development fallback: process the job in the current API process
+    # immediately as well. The worker claims only queued jobs, so this does not
+    # double-render when SQS polling is healthy.
+    asyncio.create_task(RemotionJobWorker()._process_job(video_id, None))
 
-    logger.info(f"FINISHED WAIT FOR {video_id} -> {final_status}")
-    job_result.status = final_status
-    if final_url:
-        job_result.video_url = final_url
+    # Return the 'queued' result instantly.
+    # The background worker will handle the render and update the DB status.
+    # The frontend will poll for status until completion.
+    logger.info(f"Remotion job enqueued: {video_id}. Returning success now.")
     return _response_video_job_result(job_result)
+
 
 @app.get('/my-videos')
 async def get_my_videos(current_user: str = Depends(get_current_user)):
+    logger.info("Loading /my-videos for user %s", current_user)
     cursor = videos_collection.find({"user_id": current_user}).sort("created_at", -1)
     videos = await cursor.to_list(length=100)
+    logger.info("Loaded %d videos for user %s", len(videos), current_user)
 
     refresh_tasks = [
         _refresh_processing_video(video, current_user)
@@ -1185,22 +1348,83 @@ async def get_my_videos(current_user: str = Depends(get_current_user)):
         refresh_results = await asyncio.gather(*refresh_tasks, return_exceptions=True)
         for refresh_result in refresh_results:
             if isinstance(refresh_result, Exception):
-                logger.error(f"Failed to refresh background direct video: {refresh_result}")
+                logger.exception("Failed to refresh background direct video: %s", refresh_result)
 
+    serialized_videos: list[dict[str, Any]] = []
     for video in videos:
-        video["_id"] = str(video["_id"])
-        
-        url = video.get("video_url")
-        if url and isinstance(url, str) and "/artifacts/" in url:
-            video["video_url"] = "/api/artifacts/" + url.split("/artifacts/", 1)[1]
-        elif isinstance(url, str):
-            video["video_url"] = s3_service.presign_video_url(url)
+        try:
+            serialized_videos.append(_serialize_my_video(video))
+        except Exception as exc:
+            logger.exception(
+                "Failed to serialize /my-videos item for user %s and video %s: %s",
+                current_user,
+                str(video.get("_id") or ""),
+                exc,
+            )
 
+        # Preserve payloads for frontend auto-fill logic in Bulk Send
+        # video.pop("request_payload", None)
+        # video.pop("result_payload", None)
         video.pop("job_data", None)
-        video.pop("request_payload", None)
-        video.pop("result_payload", None)
 
-    return videos
+    logger.info("Returning %d serialized videos for user %s", len(serialized_videos), current_user)
+    return serialized_videos
+    
+
+@app.get('/videos/{video_id}')
+async def get_video_details(video_id: str, current_user: str = Depends(get_current_user)):
+    """Fetch details for a single video. Accessible by owner or admin."""
+    video = await videos_collection.find_one({"_id": _mongo_id(video_id)})
+    if not video:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Video not found")
+
+    # Check permissions: owner or admin
+    is_admin = False
+    try:
+        user = await users_collection.find_one({"_id": _mongo_id(current_user)})
+        if user and user.get("is_admin"):
+            is_admin = True
+    except:
+        pass
+
+    if video.get("user_id") != current_user and not is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    video["_id"] = str(video["_id"])
+    url = video.get("video_url")
+    if url and isinstance(url, str) and "/artifacts/" in url:
+        video["video_url"] = "/api/artifacts/" + url.split("/artifacts/", 1)[1]
+    elif isinstance(url, str):
+        video["video_url"] = s3_service.presign_video_url(url)
+    
+    video.pop("job_data", None)
+    return video
+
+
+@app.get('/meta/whatsapp-templates')
+async def get_whatsapp_templates():
+    """Returns dynamic WhatsApp templates for bulk campaigns."""
+    try:
+        cursor = whatsapp_templates_collection.find({})
+        templates = await cursor.to_list(length=50)
+        for t in templates:
+            t["_id"] = str(t["_id"])
+        
+        if not templates:
+            # Fallback to the official CPSTest if DB is empty
+            return [{
+                "id": "cpstest",
+                "name": "Infobip CPSTest",
+                "desc": "Official WhatsApp template for debt recovery.",
+                "color": "indigo",
+                "whatsapp": "This is regarding loan due. Kindly follow the video for more information.",
+                "scriptPersonalized": "Hello {{customer_name}}. This is regarding your outstanding loan due with CredResolve. Kindly follow the information in this video for more details and repayment options.",
+                "scriptUniversal": "This is regarding your outstanding loan due. Kindly follow the information in this video for more details and repayment options."
+            }]
+        return templates
+    except Exception as e:
+        logger.error(f"Failed to fetch whatsapp templates: {e}")
+        return []
 
 @app.get('/custom-avatars')
 async def get_custom_avatars():
@@ -1368,3 +1592,183 @@ async def get_drafts(current_user: str = Depends(get_current_user)):
     for d in drafts:
         d["_id"] = str(d["_id"])
     return drafts
+
+
+# --- Admin Endpoints ---
+
+
+@app.get('/admin/stats')
+async def get_admin_stats(admin: dict = Depends(get_current_admin)):
+    total_users = await users_collection.count_documents({})
+    total_videos = await videos_collection.count_documents({})
+    completed = await videos_collection.count_documents({"status": "completed"})
+    queued = await videos_collection.count_documents({"status": "queued"})
+    failed = await videos_collection.count_documents({"status": "failed"})
+    remotion = await videos_collection.count_documents({"request_mode": {"$in": ["remotion", "remotion_async"]}})
+    direct = await videos_collection.count_documents({"request_mode": "direct"})
+    template = await videos_collection.count_documents({"request_mode": "template"})
+
+    return {
+        'total_users': total_users,
+        'total_videos': total_videos,
+        'completed': completed,
+        'queued': queued,
+        'failed': failed,
+        'remotion': remotion,
+        'direct': direct,
+        'template': template,
+        'status': 'online'
+    }
+
+
+@app.get('/admin/users')
+
+async def get_admin_users(admin: dict = Depends(get_current_admin)):
+    cursor = users_collection.find({})
+    users = await cursor.to_list(length=500)
+
+    results = []
+    for u in users:
+        u_id = str(u['_id'])
+        video_count = await videos_collection.count_documents({'user_id': u_id})
+        if video_count == 0:
+            video_count = await videos_collection.count_documents({'user_id': u['email']})
+        completed = await videos_collection.count_documents({'user_id': u_id, 'status': 'completed'})
+
+        results.append({
+            'id': u_id,
+            'email': u['email'],
+            'full_name': u.get('full_name', 'N/A'),
+            'video_count': video_count,
+            'completed_count': completed,
+            'is_admin': u.get('is_admin', False),
+            'disabled': u.get('disabled', False),
+        })
+    return results
+
+@app.get('/admin/users/{user_id}/videos')
+async def get_user_videos_admin(user_id: str, admin: dict = Depends(get_current_admin)):
+    """Fetch all videos for a specific user (admin only)."""
+    try:
+        oid = ObjectId(user_id) if ObjectId.is_valid(user_id) else user_id
+        user = await users_collection.find_one({"_id": oid})
+    except:
+        user = None
+
+    conditions = [{"user_id": user_id}]
+    if user:
+        conditions.append({"user_id": user.get("email", "")})
+
+    cursor = videos_collection.find({"$or": conditions}).sort("created_at", -1)
+    videos = await cursor.to_list(length=200)
+    for v in videos:
+        v['_id'] = str(v['_id'])
+        url = v.get('video_url')
+        if url and isinstance(url, str) and not "/artifacts/" in url:
+            v['video_url'] = s3_service.presign_video_url(url)
+        v.pop('job_data', None)
+    return videos
+
+@app.get('/admin/all-videos')
+async def get_all_videos(search: str = "", status: str = "", admin: dict = Depends(get_current_admin)):
+    query: dict = {}
+    if status:
+        query["status"] = status
+    if search:
+        query["$or"] = [
+            {"title": {"$regex": search, "$options": "i"}},
+            {"user_id": {"$regex": search, "$options": "i"}},
+        ]
+    cursor = videos_collection.find(query).sort('created_at', -1)
+    videos = await cursor.to_list(length=200)
+    for v in videos:
+        v['_id'] = str(v['_id'])
+        url = v.get('video_url')
+        if url and isinstance(url, str) and not "/artifacts/" in url:
+            v['video_url'] = s3_service.presign_video_url(url)
+        v.pop('job_data', None)
+    return videos
+
+@app.delete('/admin/videos/{video_id}')
+async def admin_delete_video(video_id: str, admin: dict = Depends(get_current_admin)):
+    """Admin can delete any video."""
+    result = await videos_collection.delete_one({"_id": _mongo_id(video_id)})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Video not found")
+    return {"status": "deleted"}
+
+# --- WhatsApp Campaign Analytics & Webhooks ---
+
+@app.post('/meta/whatsapp-webhook')
+async def whatsapp_webhook(request: Request):
+    """Receives delivery status updates from Infobip Bridge."""
+    try:
+        data = await request.json()
+        # Infobip format: { "results": [ { "messageId": "...", "status": { "groupName": "DELIVERED" } } ] }
+        results = data.get("results", [])
+        for res in results:
+            m_id = res.get("messageId")
+            status_group = res.get("status", {}).get("groupName", "UNKNOWN")
+            if m_id:
+                from app.database import whatsapp_logs_collection
+                await whatsapp_logs_collection.update_one(
+                    {"message_id": m_id},
+                    {"$set": {
+                        "status": status_group,
+                        "updated_at": datetime.utcnow()
+                    }}
+                )
+        return {"status": "ok"}
+    except Exception as e:
+        logger.error(f"Webhook error: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.get('/admin/campaign-analytics')
+async def get_campaign_analytics(admin: dict = Depends(get_current_admin)):
+    """Aggregates WhatsApp logs for the admin dashboard."""
+    try:
+        from app.database import whatsapp_logs_collection
+        pipeline = [
+            {"$group": {
+                "_id": "$status",
+                "count": {"$sum": 1}
+            }}
+        ]
+        cursor = whatsapp_logs_collection.aggregate(pipeline)
+        stats = await cursor.to_list(length=20)
+        
+        # Format as dictionary for easier charting
+        formatted = {s["_id"]: s["count"] for s in stats}
+        
+        # Recent logs for the table
+        recent_cursor = whatsapp_logs_collection.find({}).sort("created_at", -1).limit(50)
+        recent_logs = await recent_cursor.to_list(length=50)
+        for log in recent_logs:
+            log["_id"] = str(log["_id"])
+            
+        return {
+            "summary": formatted,
+            "recent": recent_logs
+        }
+    except Exception as e:
+        logger.error(f"Analytics error: {e}")
+        return {"summary": {}, "recent": []}
+
+@app.post('/admin/whatsapp-logs')
+async def log_whatsapp_attempt(data: dict, admin: dict = Depends(get_current_admin)):
+    """Helper to log a new send attempt from the frontend."""
+    try:
+        from app.database import whatsapp_logs_collection
+        log_entry = {
+            "message_id": data.get("message_id"),
+            "phone": data.get("phone"),
+            "customer_name": data.get("customer_name"),
+            "template_id": data.get("template_id"),
+            "status": "SENT",
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        }
+        await whatsapp_logs_collection.insert_one(log_entry)
+        return {"status": "logged"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}

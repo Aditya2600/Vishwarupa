@@ -15,6 +15,7 @@ class User(BaseModel):
     email: EmailStr
     full_name: str | None = None
     disabled: bool | None = None
+    is_admin: bool = False
 
 
 class UserCreate(BaseModel):
@@ -32,6 +33,7 @@ class Token(BaseModel):
     token_type: str
     email: EmailStr
     full_name: str | None = None
+    is_admin: bool = False
 
 
 class TokenData(BaseModel):

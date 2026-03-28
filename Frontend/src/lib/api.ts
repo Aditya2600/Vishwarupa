@@ -608,6 +608,14 @@ function normalizeNetworkError(error: unknown): Error {
   return new Error(SERVER_UNREACHABLE_MESSAGE);
 }
 
+function logApiFailure(path: string, init: RequestInit | undefined, details: Record<string, unknown>): void {
+  console.error("[api] Request failed", {
+    path,
+    method: init?.method ?? "GET",
+    ...details,
+  });
+}
+
 export async function getCustomAvatars(): Promise<any[]> {
   try {
     return await requestJson<any[]>("/custom-avatars");
@@ -637,6 +645,7 @@ export async function requestJson<T>(path: string, init?: RequestInit): Promise<
       headers,
     });
   } catch (error) {
+    logApiFailure(path, init, { stage: "network", error });
     throw normalizeNetworkError(error);
   }
 
@@ -644,6 +653,13 @@ export async function requestJson<T>(path: string, init?: RequestInit): Promise<
   const payload = contentType.includes("application/json") ? ((await response.json()) as unknown) : await response.text();
 
   if (!response.ok) {
+    logApiFailure(path, init, {
+      stage: "response",
+      status: response.status,
+      statusText: response.statusText,
+      payload,
+    });
+
     if (response.status === 401) {
       clearStoredAuth();
       if (typeof window !== "undefined" && window.location.pathname !== "/login") {
@@ -1177,6 +1193,11 @@ export async function fetchMyVideos(): Promise<any[]> {
   return requestJson<any[]>("/my-videos");
 }
 
+export async function fetchVideo(id: string): Promise<any> {
+  return requestJson<any>(`/videos/${id}`);
+}
+
+
 export async function saveDraft(draft: any): Promise<{ status: string; draft_id: string }> {
   return requestJson<{ status: string; draft_id: string }>("/drafts/save", {
     method: "POST",
@@ -1186,6 +1207,94 @@ export async function saveDraft(draft: any): Promise<{ status: string; draft_id:
 
 export async function fetchDrafts(): Promise<any[]> {
   return requestJson<any[]>("/drafts");
+}
+
+export interface WhatsAppTemplatePayload {
+  name: string;
+  fromNumber: string;
+  templateExtraData: {
+    mediaUrl: string;
+  };
+  vendor: string;
+  bodyParams: Record<string, string>;
+  headerParams?: Record<string, string>;
+  buttonParams?: Array<Record<string, string>>;
+}
+
+export interface CampaignLeadPayload {
+  phoneNumber: string;
+  uniqueId: string;
+  variables?: Record<string, string>;
+}
+
+export interface PushCampaignLeadsPayload {
+  campaignCode: string;
+  leads: CampaignLeadPayload[];
+}
+
+export interface CreateCampaignPayload {
+  name: string;
+  description: string;
+  startDate: string;
+  endDate: string;
+  templateId: string;
+  communicationType: "WHATSAPP";
+  campaignType?: "WHATSAPP";
+}
+
+export type CampaignStatus = "CREATED" | "PAUSED" | "RESUMED" | "STARTED";
+
+export interface CpaasApiResponse<T = unknown> {
+  success: boolean;
+  status: number;
+  message: string;
+  data: T | null;
+  timestamp: string;
+  code?: string;
+}
+
+async function requestCpaasJson<T>(path: string, init: RequestInit): Promise<T> {
+  return requestJson<T>(`/cpaas${path}`, init);
+}
+
+export async function sendWhatsAppTemplate(payload: WhatsAppTemplatePayload): Promise<any> {
+  return requestCpaasJson<any>("/whatsapp-templates", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createCampaign(
+  payload: CreateCampaignPayload,
+): Promise<CpaasApiResponse<unknown>> {
+  return requestCpaasJson<CpaasApiResponse<unknown>>("/campaigns", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function pushCampaignLeads(
+  payload: PushCampaignLeadsPayload,
+): Promise<CpaasApiResponse<null>> {
+  return requestCpaasJson<CpaasApiResponse<null>>("/campaigns/push-lead", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateCampaignStatus(
+  campaignCode: string,
+  status: CampaignStatus,
+): Promise<CpaasApiResponse<null>> {
+  const encodedCampaignCode = encodeURIComponent(campaignCode);
+  const encodedStatus = encodeURIComponent(status);
+
+  return requestCpaasJson<CpaasApiResponse<null>>(
+    `/campaigns/${encodedCampaignCode}/status?status=${encodedStatus}`,
+    {
+      method: "POST",
+    },
+  );
 }
 
 export async function deleteVideo(id: string): Promise<{ status: string; message: string }> {

@@ -6,6 +6,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from app.config import settings
 from app.database import users_collection
+from bson import ObjectId
 import os
 
 SECRET_KEY = os.getenv("SECRET_KEY", "default_secret_key")
@@ -52,3 +53,21 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
             raise credentials_exception
         return str(user["_id"])
     return subject
+
+async def get_current_admin(current_user_id: str = Depends(get_current_user)):
+    user_id = current_user_id
+    if "@" in user_id:
+        user = await users_collection.find_one({"email": user_id.lower()})
+    else:
+        try:
+            oid = ObjectId(user_id) if ObjectId.is_valid(user_id) else user_id
+            user = await users_collection.find_one({"_id": oid})
+        except:
+             user = await users_collection.find_one({"email": user_id.lower()})
+
+    if not user or not user.get("is_admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required"
+        )
+    return user

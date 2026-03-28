@@ -1,8 +1,10 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface User {
   fullName: string | null;
   email: string;
+  isAdmin?: boolean;
 }
 
 interface AuthContextType {
@@ -33,6 +35,7 @@ function parseTokenExpiry(token: string): number | null {
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -50,12 +53,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return;
         }
 
-        const parsedUser = JSON.parse(savedUser) as Partial<User> & { username?: string };
+        const parsedUser = JSON.parse(savedUser) as Partial<User> & { username?: string, is_admin?: boolean };
         if (parsedUser.email) {
           setToken(savedToken);
           setUser({
             email: parsedUser.email,
             fullName: parsedUser.fullName ?? parsedUser.username ?? null,
+            isAdmin: parsedUser.isAdmin ?? parsedUser.is_admin ?? false,
           });
         } else {
           localStorage.removeItem('token');
@@ -70,6 +74,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = (newToken: string, newUser: User) => {
+    queryClient.clear();
     setToken(newToken);
     setUser(newUser);
     localStorage.setItem('token', newToken);
@@ -77,10 +82,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    queryClient.clear();
     setToken(null);
     setUser(null);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('is_admin');
   };
 
   return (

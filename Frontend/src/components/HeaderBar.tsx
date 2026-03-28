@@ -1,4 +1,4 @@
-import { ChevronDown, Clapperboard, LayoutTemplate, Sparkles, Video, LogOut, User } from "lucide-react";
+import { ChevronDown, Clapperboard, LayoutTemplate, Sparkles, Video, LogOut, User, Users, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -23,6 +23,7 @@ export function HeaderBar({ onCreateVideo, primaryLabel = "Create Video" }: Head
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
+  const isAdmin = user?.isAdmin || localStorage.getItem("is_admin") === "true";
   const isVideosPage = location.pathname === "/";
   const isCreatePage = location.pathname === "/create";
   const isTemplatesPage = location.pathname === "/templates";
@@ -120,6 +121,7 @@ export function HeaderBar({ onCreateVideo, primaryLabel = "Create Video" }: Head
                 </p>
               </div>
             </DropdownMenuItem>
+
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -135,6 +137,7 @@ export function HeaderBar({ onCreateVideo, primaryLabel = "Create Video" }: Head
             <DropdownMenuLabel>{user?.fullName || user?.email || 'User'}</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
+
               <LogOut className="mr-2 h-4 w-4" />
               Logout
             </DropdownMenuItem>
