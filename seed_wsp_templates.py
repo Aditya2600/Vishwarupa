@@ -58,6 +58,9 @@ TEMPLATES = [
 
 
 async def seed():
+    # Delete the old test2 template
+    await col.delete_one({"id": "test2"})
+    print("  DELETE 'test2' if it exists")
     inserted = 0
     updated = 0
     for tmpl in TEMPLATES:
