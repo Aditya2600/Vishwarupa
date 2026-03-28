@@ -53,6 +53,38 @@ const PRIORITY_PREVIEW_COLUMNS = [
   "loan_amount",
 ];
 
+const DEFAULT_CAMPAIGN_STRATEGIES = [
+  {
+    id: "cpstest",
+    name: "Infobip CPSTest",
+    desc: "Official WhatsApp template for debt recovery.",
+    color: "indigo",
+    whatsapp: "This is regarding loan due. Kindly follow the video for more information.",
+    scriptPersonalized:
+      "Hello {{customer_name}}. This is regarding your outstanding loan due with CredResolve. Kindly follow the information in this video for more details and repayment options.",
+    scriptUniversal:
+      "This is regarding your outstanding loan due. Kindly follow the information in this video for more details and repayment options.",
+  },
+  {
+    id: "test2",
+    templateId: "897226290031810",
+    name: "test2",
+    desc: "Account Status Update Strategy",
+    color: "emerald",
+    whatsapp:
+      "Hello,\n\nAn update regarding your account has been shared by CredResolve.\nKindly watch the video and take the necessary action.\n\nThank you.",
+    scriptPersonalized:
+      "Hello {{customer_name}}. An update regarding your account has been shared by CredResolve. Kindly watch the information in this video and take the necessary action. Thank you.",
+    scriptUniversal:
+      "Hello. An update regarding your account has been shared by CredResolve. Kindly watch the information in this video and take the necessary action. Thank you.",
+  },
+] as const;
+
+const TEMPLATE_DISPLAY_NAME_BY_ID: Record<string, string> = {
+  cpstest: "Loan Recall Strategy",
+  test2: "Account Status Update",
+};
+
 function normalizeCsvKey(value: string): string {
   return value
     .toLowerCase()
@@ -337,7 +369,8 @@ export default function BulkSend() {
   });
 
   const rawTemplates = whatsappTemplatesQuery.data;
-  const CAMPAIGN_STRATEGIES: any[] = Array.isArray(rawTemplates) ? rawTemplates : [];
+  const CAMPAIGN_STRATEGIES: any[] =
+    Array.isArray(rawTemplates) && rawTemplates.length > 0 ? rawTemplates : DEFAULT_CAMPAIGN_STRATEGIES;
 
   // Auto-select first template when data arrives
   React.useEffect(() => {
@@ -406,7 +439,7 @@ export default function BulkSend() {
       setWhatsappTemplate(strategy.whatsapp);
       setVideoScript(mode === "personalized" ? strategy.scriptPersonalized : strategy.scriptUniversal);
       setSelectedMsgTemplate(id);
-      toast.success(`Switched to ${strategy.name} strategy`);
+      toast.success(`Switched to ${(TEMPLATE_DISPLAY_NAME_BY_ID[id] ?? strategy.name)} strategy`);
     }
   };
 
@@ -426,11 +459,11 @@ export default function BulkSend() {
         const strategy = CAMPAIGN_STRATEGIES.find((s: any) => s.id === selectedMsgTemplate);
         const now = Date.now();
         const campaignPayload = {
-          name: `${strategy?.name || selectedMsgTemplate} ${new Date(now).toLocaleDateString("en-GB")}`,
-          description: `Bulk send campaign for ${strategy?.name || selectedMsgTemplate} in ${selectedLanguage}.`,
+          name: `${TEMPLATE_DISPLAY_NAME_BY_ID[selectedMsgTemplate] || strategy?.name || selectedMsgTemplate} ${new Date(now).toLocaleDateString("en-GB")}`,
+          description: `Bulk send campaign for ${TEMPLATE_DISPLAY_NAME_BY_ID[selectedMsgTemplate] || strategy?.name || selectedMsgTemplate} in ${selectedLanguage}.`,
           startDate: new Date(now + 60_000).toISOString(),
           endDate: new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          templateId: selectedMsgTemplate || "cpstest",
+          templateId: strategy?.templateId || selectedMsgTemplate || "cpstest",
           communicationType: "WHATSAPP",
           campaignType: "WHATSAPP",
         };
@@ -1110,12 +1143,12 @@ export default function BulkSend() {
              <div className="space-y-2">
                <Label className="text-[10px] uppercase font-bold text-muted-foreground text-left block">Select Template</Label>
                <select 
-                className="w-full bg-background border-2 rounded-xl h-11 px-4 text-sm focus:ring-2 focus:ring-primary focus:outline-none transition-all font-bold"
+               className="w-full bg-background border-2 rounded-xl h-11 px-4 text-sm focus:ring-2 focus:ring-primary focus:outline-none transition-all font-bold"
                 value={selectedMsgTemplate}
                 onChange={(e) => handleTemplateSelect(e.target.value)}
                >
                  {CAMPAIGN_STRATEGIES.map((tmpl: any) => (
-                   <option key={tmpl.id} value={tmpl.id}>{tmpl.name}</option>
+                   <option key={tmpl.id} value={tmpl.id}>{TEMPLATE_DISPLAY_NAME_BY_ID[tmpl.id] ?? tmpl.name}</option>
                  ))}
                </select>
              </div>

@@ -31,6 +31,28 @@ TEMPLATES = [
             "in this video for more details and repayment options."
         ),
     },
+    {
+        "id": "test2",
+        "templateId": "897226290031810",
+        "name": "test2",
+        "desc": "Account Status Update Strategy",
+        "color": "emerald",
+        "whatsapp": (
+            "Hello,\n\nAn update regarding your account has been shared by CredResolve.\n"
+            "Kindly watch the video and take the necessary action.\n\n"
+            "Thank you."
+        ),
+        "scriptPersonalized": (
+            "Hello {{customer_name}}. An update regarding your account has been "
+            "shared by CredResolve. Kindly watch the information in this video "
+            "and take the necessary action. Thank you."
+        ),
+        "scriptUniversal": (
+            "Hello. An update regarding your account has been shared by "
+            "CredResolve. Kindly watch the information in this video and "
+            "take the necessary action. Thank you."
+        ),
+    },
 ]
 
 
