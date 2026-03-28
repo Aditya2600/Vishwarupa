@@ -189,7 +189,6 @@ export default function MyVideos() {
     refetchInterval: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    refetchOnMount: false,
   });
 
   useEffect(() => {
