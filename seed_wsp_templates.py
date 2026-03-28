@@ -1,6 +1,6 @@
 """
-Seed script: inserts default WhatsApp campaign templates into MongoDB.
-Run once: python seed_wsp_templates.py
+Seed script: upserts default WhatsApp campaign templates into MongoDB.
+Run anytime: python seed_wsp_templates.py
 """
 import asyncio
 import os
@@ -59,18 +59,23 @@ TEMPLATES = [
 
 async def seed():
     inserted = 0
-    skipped = 0
+    updated = 0
     for tmpl in TEMPLATES:
-        existing = await col.find_one({"id": tmpl["id"]})
-        if existing:
-            print(f"  SKIP  '{tmpl['id']}' already exists.")
-            skipped += 1
-        else:
-            await col.insert_one(tmpl)
+        result = await col.update_one(
+            {"id": tmpl["id"]},
+            {"$set": tmpl},
+            upsert=True,
+        )
+        if result.upserted_id is not None:
             print(f"  INSERT '{tmpl['id']}' — {tmpl['name']}")
             inserted += 1
+        elif result.modified_count > 0:
+            print(f"  UPDATE '{tmpl['id']}' — {tmpl['name']}")
+            updated += 1
+        else:
+            print(f"  OK     '{tmpl['id']}' already up to date.")
 
-    print(f"\nDone. {inserted} inserted, {skipped} skipped.")
+    print(f"\nDone. {inserted} inserted, {updated} updated.")
 
 
 if __name__ == "__main__":
