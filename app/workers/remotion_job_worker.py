@@ -104,21 +104,27 @@ class RemotionJobWorker:
                 self.sqs_service.delete_message(receipt_handle, self.queue_url)
             return
 
-        # 2. Check if already completed/processing
+        # 2. Skip only completed jobs. Failed jobs are allowed to retry.
         current_status = job_doc.get("status", "queued")
-        if current_status in ("completed", "failed"):
+        if current_status == "completed":
             logger.info(f"RemotionJobWorker: video_id={video_id} already in status={current_status}. Deleting from SQS.")
             if receipt_handle:
                 self.sqs_service.delete_message(receipt_handle, self.queue_url)
             return
+        if current_status == "processing":
+            logger.info(f"RemotionJobWorker: video_id={video_id} is already processing. Deleting duplicate SQS message.")
+            if receipt_handle:
+                self.sqs_service.delete_message(receipt_handle, self.queue_url)
+            return
 
-        # 3. Mark as processing
+        # 3. Mark as processing, clearing any prior failure state so retries can run cleanly.
         now = datetime.utcnow()
         await self.videos_collection_ref.update_one(
             {"_id": _mongo_id(video_id)},
             {"$set": {
                 "status": "processing",
                 "updated_at": now,
+                "error_message": None,
             }}
         )
 

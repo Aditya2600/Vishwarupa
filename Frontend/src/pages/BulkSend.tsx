@@ -66,9 +66,9 @@ const DEFAULT_CAMPAIGN_STRATEGIES = [
       "This is regarding your outstanding loan due. Kindly follow the information in this video for more details and repayment options.",
   },
   {
-    id: "test2",
-    templateId: "897226290031810",
-    name: "test2",
+    id: "test3",
+    templateId: "34899727692974205",
+    name: "test3",
     desc: "Account Status Update Strategy",
     color: "emerald",
     whatsapp:
@@ -82,7 +82,7 @@ const DEFAULT_CAMPAIGN_STRATEGIES = [
 
 const TEMPLATE_DISPLAY_NAME_BY_ID: Record<string, string> = {
   cpstest: "Loan Recall Strategy",
-  test2: "Account Status Update",
+  test3: "Account Status Update",
 };
 
 function normalizeCsvKey(value: string): string {
