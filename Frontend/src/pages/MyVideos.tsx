@@ -1,6 +1,10 @@
 import { Film, PlayCircle, Sparkles, Clock, CheckCircle, ExternalLink, AlertCircle, RotateCcw, Trash2, Download, Share2 } from "lucide-react";
 import { motion } from "framer-motion";
+<<<<<<< Updated upstream
 import { useState } from "react";
+=======
+import { useEffect, useRef, useState } from "react";
+>>>>>>> Stashed changes
 import { useNavigate } from "react-router-dom";
 import { HeaderBar } from "@/components/HeaderBar";
 import { Button } from "@/components/ui/button";
@@ -24,6 +28,7 @@ interface VideoListItem {
   status: string;
   request_mode: string;
   video_url: string | null;
+  thumbnail_url?: string | null;
   created_at: string;
   isLocalDraft?: boolean;
 }
@@ -170,10 +175,15 @@ export default function MyVideos() {
   const navigate = useNavigate();
   const [localDraft, setLocalDraft] = useState<VideoListItem | null>(() => buildLocalDraftItem());
   const [hasSoftDeletedDraft, setHasSoftDeletedDraft] = useState(() => Boolean(readSoftDeletedDraft()));
+  const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
+  const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
   const { data: videos, isLoading, error, refetch } = useQuery({
     queryKey: ["my-videos"],
     queryFn: fetchMyVideos,
-    refetchInterval: 10000, // Poll every 10 seconds for status updates
+    refetchInterval: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
   });
 
   const deleteMutation = useMutation({
@@ -294,6 +304,22 @@ export default function MyVideos() {
     total: mergedVideos.length,
     processing: mergedVideos.filter((video) => video.status === "processing").length,
     ready: mergedVideos.filter((video) => video.status === "completed" || video.status === "styled").length,
+  };
+
+  const handleCardVideoPlay = (videoId: string) => {
+    setActiveVideoId(videoId);
+    const element = videoRefs.current[videoId];
+    if (!element) {
+      return;
+    }
+
+    element.currentTime = 0;
+    const playPromise = element.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch(() => {
+        // Ignore autoplay interruptions and keep controls visible for manual retry.
+      });
+    }
   };
 
   return (
@@ -454,7 +480,34 @@ export default function MyVideos() {
                   <div className="aspect-video bg-slate-100 dark:bg-slate-900 relative overflow-hidden flex items-center justify-center">
                     {video.status === "completed" || video.status === "styled" ? (
                       video.video_url ? (
-                        <video src={video.video_url} className="w-full h-full object-cover" controls />
+                        <div className="relative h-full w-full overflow-hidden">
+                          <video
+                            ref={(element) => {
+                              videoRefs.current[video._id] = element;
+                            }}
+                            src={video.video_url}
+                            poster={video.thumbnail_url ?? undefined}
+                            className="h-full w-full object-cover"
+                            controls={activeVideoId === video._id}
+                            playsInline
+                            preload="metadata"
+                          />
+                          {activeVideoId !== video._id ? (
+                            <button
+                              type="button"
+                              className="absolute inset-0 h-full w-full overflow-hidden"
+                              onClick={() => handleCardVideoPlay(video._id)}
+                              aria-label={`Play ${video.title || "video"}`}
+                            >
+                              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
+                              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black/55 text-white shadow-lg ring-1 ring-white/30 transition-transform group-hover:scale-105">
+                                  <PlayCircle className="h-8 w-8" />
+                                </div>
+                              </div>
+                            </button>
+                          ) : null}
+                        </div>
                       ) : (
                         <PlayCircle className="h-12 w-12 text-primary opacity-50" />
                       )
