@@ -978,13 +978,6 @@ async def _resolve_cpaas_template_key(template_id: Any) -> str | None:
         or raw_template_id
     ).strip()
 
-    if resolved_template_key and resolved_template_key != raw_template_id:
-        logger.info(
-            "Resolved CPAAS templateId %s -> %s using Mongo template record.",
-            raw_template_id,
-            resolved_template_key,
-        )
-
     return resolved_template_key or raw_template_id
 
 
