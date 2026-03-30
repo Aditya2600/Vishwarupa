@@ -32,8 +32,9 @@ TEMPLATES = [
         ),
     },
     {
-        "id": "test2",
-        "name": "test2",
+        "id": "test3",
+        "templateId": "34899727692974205",
+        "name": "test3",
         "desc": "Account Status Update Strategy",
         "color": "emerald",
         "whatsapp": (
@@ -57,6 +58,9 @@ TEMPLATES = [
 
 
 async def seed():
+    # Delete the old test2 template
+    await col.delete_one({"id": "test2"})
+    print("  DELETE 'test2' if it exists")
     inserted = 0
     updated = 0
     for tmpl in TEMPLATES:
