@@ -1480,20 +1480,42 @@ async def get_my_videos(current_user: str = Depends(get_current_user)):
 @app.get('/videos/{video_id}')
 async def get_video_details(video_id: str, current_user: str = Depends(get_current_user)):
     """Fetch details for a single video. Accessible by owner or admin."""
+    logger.info("Loading /videos/%s for user %s", video_id, current_user)
     video = await videos_collection.find_one({"_id": _mongo_id(video_id)})
     if not video:
+        logger.warning("Video %s not found for user %s", video_id, current_user)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Video not found")
 
     # Check permissions: owner or admin
     is_admin = False
+    current_user_email: str | None = None
     try:
         user = await users_collection.find_one({"_id": _mongo_id(current_user)})
         if user and user.get("is_admin"):
             is_admin = True
+        if user and user.get("email"):
+            current_user_email = str(user.get("email"))
     except:
         pass
 
-    if video.get("user_id") != current_user and not is_admin:
+    logger.info(
+        "Fetched /videos/%s record | current_user=%s | current_user_email=%s | video_user_id=%s | is_admin=%s",
+        video_id,
+        current_user,
+        current_user_email,
+        str(video.get("user_id") or ""),
+        is_admin,
+    )
+
+    if video.get("user_id") not in {current_user, current_user_email} and not is_admin:
+        logger.warning(
+            "Forbidden /videos/%s | current_user=%s | current_user_email=%s | video_user_id=%s | is_admin=%s",
+            video_id,
+            current_user,
+            current_user_email,
+            str(video.get("user_id") or ""),
+            is_admin,
+        )
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
     video["_id"] = str(video["_id"])
