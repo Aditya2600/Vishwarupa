@@ -583,26 +583,26 @@ export default function MyVideos() {
                             <DropdownMenuContent align="end" className="w-48 p-1.5 rounded-xl border-border/80 shadow-xl backdrop-blur-md bg-card/95">
                               <DropdownMenuItem 
                                 onClick={() => void handleShare(video)}
-                                className="flex items-center gap-2 rounded-lg py-2 cursor-pointer transition-colors"
+                                className="group flex items-center gap-2 rounded-lg py-2 cursor-pointer transition-colors"
                               >
-                                <div className="p-1.5 rounded-md bg-primary/5 text-primary group-data-[highlighted]:bg-primary group-data-[highlighted]:text-white transition-colors">
+                                <div className="p-1.5 rounded-md bg-primary/5 text-primary group-hover:bg-primary group-hover:text-white group-focus:bg-primary group-focus:text-white group-data-[highlighted]:bg-primary group-data-[highlighted]:text-white transition-colors">
                                   <Link className="w-3.5 h-3.5" />
                                 </div>
                                 <div className="flex flex-col">
-                                  <span className="text-[13px] font-semibold">Share Link</span>
-                                  <span className="text-[10px] text-muted-foreground">Copy url to clipboard</span>
+                                  <span className="text-[13px] font-semibold group-hover:text-white group-focus:text-white group-data-[highlighted]:text-white transition-colors">Share Link</span>
+                                  <span className="text-[10px] text-muted-foreground group-hover:text-white group-focus:text-white group-data-[highlighted]:text-white transition-colors">Copy url to clipboard</span>
                                 </div>
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={() => navigate(`/bulk?video_id=${video._id}`)}
-                                className="flex items-center gap-2 rounded-lg py-2 cursor-pointer transition-colors"
+                                className="group flex items-center gap-2 rounded-lg py-2 cursor-pointer transition-colors"
                               >
-                                <div className="p-1.5 rounded-md bg-indigo-500/5 text-indigo-500 group-data-[highlighted]:bg-indigo-500 group-data-[highlighted]:text-white transition-colors">
+                                <div className="p-1.5 rounded-md bg-primary/5 text-primary group-hover:bg-primary group-hover:text-white group-focus:bg-primary group-focus:text-white group-data-[highlighted]:bg-primary group-data-[highlighted]:text-white transition-colors">
                                   <Users className="w-3.5 h-3.5" />
                                 </div>
                                 <div className="flex flex-col">
-                                  <span className="text-[13px] font-semibold">Share in Bulk</span>
-                                  <span className="text-[10px] text-muted-foreground">Send to multiple contacts</span>
+                                  <span className="text-[13px] font-semibold group-hover:text-white group-focus:text-white group-data-[highlighted]:text-white transition-colors">Share in Bulk</span>
+                                  <span className="text-[10px] text-muted-foreground group-hover:text-white group-focus:text-white group-data-[highlighted]:text-white transition-colors">Send to multiple contacts</span>
                                 </div>
                               </DropdownMenuItem>
                             </DropdownMenuContent>

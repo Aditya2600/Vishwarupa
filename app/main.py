@@ -272,6 +272,20 @@ def _stored_video_job_id(video: dict[str, Any]) -> str | None:
     return None
 
 
+def _video_log_snapshot(video: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": str(video.get("_id") or ""),
+        "status": str(video.get("status") or ""),
+        "request_mode": str(video.get("request_mode") or ""),
+        "title": str(video.get("title") or "")[:120],
+        "video_url_type": type(video.get("video_url")).__name__,
+        "created_at_type": type(video.get("created_at")).__name__,
+        "updated_at_type": type(video.get("updated_at")).__name__,
+        "has_job_data": isinstance(video.get("job_data"), dict),
+        "has_result_payload": isinstance(video.get("result_payload"), dict),
+    }
+
+
 async def _find_avatar_video(video_id: str, current_user: str) -> dict[str, Any] | None:
     return await videos_collection.find_one(
         {'_id': _mongo_id(video_id), 'user_id': current_user, 'request_mode': 'avatar_async'}
@@ -284,8 +298,19 @@ async def _refresh_processing_video(video: dict[str, Any], current_user: str) ->
 
     external_video_id = _stored_video_job_id(video)
     if not external_video_id:
+        logger.warning(
+            "Skipping processing video refresh due to missing external provider id | user=%s | snapshot=%s",
+            current_user,
+            json.dumps(_video_log_snapshot(video), default=str),
+        )
         return
 
+    logger.info(
+        "Refreshing processing video from provider | user=%s | external_video_id=%s | snapshot=%s",
+        current_user,
+        external_video_id,
+        json.dumps(_video_log_snapshot(video), default=str),
+    )
     try:
         refreshed = await asyncio.to_thread(
             service.get_video_status_result,
@@ -297,6 +322,12 @@ async def _refresh_processing_video(video: dict[str, Any], current_user: str) ->
         await _mark_video_failed(current_user, external_video_id, detail)
         video["status"] = "failed"
         video["job_data"] = {"detail": detail}
+        logger.warning(
+            "Provider refresh marked video as failed | user=%s | external_video_id=%s | error=%s",
+            current_user,
+            external_video_id,
+            detail,
+        )
         return
 
     await _persist_video_job_result(current_user, refreshed)
@@ -304,6 +335,13 @@ async def _refresh_processing_video(video: dict[str, Any], current_user: str) ->
     video["title"] = refreshed.title or video.get("title")
     video["video_url"] = refreshed.video_url or video.get("video_url")
     video["job_data"] = _to_mongo_safe(refreshed)
+    logger.info(
+        "Provider refresh completed | user=%s | external_video_id=%s | normalized_status=%s | has_video_url=%s",
+        current_user,
+        external_video_id,
+        video["status"],
+        bool(video.get("video_url")),
+    )
 
 
 def _serialize_my_video(video: dict[str, Any]) -> dict[str, Any]:
@@ -913,11 +951,44 @@ async def _proxy_cpaas_request(method: str, path: str, payload: Any | None = Non
     return JSONResponse(status_code=response.status_code, content=body)
 
 
+async def _resolve_cpaas_template_key(template_id: Any) -> str | None:
+    raw_template_id = str(template_id or "").strip()
+    if not raw_template_id:
+        return None
+
+    template_doc = await whatsapp_templates_collection.find_one(
+        {
+            "$or": [
+                {"id": raw_template_id},
+                {"name": raw_template_id},
+                {"templateId": raw_template_id},
+                {"template_id": raw_template_id},
+                {"vendorTemplateId": raw_template_id},
+                {"vendor_template_id": raw_template_id},
+            ]
+        }
+    )
+
+    if not template_doc:
+        return raw_template_id
+
+    resolved_template_key = str(
+        template_doc.get("id")
+        or template_doc.get("name")
+        or raw_template_id
+    ).strip()
+
+    return resolved_template_key or raw_template_id
+
+
 @app.post('/cpaas/campaigns')
 async def create_cpaas_campaign(payload: dict, current_user: str = Depends(get_current_user)):
     upstream_payload = dict(payload)
     if not upstream_payload.get("communicationType") and upstream_payload.get("campaignType"):
         upstream_payload["communicationType"] = upstream_payload["campaignType"]
+    resolved_template_key = await _resolve_cpaas_template_key(upstream_payload.get("templateId"))
+    if resolved_template_key:
+        upstream_payload["templateId"] = resolved_template_key
     return await _proxy_cpaas_request("POST", "/campaigns", upstream_payload)
 
 
@@ -1334,60 +1405,110 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
 
 @app.get('/my-videos')
 async def get_my_videos(current_user: str = Depends(get_current_user)):
-    logger.info("Loading /my-videos for user %s", current_user)
-    cursor = videos_collection.find({"user_id": current_user}).sort("created_at", -1)
-    videos = await cursor.to_list(length=100)
-    logger.info("Loaded %d videos for user %s", len(videos), current_user)
+    try:
+        logger.info("Loading /my-videos for user %s", current_user)
+        cursor = videos_collection.find({"user_id": current_user}).sort("created_at", -1)
+        videos = await cursor.to_list(length=100)
+        logger.info("Loaded %d videos for user %s", len(videos), current_user)
 
-    refresh_tasks = [
-        _refresh_processing_video(video, current_user)
-        for video in videos
-        if video.get("status") == "processing" and video.get("request_mode") in {"direct", "template"}
-    ]
-    if refresh_tasks:
-        refresh_results = await asyncio.gather(*refresh_tasks, return_exceptions=True)
-        for refresh_result in refresh_results:
-            if isinstance(refresh_result, Exception):
-                logger.exception("Failed to refresh background direct video: %s", refresh_result)
+        refresh_candidates = [
+            video
+            for video in videos
+            if video.get("status") == "processing" and video.get("request_mode") in {"direct", "template"}
+        ]
+        logger.info(
+            "Found %d processing videos to refresh for user %s",
+            len(refresh_candidates),
+            current_user,
+        )
 
-    serialized_videos: list[dict[str, Any]] = []
-    for video in videos:
-        try:
-            serialized_videos.append(_serialize_my_video(video))
-        except Exception as exc:
-            logger.exception(
-                "Failed to serialize /my-videos item for user %s and video %s: %s",
-                current_user,
-                str(video.get("_id") or ""),
-                exc,
+        if refresh_candidates:
+            refresh_results = await asyncio.gather(
+                *(_refresh_processing_video(video, current_user) for video in refresh_candidates),
+                return_exceptions=True,
             )
+            for index, refresh_result in enumerate(refresh_results):
+                if isinstance(refresh_result, Exception):
+                    logger.exception(
+                        "Failed to refresh processing video for user %s at refresh index %d: %s",
+                        current_user,
+                        index,
+                        refresh_result,
+                    )
 
-        # Preserve payloads for frontend auto-fill logic in Bulk Send
-        # video.pop("request_payload", None)
-        # video.pop("result_payload", None)
-        video.pop("job_data", None)
+        serialized_videos: list[dict[str, Any]] = []
+        serialization_failures = 0
+        for video in videos:
+            try:
+                serialized_videos.append(_serialize_my_video(video))
+            except Exception as exc:
+                serialization_failures += 1
+                logger.exception(
+                    "Failed to serialize /my-videos item | user=%s | snapshot=%s | error=%s",
+                    current_user,
+                    json.dumps(_video_log_snapshot(video), default=str),
+                    exc,
+                )
 
-    logger.info("Returning %d serialized videos for user %s", len(serialized_videos), current_user)
-    return serialized_videos
+            # Preserve payloads for frontend auto-fill logic in Bulk Send
+            # video.pop("request_payload", None)
+            # video.pop("result_payload", None)
+            video.pop("job_data", None)
+
+        logger.info(
+            "Returning %d serialized videos for user %s (serialization_failures=%d)",
+            len(serialized_videos),
+            current_user,
+            serialization_failures,
+        )
+        return serialized_videos
+    except Exception as exc:
+        logger.exception("Fatal /my-videos failure for user %s: %s", current_user, exc)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to load your video library. Check backend logs for the exact failing step.",
+        ) from exc
     
 
 @app.get('/videos/{video_id}')
 async def get_video_details(video_id: str, current_user: str = Depends(get_current_user)):
     """Fetch details for a single video. Accessible by owner or admin."""
+    logger.info("Loading /videos/%s for user %s", video_id, current_user)
     video = await videos_collection.find_one({"_id": _mongo_id(video_id)})
     if not video:
+        logger.warning("Video %s not found for user %s", video_id, current_user)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Video not found")
 
     # Check permissions: owner or admin
     is_admin = False
+    current_user_email: str | None = None
     try:
         user = await users_collection.find_one({"_id": _mongo_id(current_user)})
         if user and user.get("is_admin"):
             is_admin = True
+        if user and user.get("email"):
+            current_user_email = str(user.get("email"))
     except:
         pass
 
-    if video.get("user_id") != current_user and not is_admin:
+    logger.info(
+        "Fetched /videos/%s record | current_user=%s | current_user_email=%s | video_user_id=%s | is_admin=%s",
+        video_id,
+        current_user,
+        current_user_email,
+        str(video.get("user_id") or ""),
+        is_admin,
+    )
+
+    if video.get("user_id") not in {current_user, current_user_email} and not is_admin:
+        logger.warning(
+            "Forbidden /videos/%s | current_user=%s | current_user_email=%s | video_user_id=%s | is_admin=%s",
+            video_id,
+            current_user,
+            current_user_email,
+            str(video.get("user_id") or ""),
+            is_admin,
+        )
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
     video["_id"] = str(video["_id"])
