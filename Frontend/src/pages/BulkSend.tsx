@@ -67,7 +67,6 @@ const DEFAULT_CAMPAIGN_STRATEGIES = [
   },
   {
     id: "test2",
-    templateId: "897226290031810",
     name: "test2",
     desc: "Account Status Update Strategy",
     color: "emerald",
@@ -173,9 +172,9 @@ function buildVideoLinkPreview(
 
   const leadKey = slugifyPreviewValue(
     getRowValue(row, headers, mapping, "lan")
-      || getRowValue(row, headers, mapping, "phone")
-      || getRowValue(row, headers, mapping, "name")
-      || `lead-${index + 1}`,
+    || getRowValue(row, headers, mapping, "phone")
+    || getRowValue(row, headers, mapping, "name")
+    || `lead-${index + 1}`,
   );
 
   return `${origin}/bulk/preview/generated/${leadKey || `lead-${index + 1}`}`;
@@ -270,9 +269,9 @@ export default function BulkSend() {
   const [searchParams] = useSearchParams();
   const videoIdFromUrl = searchParams.get("video_id");
   const isFromVideo = !!videoIdFromUrl;
-  
-  const steps: Step[] = isFromVideo 
-    ? ["upload", "mapping", "launch"] 
+
+  const steps: Step[] = isFromVideo
+    ? ["upload", "mapping", "launch"]
     : ["config", "assets", "upload", "mapping", "preview", "launch"];
 
   const [currentStep, setCurrentStep] = useState<Step>(isFromVideo ? "upload" : "config");
@@ -318,7 +317,7 @@ export default function BulkSend() {
         // Auto-detect engine
         const isRemotion = refVideo.request_mode === "remotion" || (refVideo.request_mode as string)?.includes("remotion");
         setEngine(isRemotion ? "remotion" : "avatar");
-        
+
         // Existing-video flow should send the chosen video to WhatsApp, not generate new drafts.
         if (isFromVideo) {
           setMode("universal");
@@ -385,7 +384,7 @@ export default function BulkSend() {
   const PhoneMockup = ({ message }: { message: string }) => (
     <div className="relative mx-auto border-gray-800 dark:border-gray-800 bg-gray-800 border-[10px] rounded-[2rem] h-[500px] w-[250px] shadow-xl overflow-hidden scale-95 origin-top">
       <div className="w-[120px] h-[15px] bg-gray-800 top-0 left-1/2 -translate-x-1/2 absolute rounded-b-[0.8rem] z-20"></div>
-      
+
       <div className="h-full w-full bg-[#e5ddd5] flex flex-col pt-8">
         <div className="bg-[#075e54] p-2 flex items-center gap-2 text-white">
           <ChevronLeft className="w-4 h-4" />
@@ -397,16 +396,16 @@ export default function BulkSend() {
             <span className="text-[8px] opacity-80">Active now</span>
           </div>
         </div>
-        
+
         <div className="flex-1 p-3 space-y-3 overflow-y-auto">
           <div className="bg-white p-2 rounded-lg shadow-sm max-w-[90%] relative self-start">
-             <div className="flex items-center gap-2 mb-1.5 p-1.5 bg-secondary/10 rounded-md border border-border/50">
+            <div className="flex items-center gap-2 mb-1.5 p-1.5 bg-secondary/10 rounded-md border border-border/50">
               <div className="w-7 h-7 bg-orange-100 rounded flex items-center justify-center shrink-0">
-                 <Video className="w-3.5 h-3.5 text-orange-600" />
+                <Video className="w-3.5 h-3.5 text-orange-600" />
               </div>
               <div className="flex flex-col min-w-0">
-                 <span className="text-[9px] font-black leading-none uppercase tracking-tighter">Video</span>
-                 <span className="text-[6px] text-muted-foreground font-bold truncate">Supported file types: MP4, 3GPP</span>
+                <span className="text-[9px] font-black leading-none uppercase tracking-tighter">Video</span>
+                <span className="text-[6px] text-muted-foreground font-bold truncate">Supported file types: MP4, 3GPP</span>
               </div>
             </div>
             <p className="text-[10px] leading-snug text-slate-800 whitespace-pre-wrap">
@@ -417,7 +416,7 @@ export default function BulkSend() {
             </div>
           </div>
         </div>
-        
+
         <div className="p-2 bg-white flex items-center gap-2">
           <div className="w-5 h-5 rounded-full border border-slate-300 flex items-center justify-center text-slate-400 text-[10px]">+</div>
           <div className="flex-1 h-6 bg-slate-100 rounded-full border border-slate-200"></div>
@@ -463,7 +462,7 @@ export default function BulkSend() {
           description: `Bulk send campaign for ${TEMPLATE_DISPLAY_NAME_BY_ID[selectedMsgTemplate] || strategy?.name || selectedMsgTemplate} in ${selectedLanguage}.`,
           startDate: new Date(now + 60_000).toISOString(),
           endDate: new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          templateId: strategy?.templateId || selectedMsgTemplate || "cpstest",
+          templateId: strategy?.id || selectedMsgTemplate || "cpstest",
           communicationType: "WHATSAPP",
           campaignType: "WHATSAPP",
         };
@@ -532,8 +531,8 @@ export default function BulkSend() {
               voice_id: selectedVoice,
               language: selectedLanguage,
               script_text: videoScript.replace(/{{customer_name}}/g, mappedName || "Customer")
-                            .replace(/{{loan_amount}}/g, mappedLoan || "0")
-                            .replace(/{{lan}}/g, mappedLan || "N/A"),
+                .replace(/{{loan_amount}}/g, mappedLoan || "0")
+                .replace(/{{lan}}/g, mappedLan || "N/A"),
               title_prefix: "Bulk Campaign"
             }, false); // wait=false for speed
           } else {
@@ -544,8 +543,8 @@ export default function BulkSend() {
               loan_amount: mappedLoan || "0",
               language: selectedLanguage,
               script_text: videoScript.replace(/{{customer_name}}/g, mappedName || "Customer")
-                            .replace(/{{loan_amount}}/g, mappedLoan || "0")
-                            .replace(/{{lan}}/g, mappedLan || "N/A"),
+                .replace(/{{loan_amount}}/g, mappedLoan || "0")
+                .replace(/{{lan}}/g, mappedLan || "N/A"),
               title_prefix: "Bulk Campaign",
               subtitleColor: "White",
               subtitlePosition: "Bottom",
@@ -613,7 +612,7 @@ export default function BulkSend() {
     }
 
     setPlayingVoiceId(voice.id);
-    
+
     try {
       let audioSrc = "";
       if (voice.previewUrl) {
@@ -753,40 +752,40 @@ export default function BulkSend() {
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-col md:flex-row items-center justify-center gap-6 p-4 bg-secondary/20 rounded-3xl border border-secondary shadow-sm">
         <div className="flex flex-col gap-1.5">
-           <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Persona Gender</Label>
-           <div className="flex items-center gap-2 p-1.5 bg-background rounded-2xl border">
-              {["male", "female"].map(g => (
-                <Button 
-                  key={g}
-                  variant={genderFilter === g ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setGenderFilter(g as any)}
-                  className="rounded-xl text-xs font-bold capitalize h-8 px-6"
-                >
-                  {g}
-                </Button>
-              ))}
-           </div>
+          <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Persona Gender</Label>
+          <div className="flex items-center gap-2 p-1.5 bg-background rounded-2xl border">
+            {["male", "female"].map(g => (
+              <Button
+                key={g}
+                variant={genderFilter === g ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setGenderFilter(g as any)}
+                className="rounded-xl text-xs font-bold capitalize h-8 px-6"
+              >
+                {g}
+              </Button>
+            ))}
+          </div>
         </div>
 
         <div className="w-[200px] flex flex-col gap-1.5">
-           <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Campaign Language</Label>
-           <select 
-              className="w-full bg-background border rounded-2xl p-1.5 text-xs font-bold focus:ring-2 focus:ring-primary focus:outline-none transition-all shadow-sm h-11"
-              value={selectedLanguage}
-              onChange={(e) => setSelectedLanguage(e.target.value)}
-            >
-              <option value="en-US">English</option>
-              <option value="hi-IN">Hindi</option>
-              <option value="mr-IN">Marathi</option>
-              <option value="ta-IN">Tamil</option>
-              <option value="te-IN">Telugu</option>
-              <option value="kn-IN">Kannada</option>
-              {engine === "remotion" && <option value="bn-IN">Bengali</option>}
-              <option value="gu-IN">Gujarati</option>
-              {engine === "remotion" && <option value="ml-IN">Malayalam</option>}
-              {/* Punjabi removed from both */}
-            </select>
+          <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Campaign Language</Label>
+          <select
+            className="w-full bg-background border rounded-2xl p-1.5 text-xs font-bold focus:ring-2 focus:ring-primary focus:outline-none transition-all shadow-sm h-11"
+            value={selectedLanguage}
+            onChange={(e) => setSelectedLanguage(e.target.value)}
+          >
+            <option value="en-US">English</option>
+            <option value="hi-IN">Hindi</option>
+            <option value="mr-IN">Marathi</option>
+            <option value="ta-IN">Tamil</option>
+            <option value="te-IN">Telugu</option>
+            <option value="kn-IN">Kannada</option>
+            {engine === "remotion" && <option value="bn-IN">Bengali</option>}
+            <option value="gu-IN">Gujarati</option>
+            {engine === "remotion" && <option value="ml-IN">Malayalam</option>}
+            {/* Punjabi removed from both */}
+          </select>
         </div>
       </div>
 
@@ -804,10 +803,10 @@ export default function BulkSend() {
                   .filter((avatar: any) => {
                     const targetGender = genderFilter.toLowerCase();
                     if (!avatar.gender || avatar.gender.toLowerCase() !== targetGender) return false;
-                    
+
                     const name = (avatar.name || "").toLowerCase().trim();
                     if (uniqueAvatarNames.has(name) || name === "riya" || name === "meera" || name === "aditya k" || name === "karan" || name === "priya" || name === "rohan" || name === "kabir") return false;
-                    
+
                     uniqueAvatarNames.add(name);
                     return true;
                   })
@@ -833,25 +832,25 @@ export default function BulkSend() {
                   })
                   .slice(0, 6);
               })().map((av: any) => (
-                  <div
-                    key={av.id}
-                    onClick={() => setSelectedAvatar(av.id)}
-                    className={cn(
-                      "relative aspect-[3/4] rounded-lg overflow-hidden border-2 cursor-pointer transition-all hover:scale-105",
-                      selectedAvatar === av.id ? "border-primary" : "border-transparent"
-                    )}
-                  >
-                    <img src={av.previewImageUrl || (av as any).preview_image_url || ""} alt={av.name} className="w-full h-full object-cover" />
-                    {selectedAvatar === av.id && (
-                      <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
-                        <CheckCircle2 className="w-8 h-8 text-white drop-shadow-md" />
-                      </div>
-                    )}
-                    <div className="absolute bottom-0 inset-x-0 p-1 bg-black/60 text-[10px] text-white truncate text-center font-bold">
-                      {av.name}
+                <div
+                  key={av.id}
+                  onClick={() => setSelectedAvatar(av.id)}
+                  className={cn(
+                    "relative aspect-[3/4] rounded-lg overflow-hidden border-2 cursor-pointer transition-all hover:scale-105",
+                    selectedAvatar === av.id ? "border-primary" : "border-transparent"
+                  )}
+                >
+                  <img src={av.previewImageUrl || (av as any).preview_image_url || ""} alt={av.name} className="w-full h-full object-cover" />
+                  {selectedAvatar === av.id && (
+                    <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
+                      <CheckCircle2 className="w-8 h-8 text-white drop-shadow-md" />
                     </div>
+                  )}
+                  <div className="absolute bottom-0 inset-x-0 p-1 bg-black/60 text-[10px] text-white truncate text-center font-bold">
+                    {av.name}
                   </div>
-                ))}
+                </div>
+              ))}
             </div>
           </div>
           <div className="space-y-4">
@@ -866,7 +865,7 @@ export default function BulkSend() {
                   .filter((voice: any) => {
                     const isLangCompatible = isVoiceCompatibleWithLanguage(voice, selectedLanguage);
                     if (!isLangCompatible) return false;
-                    
+
                     const vName = voice.name.toLowerCase().trim();
                     // Aggressively deduplicate 'peppy priya' variants as in main flow
                     if (vName.includes("peppy priya")) {
@@ -876,7 +875,7 @@ export default function BulkSend() {
                       if (uniqueVoiceNames.has(vName)) return false;
                       uniqueVoiceNames.add(vName);
                     }
-                    
+
                     const voiceGen = (voice.gender || "").toLowerCase();
                     if (voiceGen !== genderFilter) return false;
 
@@ -895,35 +894,35 @@ export default function BulkSend() {
                   .sort((left, right) => compareVoicesForLanguage(left, right, selectedLanguage))
                   .slice(0, 20);
               })().map((v: any) => (
-                  <div
-                    key={v.id}
-                    className={cn(
-                      "p-3 rounded-xl border-2 text-sm transition-all flex items-center justify-between group",
-                      selectedVoice === v.id ? "border-primary bg-primary/5" : "hover:border-secondary-foreground/20 bg-background hover:bg-secondary/50"
-                    )}
-                  >
-                    <div className="flex items-center gap-3 cursor-pointer flex-1" onClick={() => setSelectedVoice(v.id)}>
-                      <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center transition-transform group-hover:scale-110">
-                        <Users className="w-4 h-4 text-primary" />
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="font-bold text-xs">{v.name}</span>
-                        <span className="text-[10px] text-muted-foreground uppercase">{selectedLanguage.split('-')[0]} Voice</span>
-                      </div>
+                <div
+                  key={v.id}
+                  className={cn(
+                    "p-3 rounded-xl border-2 text-sm transition-all flex items-center justify-between group",
+                    selectedVoice === v.id ? "border-primary bg-primary/5" : "hover:border-secondary-foreground/20 bg-background hover:bg-secondary/50"
+                  )}
+                >
+                  <div className="flex items-center gap-3 cursor-pointer flex-1" onClick={() => setSelectedVoice(v.id)}>
+                    <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center transition-transform group-hover:scale-110">
+                      <Users className="w-4 h-4 text-primary" />
                     </div>
-                    <div className="flex items-center gap-2">
-                       <Button
-                          size="icon"
-                          variant="ghost"
-                          className="w-8 h-8 rounded-full"
-                          onClick={() => handlePreviewVoice(v)}
-                       >
-                          {playingVoiceId === v.id ? <Pause className="w-3 h-3 text-primary" /> : <Play className="w-3 h-3 text-muted-foreground" />}
-                       </Button>
-                       {selectedVoice === v.id && <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />}
+                    <div className="flex flex-col">
+                      <span className="font-bold text-xs">{v.name}</span>
+                      <span className="text-[10px] text-muted-foreground uppercase">{selectedLanguage.split('-')[0]} Voice</span>
                     </div>
                   </div>
-                ))}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="w-8 h-8 rounded-full"
+                      onClick={() => handlePreviewVoice(v)}
+                    >
+                      {playingVoiceId === v.id ? <Pause className="w-3 h-3 text-primary" /> : <Play className="w-3 h-3 text-muted-foreground" />}
+                    </Button>
+                    {selectedVoice === v.id && <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -931,12 +930,12 @@ export default function BulkSend() {
 
       <div className="space-y-6 pt-6 border-t mt-8 animate-in fade-in duration-700">
         <Label className="text-base font-bold flex items-center gap-2">
-           <Settings2 className="w-4 h-4 text-primary" />
-           Campaign Strategy Template
+          <Settings2 className="w-4 h-4 text-primary" />
+          Campaign Strategy Template
         </Label>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {CAMPAIGN_STRATEGIES.map((tmpl) => (
-            <Card 
+            <Card
               key={tmpl.id}
               className={cn(
                 "cursor-pointer border-2 transition-all hover:shadow-lg h-full group relative overflow-hidden",
@@ -946,25 +945,25 @@ export default function BulkSend() {
             >
               <CardContent className="pt-6 text-center space-y-2">
                 <div className={cn("w-12 h-12 rounded-full mx-auto flex items-center justify-center transition-transform group-hover:scale-110",
-                    tmpl.color === 'blue' ? "bg-blue-100 text-blue-600 shadow-sm shadow-blue-200" :
-                    tmpl.color === 'green' ? "bg-green-100 text-green-600 shadow-sm shadow-green-200" : 
-                    tmpl.color === 'red' ? "bg-red-100 text-red-600 shadow-sm shadow-red-200" : 
-                    "bg-purple-100 text-purple-600 shadow-sm shadow-purple-200"
+                  tmpl.color === 'blue' ? "bg-blue-100 text-blue-600 shadow-sm shadow-blue-200" :
+                    tmpl.color === 'green' ? "bg-green-100 text-green-600 shadow-sm shadow-green-200" :
+                      tmpl.color === 'red' ? "bg-red-100 text-red-600 shadow-sm shadow-red-200" :
+                        "bg-purple-100 text-purple-600 shadow-sm shadow-purple-200"
                 )}>
                   <Settings2 className="w-6 h-6" />
                 </div>
                 <h4 className="font-bold text-sm tracking-tight">{tmpl.name}</h4>
                 <p className="text-[10px] text-muted-foreground leading-tight px-1 line-clamp-2">{tmpl.desc}</p>
-                
+
                 <div className="inline-flex items-center gap-1 mt-2 px-2 py-0.5 bg-secondary/50 rounded-full border border-border/50">
-                    <div className="w-1 h-1 rounded-full bg-primary animate-pulse" />
-                    <span className="text-[8px] uppercase font-bold tracking-widest text-muted-foreground">{genderFilter} script</span>
+                  <div className="w-1 h-1 rounded-full bg-primary animate-pulse" />
+                  <span className="text-[8px] uppercase font-bold tracking-widest text-muted-foreground">{genderFilter} script</span>
                 </div>
 
                 {selectedMsgTemplate === tmpl.id && (
                   <div className="absolute top-2 right-2 scale-in duration-200">
                     <div className="bg-primary text-white p-1 rounded-full shadow-lg">
-                       <CheckCircle2 className="w-3 h-3" />
+                      <CheckCircle2 className="w-3 h-3" />
                     </div>
                   </div>
                 )}
@@ -978,14 +977,14 @@ export default function BulkSend() {
             AI Video Script Preview
           </div>
           <div className="text-xs text-foreground/80 bg-background/50 p-4 rounded-xl border-2 border-border/50 leading-relaxed italic whitespace-pre-wrap font-serif">
-            {mode === "personalized" 
-              ? (CAMPAIGN_STRATEGIES.find(t => t.id === selectedMsgTemplate)?.scriptPersonalized || "Select strategy") 
+            {mode === "personalized"
+              ? (CAMPAIGN_STRATEGIES.find(t => t.id === selectedMsgTemplate)?.scriptPersonalized || "Select strategy")
               : (CAMPAIGN_STRATEGIES.find(t => t.id === selectedMsgTemplate)?.scriptUniversal || "Select strategy")
             }
           </div>
           <div className="mt-3 flex items-center gap-2 px-1">
-             <Info className="w-3 h-3 text-primary animate-bounce-slow" />
-             <p className="text-[9px] text-muted-foreground">The AI will use this transcript to generate the speech for your **{selectedLanguage}** video.</p>
+            <Info className="w-3 h-3 text-primary animate-bounce-slow" />
+            <p className="text-[9px] text-muted-foreground">The AI will use this transcript to generate the speech for your **{selectedLanguage}** video.</p>
           </div>
         </div>
       </div>
@@ -1005,97 +1004,97 @@ export default function BulkSend() {
     const refVideo = isFromVideo ? referenceVideoQuery.data : null;
     const isVideoLoading = isFromVideo && referenceVideoQuery.isLoading;
 
-    
+
     return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className={cn("grid gap-6", isFromVideo ? "grid-cols-1 lg:grid-cols-12" : "grid-cols-1")}>
-        {isVideoLoading && (
-          <div className="lg:col-span-7">
-            <Card className="h-full border-2 border-primary/20 shadow-xl overflow-hidden bg-card/50 flex flex-col">
-              <div className="aspect-video bg-muted animate-pulse flex items-center justify-center">
-                <LoaderCircle className="w-8 h-8 text-primary animate-spin" />
-              </div>
-              <div className="p-6 space-y-4">
-                <div className="h-6 w-2/3 bg-muted animate-pulse rounded" />
-                <div className="h-4 w-1/3 bg-muted animate-pulse rounded" />
-              </div>
-            </Card>
-          </div>
-        )}
-
-        {refVideo && (
-
-          <div className="lg:col-span-7">
-            <Card className="h-full overflow-hidden border-2 border-primary/20 shadow-xl flex flex-col group bg-card/50 backdrop-blur-sm">
-              <div className="aspect-video bg-black relative overflow-hidden">
-                 {refVideo.video_url && <video src={refVideo.video_url} className="w-full h-full object-cover" controls />}
-                 {!refVideo.video_url && <div className="w-full h-full flex items-center justify-center text-white/50 text-xs text-center p-4">Reference video ready - No preview available</div>}
-                 <div className="absolute top-4 left-4 z-10">
-                    <div className="bg-black/60 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest text-white border border-white/20 flex items-center gap-2">
-                       <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                       Reference Video
-                    </div>
-                 </div>
-              </div>
-              <div className="p-6 flex-1 flex flex-col">
-                 <div className="mb-4">
-                    <h4 className="font-bold text-xl leading-tight mb-2 text-foreground group-hover:text-primary transition-colors line-clamp-2">{refVideo.title || "Bulk Send Template"}</h4>
-                    <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-widest">
-                       <Video className="w-3.5 h-3.5" /> {engine === "avatar" ? "AI Avatar" : "Text to Video"}
-                    </div>
-                 </div>
-                 
-                 <div className="mt-auto pt-6 border-t border-border/50 flex flex-wrap items-center gap-2">
-                    <div className="px-3 py-1 bg-secondary text-secondary-foreground text-[10px] uppercase font-black tracking-widest rounded-lg border border-border">
-                       Language: {selectedLanguage}
-                    </div>
-                 </div>
-              </div>
-            </Card>
-          </div>
-        )}
-
-        <div className={cn("flex flex-col items-center justify-center p-12 text-center border-2 border-dashed rounded-[2rem] bg-secondary/5 group hover:border-primary/40 transition-all duration-500 hover:bg-secondary/10", isFromVideo ? "lg:col-span-5" : "w-full")}>
-          <div className="w-24 h-24 rounded-3xl bg-primary/10 flex items-center justify-center mb-8 group-hover:scale-110 group-hover:rotate-3 transition-all duration-500 shadow-inner">
-            <FileSpreadsheet className="w-12 h-12 text-primary" />
-          </div>
-          <CardTitle className="mb-2 text-2xl font-bold">Upload audience data</CardTitle>
-          <CardDescription className="mb-10 max-w-sm text-base leading-relaxed">
-            Prepare a CSV with customer info like name, phone, and specific placeholders for your video.
-          </CardDescription>
-          <div className="flex flex-col items-center gap-3 w-full max-w-xs mx-auto">
-            <Label className="cursor-pointer bg-primary text-primary-foreground hover:bg-primary/95 h-14 w-full flex items-center justify-center rounded-2xl font-black shadow-lg shadow-primary/20 transition-all active:scale-95 group-hover:translate-y-[-2px] whitespace-nowrap">
-              {file ? "Change CSV File" : "Select CSV File"}
-              <input type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
-            </Label>
-            <Button variant="outline" className="h-14 w-full border-2 rounded-2xl font-bold" asChild>
-              <a href={SAMPLE_BULK_CSV_URL} download="sample.csv">
-                Download Sample
-              </a>
-            </Button>
-          </div>
-          {file && (
-            <div className="mt-4 flex items-center gap-2 text-green-600 font-bold bg-green-500/5 px-4 py-2 rounded-full border border-green-500/10">
-               <CheckCircle2 className="w-4 h-4" /> {file.name}
+      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className={cn("grid gap-6", isFromVideo ? "grid-cols-1 lg:grid-cols-12" : "grid-cols-1")}>
+          {isVideoLoading && (
+            <div className="lg:col-span-7">
+              <Card className="h-full border-2 border-primary/20 shadow-xl overflow-hidden bg-card/50 flex flex-col">
+                <div className="aspect-video bg-muted animate-pulse flex items-center justify-center">
+                  <LoaderCircle className="w-8 h-8 text-primary animate-spin" />
+                </div>
+                <div className="p-6 space-y-4">
+                  <div className="h-6 w-2/3 bg-muted animate-pulse rounded" />
+                  <div className="h-4 w-1/3 bg-muted animate-pulse rounded" />
+                </div>
+              </Card>
             </div>
           )}
+
+          {refVideo && (
+
+            <div className="lg:col-span-7">
+              <Card className="h-full overflow-hidden border-2 border-primary/20 shadow-xl flex flex-col group bg-card/50 backdrop-blur-sm">
+                <div className="aspect-video bg-black relative overflow-hidden">
+                  {refVideo.video_url && <video src={refVideo.video_url} className="w-full h-full object-cover" controls />}
+                  {!refVideo.video_url && <div className="w-full h-full flex items-center justify-center text-white/50 text-xs text-center p-4">Reference video ready - No preview available</div>}
+                  <div className="absolute top-4 left-4 z-10">
+                    <div className="bg-black/60 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest text-white border border-white/20 flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                      Reference Video
+                    </div>
+                  </div>
+                </div>
+                <div className="p-6 flex-1 flex flex-col">
+                  <div className="mb-4">
+                    <h4 className="font-bold text-xl leading-tight mb-2 text-foreground group-hover:text-primary transition-colors line-clamp-2">{refVideo.title || "Bulk Send Template"}</h4>
+                    <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-widest">
+                      <Video className="w-3.5 h-3.5" /> {engine === "avatar" ? "AI Avatar" : "Text to Video"}
+                    </div>
+                  </div>
+
+                  <div className="mt-auto pt-6 border-t border-border/50 flex flex-wrap items-center gap-2">
+                    <div className="px-3 py-1 bg-secondary text-secondary-foreground text-[10px] uppercase font-black tracking-widest rounded-lg border border-border">
+                      Language: {selectedLanguage}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          )}
+
+          <div className={cn("flex flex-col items-center justify-center p-12 text-center border-2 border-dashed rounded-[2rem] bg-secondary/5 group hover:border-primary/40 transition-all duration-500 hover:bg-secondary/10", isFromVideo ? "lg:col-span-5" : "w-full")}>
+            <div className="w-24 h-24 rounded-3xl bg-primary/10 flex items-center justify-center mb-8 group-hover:scale-110 group-hover:rotate-3 transition-all duration-500 shadow-inner">
+              <FileSpreadsheet className="w-12 h-12 text-primary" />
+            </div>
+            <CardTitle className="mb-2 text-2xl font-bold">Upload audience data</CardTitle>
+            <CardDescription className="mb-10 max-w-sm text-base leading-relaxed">
+              Prepare a CSV with customer info like name, phone, and specific placeholders for your video.
+            </CardDescription>
+            <div className="flex flex-col items-center gap-3 w-full max-w-xs mx-auto">
+              <Label className="cursor-pointer bg-primary text-primary-foreground hover:bg-primary/95 h-14 w-full flex items-center justify-center rounded-2xl font-black shadow-lg shadow-primary/20 transition-all active:scale-95 group-hover:translate-y-[-2px] whitespace-nowrap">
+                {file ? "Change CSV File" : "Select CSV File"}
+                <input type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
+              </Label>
+              <Button variant="outline" className="h-14 w-full border-2 rounded-2xl font-bold" asChild>
+                <a href={SAMPLE_BULK_CSV_URL} download="sample.csv">
+                  Download Sample
+                </a>
+              </Button>
+            </div>
+            {file && (
+              <div className="mt-4 flex items-center gap-2 text-green-600 font-bold bg-green-500/5 px-4 py-2 rounded-full border border-green-500/10">
+                <CheckCircle2 className="w-4 h-4" /> {file.name}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex justify-between items-center bg-card/40 backdrop-blur-sm p-6 rounded-3xl border border-border mt-8">
+          <Button variant="ghost" onClick={() => setCurrentStep(isFromVideo ? "assets" : "assets")} className="rounded-2xl font-bold h-12 px-6" disabled={isFromVideo}>
+            <ArrowLeft className="mr-2 w-4 h-4" /> {isFromVideo ? "Reference Video Context" : "Back to Assets"}
+          </Button>
+          <Button
+            size="lg"
+            disabled={!file}
+            onClick={() => setCurrentStep("mapping")}
+            className="rounded-2xl font-black h-12 px-10 shadow-lg shadow-primary/20 transition-all active:scale-95 bg-primary hover:bg-primary/90"
+          >
+            Continue to Mapping <ChevronRight className="ml-2 w-4 h-4" />
+          </Button>
         </div>
       </div>
-
-      <div className="flex justify-between items-center bg-card/40 backdrop-blur-sm p-6 rounded-3xl border border-border mt-8">
-        <Button variant="ghost" onClick={() => setCurrentStep(isFromVideo ? "assets" : "assets")} className="rounded-2xl font-bold h-12 px-6" disabled={isFromVideo}>
-          <ArrowLeft className="mr-2 w-4 h-4" /> {isFromVideo ? "Reference Video Context" : "Back to Assets"}
-        </Button>
-        <Button 
-          size="lg" 
-          disabled={!file}
-          onClick={() => setCurrentStep("mapping")} 
-          className="rounded-2xl font-black h-12 px-10 shadow-lg shadow-primary/20 transition-all active:scale-95 bg-primary hover:bg-primary/90"
-        >
-          Continue to Mapping <ChevronRight className="ml-2 w-4 h-4" />
-        </Button>
-      </div>
-    </div>
     );
   };
 
@@ -1117,7 +1116,7 @@ export default function BulkSend() {
                 </div>
                 <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
                 <div className="flex-1">
-                  <select 
+                  <select
                     className="w-full bg-background border-2 rounded-lg p-2 text-sm focus:ring-2 focus:ring-primary focus:outline-none transition-all"
                     value={mapping[sysVar] || ""}
                     onChange={(e) => setMapping(prev => ({ ...prev, [sysVar]: e.target.value }))}
@@ -1140,29 +1139,29 @@ export default function BulkSend() {
           </div>
 
           <div className="flex flex-col gap-6">
-             <div className="space-y-2">
-               <Label className="text-[10px] uppercase font-bold text-muted-foreground text-left block">Select Template</Label>
-               <select 
-               className="w-full bg-background border-2 rounded-xl h-11 px-4 text-sm focus:ring-2 focus:ring-primary focus:outline-none transition-all font-bold"
+            <div className="space-y-2">
+              <Label className="text-[10px] uppercase font-bold text-muted-foreground text-left block">Select Template</Label>
+              <select
+                className="w-full bg-background border-2 rounded-xl h-11 px-4 text-sm focus:ring-2 focus:ring-primary focus:outline-none transition-all font-bold"
                 value={selectedMsgTemplate}
                 onChange={(e) => handleTemplateSelect(e.target.value)}
-               >
-                 {CAMPAIGN_STRATEGIES.map((tmpl: any) => (
-                   <option key={tmpl.id} value={tmpl.id}>{TEMPLATE_DISPLAY_NAME_BY_ID[tmpl.id] ?? tmpl.name}</option>
-                 ))}
-               </select>
-             </div>
+              >
+                {CAMPAIGN_STRATEGIES.map((tmpl: any) => (
+                  <option key={tmpl.id} value={tmpl.id}>{TEMPLATE_DISPLAY_NAME_BY_ID[tmpl.id] ?? tmpl.name}</option>
+                ))}
+              </select>
+            </div>
 
-             <div className="flex flex-col items-center">
-                <PhoneMockup message={whatsappTemplate} />
-             </div>
+            <div className="flex flex-col items-center">
+              <PhoneMockup message={whatsappTemplate} />
+            </div>
           </div>
 
           <div className="space-y-3 mt-6">
             <div className="flex flex-wrap gap-2">
               <span className="text-[10px] text-muted-foreground w-full text-left uppercase font-black tracking-tighter">Insert Variable Tag:</span>
               {["name", "video_url", "loan_amount", "lan", "client_name"].map(v => (
-                <button 
+                <button
                   key={v}
                   onClick={() => insertVariable(v)}
                   className="text-[10px] font-bold bg-secondary hover:bg-primary hover:text-white px-2 py-1 rounded-lg border transition-all uppercase"
@@ -1195,8 +1194,8 @@ export default function BulkSend() {
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
         <div className="lg:col-span-3">
           <div className="flex items-center justify-between mb-4">
-             <Label className="text-lg font-bold">Video Preview</Label>
-             <span className="text-[10px] px-2 py-1 rounded bg-red-100 text-red-600 font-black animate-pulse uppercase">Live Simulation</span>
+            <Label className="text-lg font-bold">Video Preview</Label>
+            <span className="text-[10px] px-2 py-1 rounded bg-red-100 text-red-600 font-black animate-pulse uppercase">Live Simulation</span>
           </div>
           <Card className="w-full bg-black border-none overflow-hidden relative shadow-2xl">
             <div className="aspect-video bg-slate-900 flex items-center justify-center relative">
@@ -1212,9 +1211,9 @@ export default function BulkSend() {
               </div>
               <Play className="w-12 h-12 text-white/20 animate-pulse" />
               <div className="absolute top-8 left-8">
-                 <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center">
-                    <Sparkles className="w-5 h-5 text-primary" />
-                 </div>
+                <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center">
+                  <Sparkles className="w-5 h-5 text-primary" />
+                </div>
               </div>
             </div>
           </Card>
@@ -1223,23 +1222,23 @@ export default function BulkSend() {
         <div className="lg:col-span-2 space-y-4">
           <Label className="text-lg font-bold">WhatsApp Preview</Label>
           <div className="bg-emerald-50 dark:bg-emerald-950/20 p-6 rounded-3xl border border-emerald-100 dark:border-emerald-900/40 relative min-h-[300px] flex flex-col shadow-sm">
-             <div className="flex-1 font-sans text-sm text-emerald-900 dark:text-emerald-100 leading-relaxed whitespace-pre-wrap">
-               {whatsappTemplate.replace('{{name}}', '[Customer Name]').replace('{{lan}}', mapping['lan'] || '[LAN]').replace('{{loan_amount}}', mapping['loan_amount'] || '[Amount]').replace('{{video_url}}', 'https://vishwarupe.ai/v/example')}
-             </div>
-             <div className="mt-6 pt-4 border-t border-emerald-200/50 dark:border-emerald-800/50">
-                <div className="flex items-center gap-2 text-[10px] text-emerald-600/70 font-bold uppercase tracking-widest">
-                   <Smartphone className="w-3 h-3" /> Sending to {mapping['phone'] || 'Mapped Column'}
-                </div>
-             </div>
-             <div className="absolute -top-3 -left-3">
-                <div className="bg-emerald-500 text-white p-2 rounded-full shadow-lg">
-                   <MessageSquare className="w-4 h-4" />
-                </div>
-             </div>
+            <div className="flex-1 font-sans text-sm text-emerald-900 dark:text-emerald-100 leading-relaxed whitespace-pre-wrap">
+              {whatsappTemplate.replace('{{name}}', '[Customer Name]').replace('{{lan}}', mapping['lan'] || '[LAN]').replace('{{loan_amount}}', mapping['loan_amount'] || '[Amount]').replace('{{video_url}}', 'https://vishwarupe.ai/v/example')}
+            </div>
+            <div className="mt-6 pt-4 border-t border-emerald-200/50 dark:border-emerald-800/50">
+              <div className="flex items-center gap-2 text-[10px] text-emerald-600/70 font-bold uppercase tracking-widest">
+                <Smartphone className="w-3 h-3" /> Sending to {mapping['phone'] || 'Mapped Column'}
+              </div>
+            </div>
+            <div className="absolute -top-3 -left-3">
+              <div className="bg-emerald-500 text-white p-2 rounded-full shadow-lg">
+                <MessageSquare className="w-4 h-4" />
+              </div>
+            </div>
           </div>
           <div className="p-3 bg-secondary/30 rounded-xl text-[11px] text-muted-foreground italic flex items-start gap-2">
-             <Info className="w-4 h-4 mt-0.5 shrink-0" />
-             This preview uses mapping data to simulate the final look. Final videos will vary based on exact CSV values.
+            <Info className="w-4 h-4 mt-0.5 shrink-0" />
+            This preview uses mapping data to simulate the final look. Final videos will vary based on exact CSV values.
           </div>
         </div>
       </div>
@@ -1259,209 +1258,209 @@ export default function BulkSend() {
     const shouldUseCampaignSend = mode === "universal" || isFromVideo;
 
     return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <section className="rounded-[2rem] border border-border/70 bg-gradient-to-br from-card via-card to-primary/[0.04] p-8 shadow-xl">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="space-y-3">
-            <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-3 py-1 text-[10px] font-black uppercase tracking-[0.28em] text-primary">
-              <FileCheck className="w-3.5 h-3.5" />
-              Final Lead Review
+      <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <section className="rounded-[2rem] border border-border/70 bg-gradient-to-br from-card via-card to-primary/[0.04] p-8 shadow-xl">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-3">
+              <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-3 py-1 text-[10px] font-black uppercase tracking-[0.28em] text-primary">
+                <FileCheck className="w-3.5 h-3.5" />
+                Final Lead Review
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-3xl font-black tracking-tight text-foreground">CSV review before launch</h2>
+                <p className="max-w-2xl text-sm leading-7 text-muted-foreground">
+                  Verify the first {CSV_PREVIEW_ROW_LIMIT} leads and the video link preview for each row before starting the campaign.
+                </p>
+              </div>
             </div>
-            <div className="space-y-2">
-              <h2 className="text-3xl font-black tracking-tight text-foreground">CSV review before launch</h2>
-              <p className="max-w-2xl text-sm leading-7 text-muted-foreground">
-                Verify the first {CSV_PREVIEW_ROW_LIMIT} leads and the video link preview for each row before starting the campaign.
+            <div className="inline-flex rounded-full border border-primary/20 bg-primary/10 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-primary">
+              Pending Launch
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border-2 overflow-hidden shadow-xl bg-card">
+          <div className="p-6 bg-primary/5 border-b flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center">
+                <Sparkles className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <h3 className="font-bold">Campaign Ready</h3>
+                <p className="text-xs text-muted-foreground">Review the summary below before firing.</p>
+              </div>
+            </div>
+            <div className="px-3 py-1 rounded-full bg-primary text-white text-[10px] font-bold uppercase tracking-widest">
+              Pending
+            </div>
+          </div>
+          <div className="grid gap-4 p-6 md:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-2xl border border-border/70 bg-background/80 p-4">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground font-bold">Generation Engine</Label>
+              <div className="mt-2 font-bold flex items-center gap-2">
+                {engine === "avatar" ? (
+                  <><Users className="w-4 h-4 text-purple-500" /> AI Presenter</>
+                ) : (
+                  <><Video className="w-4 h-4 text-blue-500" /> Dynamic Creative</>
+                )}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-background/80 p-4">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground font-bold">Total Recipients</Label>
+              <div className="mt-2 font-bold flex items-center gap-2 text-primary">
+                <FileSpreadsheet className="w-4 h-4 text-green-500" /> {csvData.length} Rows Detected
+              </div>
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-background/80 p-4">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground font-bold">Campaign Mode</Label>
+              <div className="mt-2 font-bold flex items-center gap-2 capitalize">
+                <Play className="w-4 h-4 text-primary" /> {mode}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-background/80 p-4">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground font-bold">Primary Language</Label>
+              <div className="mt-2 font-bold flex items-center gap-2">
+                <Info className="w-4 h-4 text-blue-500" /> {selectedLanguage}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {csvData.length > 0 ? (
+          <Card className="overflow-hidden border-2 shadow-xl bg-card/80 backdrop-blur-sm">
+            <CardHeader className="border-b bg-primary/5">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="space-y-1">
+                  <CardTitle className="text-2xl font-black tracking-tight">Preview your first leads</CardTitle>
+                  <CardDescription>
+                    Showing the first {Math.min(csvData.length, CSV_PREVIEW_ROW_LIMIT)} rows with prioritized lead columns
+                    and a video link preview for each lead.
+                  </CardDescription>
+                </div>
+                <div className="inline-flex rounded-full border border-border/70 bg-background/80 px-3 py-1 text-[11px] font-bold text-muted-foreground">
+                  {csvData.length > CSV_PREVIEW_ROW_LIMIT
+                    ? `${csvData.length - CSV_PREVIEW_ROW_LIMIT} more leads follow the same mapping logic`
+                    : "All uploaded leads are shown below"}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="overflow-x-auto p-0">
+              <Table className="min-w-[1200px]">
+                <TableHeader className="bg-secondary/10">
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="w-14 text-[10px] font-black uppercase tracking-widest text-muted-foreground">#</TableHead>
+                    {orderPreviewHeaders(csvHeaders, mapping).map((header) => (
+                      <TableHead
+                        key={header}
+                        className="min-w-[160px] text-[10px] font-black uppercase tracking-widest text-muted-foreground"
+                      >
+                        {header}
+                      </TableHead>
+                    ))}
+                    <TableHead className="sticky right-0 z-20 min-w-[320px] border-l bg-secondary/95 text-[10px] font-black uppercase tracking-widest text-primary shadow-[-16px_0_20px_-18px_rgba(15,23,42,0.35)] backdrop-blur">
+                      Video Link Preview
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {csvData.slice(0, CSV_PREVIEW_ROW_LIMIT).map((row, index) => {
+                    const previewLink = buildVideoLinkPreview(
+                      row,
+                      index,
+                      csvHeaders,
+                      mapping,
+                      mode,
+                      referenceVideoQuery.data?.video_url,
+                    );
+                    const previewLinkLabel = getVideoLinkPreviewLabel(
+                      row,
+                      csvHeaders,
+                      mapping,
+                      mode,
+                      referenceVideoQuery.data?.video_url,
+                    );
+
+                    return (
+                      <TableRow key={`launch-preview-${index}`} className="align-top">
+                        <TableCell className="font-black text-primary">{index + 1}</TableCell>
+                        {orderPreviewHeaders(csvHeaders, mapping).map((header) => {
+                          const cellValue =
+                            typeof row[header] === "string"
+                              ? row[header].trim()
+                              : row[header] == null
+                                ? ""
+                                : String(row[header]);
+
+                          return (
+                            <TableCell key={`${header}-${index}`} className="min-w-[160px] max-w-[180px]">
+                              <div className="truncate text-sm text-foreground" title={cellValue || "-"}>
+                                {cellValue || <span className="text-muted-foreground">-</span>}
+                              </div>
+                            </TableCell>
+                          );
+                        })}
+                        <TableCell className="sticky right-0 z-10 min-w-[320px] border-l bg-background/95 shadow-[-16px_0_20px_-18px_rgba(15,23,42,0.22)] backdrop-blur">
+                          <div className="space-y-1">
+                            <div className="break-all font-mono text-xs text-foreground">{previewLink}</div>
+                            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                              {previewLinkLabel}
+                            </div>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="border-2 shadow-sm">
+            <CardContent className="p-8 text-center text-muted-foreground">
+              No CSV data available yet. Upload and map a CSV before launching the campaign.
+            </CardContent>
+          </Card>
+        )}
+
+        <section className="rounded-3xl border border-primary/15 bg-primary/[0.04] p-5">
+          <div className="flex items-start gap-3">
+            <Info className="w-5 h-5 shrink-0 text-primary mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-sm font-bold text-foreground">Video link guidance</p>
+              <p className="text-sm leading-6 text-muted-foreground">
+                {shouldUseCampaignSend && referenceVideoQuery.data?.video_url
+                  ? "All recipients will receive the same video link."
+                  : shouldUseCampaignSend
+                    ? "A shared preview link is shown here. The same video link will be used for every recipient."
+                    : "Preview links are for review only. Final video URLs are created after generation."}
               </p>
             </div>
           </div>
-          <div className="inline-flex rounded-full border border-primary/20 bg-primary/10 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-primary">
-            Pending Launch
-          </div>
+        </section>
+
+        <div className="bg-amber-500/5 border border-amber-500/20 p-4 rounded-xl flex items-start gap-4">
+          <AlertCircle className="w-6 h-6 text-amber-500 shrink-0" />
+          <p className="text-sm text-amber-700/80">
+            <strong>Important:</strong> {shouldUseCampaignSend
+              ? "Launching this campaign will push the selected video to the mapped WhatsApp numbers immediately."
+              : "Launching this campaign will immediately queue all jobs to AWS SQS. Avatar videos can take 2-10 mins each to process depending on length. Text renders are usually faster (~45s each)."}
+          </p>
         </div>
-      </section>
 
-      <section className="rounded-2xl border-2 overflow-hidden shadow-xl bg-card">
-        <div className="p-6 bg-primary/5 border-b flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-green-600" />
-            </div>
-            <div>
-              <h3 className="font-bold">Campaign Ready</h3>
-              <p className="text-xs text-muted-foreground">Review the summary below before firing.</p>
-            </div>
-          </div>
-          <div className="px-3 py-1 rounded-full bg-primary text-white text-[10px] font-bold uppercase tracking-widest">
-            Pending
-          </div>
+        <div className="flex justify-between">
+          <Button variant="ghost" onClick={() => setCurrentStep("mapping")}>
+            <ArrowLeft className="mr-2 w-4 h-4" /> Back to Mapping
+          </Button>
+          <Button size="lg" disabled={isLaunching || csvData.length === 0} className="bg-green-600 hover:bg-green-700 text-white px-12 font-black shadow-lg shadow-green-200" onClick={handleLaunchCampaign}>
+            {isLaunching ? (
+              <><LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> Sending...</>
+            ) : (
+              <>Launch Full Campaign <Sparkles className="ml-2 w-4 h-4" /></>
+            )}
+          </Button>
+
         </div>
-        <div className="grid gap-4 p-6 md:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-2xl border border-border/70 bg-background/80 p-4">
-            <Label className="text-xs uppercase tracking-wider text-muted-foreground font-bold">Generation Engine</Label>
-            <div className="mt-2 font-bold flex items-center gap-2">
-              {engine === "avatar" ? (
-                <><Users className="w-4 h-4 text-purple-500" /> AI Presenter</>
-              ) : (
-                <><Video className="w-4 h-4 text-blue-500" /> Dynamic Creative</>
-              )}
-            </div>
-          </div>
-          <div className="rounded-2xl border border-border/70 bg-background/80 p-4">
-            <Label className="text-xs uppercase tracking-wider text-muted-foreground font-bold">Total Recipients</Label>
-            <div className="mt-2 font-bold flex items-center gap-2 text-primary">
-              <FileSpreadsheet className="w-4 h-4 text-green-500" /> {csvData.length} Rows Detected
-            </div>
-          </div>
-          <div className="rounded-2xl border border-border/70 bg-background/80 p-4">
-            <Label className="text-xs uppercase tracking-wider text-muted-foreground font-bold">Campaign Mode</Label>
-            <div className="mt-2 font-bold flex items-center gap-2 capitalize">
-              <Play className="w-4 h-4 text-primary" /> {mode}
-            </div>
-          </div>
-          <div className="rounded-2xl border border-border/70 bg-background/80 p-4">
-            <Label className="text-xs uppercase tracking-wider text-muted-foreground font-bold">Primary Language</Label>
-            <div className="mt-2 font-bold flex items-center gap-2">
-              <Info className="w-4 h-4 text-blue-500" /> {selectedLanguage}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {csvData.length > 0 ? (
-        <Card className="overflow-hidden border-2 shadow-xl bg-card/80 backdrop-blur-sm">
-          <CardHeader className="border-b bg-primary/5">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="space-y-1">
-                <CardTitle className="text-2xl font-black tracking-tight">Preview your first leads</CardTitle>
-                <CardDescription>
-                  Showing the first {Math.min(csvData.length, CSV_PREVIEW_ROW_LIMIT)} rows with prioritized lead columns
-                  and a video link preview for each lead.
-                </CardDescription>
-              </div>
-              <div className="inline-flex rounded-full border border-border/70 bg-background/80 px-3 py-1 text-[11px] font-bold text-muted-foreground">
-                {csvData.length > CSV_PREVIEW_ROW_LIMIT
-                  ? `${csvData.length - CSV_PREVIEW_ROW_LIMIT} more leads follow the same mapping logic`
-                  : "All uploaded leads are shown below"}
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="overflow-x-auto p-0">
-            <Table className="min-w-[1200px]">
-              <TableHeader className="bg-secondary/10">
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-14 text-[10px] font-black uppercase tracking-widest text-muted-foreground">#</TableHead>
-                  {orderPreviewHeaders(csvHeaders, mapping).map((header) => (
-                    <TableHead
-                      key={header}
-                      className="min-w-[160px] text-[10px] font-black uppercase tracking-widest text-muted-foreground"
-                    >
-                      {header}
-                    </TableHead>
-                  ))}
-                  <TableHead className="sticky right-0 z-20 min-w-[320px] border-l bg-secondary/95 text-[10px] font-black uppercase tracking-widest text-primary shadow-[-16px_0_20px_-18px_rgba(15,23,42,0.35)] backdrop-blur">
-                    Video Link Preview
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {csvData.slice(0, CSV_PREVIEW_ROW_LIMIT).map((row, index) => {
-                  const previewLink = buildVideoLinkPreview(
-                    row,
-                    index,
-                    csvHeaders,
-                    mapping,
-                    mode,
-                    referenceVideoQuery.data?.video_url,
-                  );
-                  const previewLinkLabel = getVideoLinkPreviewLabel(
-                    row,
-                    csvHeaders,
-                    mapping,
-                    mode,
-                    referenceVideoQuery.data?.video_url,
-                  );
-
-                  return (
-                    <TableRow key={`launch-preview-${index}`} className="align-top">
-                      <TableCell className="font-black text-primary">{index + 1}</TableCell>
-                      {orderPreviewHeaders(csvHeaders, mapping).map((header) => {
-                        const cellValue =
-                          typeof row[header] === "string"
-                            ? row[header].trim()
-                            : row[header] == null
-                              ? ""
-                              : String(row[header]);
-
-                        return (
-                          <TableCell key={`${header}-${index}`} className="min-w-[160px] max-w-[180px]">
-                            <div className="truncate text-sm text-foreground" title={cellValue || "-"}>
-                              {cellValue || <span className="text-muted-foreground">-</span>}
-                            </div>
-                          </TableCell>
-                        );
-                      })}
-                      <TableCell className="sticky right-0 z-10 min-w-[320px] border-l bg-background/95 shadow-[-16px_0_20px_-18px_rgba(15,23,42,0.22)] backdrop-blur">
-                        <div className="space-y-1">
-                          <div className="break-all font-mono text-xs text-foreground">{previewLink}</div>
-                          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                            {previewLinkLabel}
-                          </div>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card className="border-2 shadow-sm">
-          <CardContent className="p-8 text-center text-muted-foreground">
-            No CSV data available yet. Upload and map a CSV before launching the campaign.
-          </CardContent>
-        </Card>
-      )}
-
-      <section className="rounded-3xl border border-primary/15 bg-primary/[0.04] p-5">
-        <div className="flex items-start gap-3">
-          <Info className="w-5 h-5 shrink-0 text-primary mt-0.5" />
-          <div className="space-y-1">
-            <p className="text-sm font-bold text-foreground">Video link guidance</p>
-            <p className="text-sm leading-6 text-muted-foreground">
-              {shouldUseCampaignSend && referenceVideoQuery.data?.video_url
-                ? "All recipients will receive the same video link."
-                : shouldUseCampaignSend
-                  ? "A shared preview link is shown here. The same video link will be used for every recipient."
-                  : "Preview links are for review only. Final video URLs are created after generation."}
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <div className="bg-amber-500/5 border border-amber-500/20 p-4 rounded-xl flex items-start gap-4">
-        <AlertCircle className="w-6 h-6 text-amber-500 shrink-0" />
-        <p className="text-sm text-amber-700/80">
-          <strong>Important:</strong> {shouldUseCampaignSend
-            ? "Launching this campaign will push the selected video to the mapped WhatsApp numbers immediately."
-            : "Launching this campaign will immediately queue all jobs to AWS SQS. Avatar videos can take 2-10 mins each to process depending on length. Text renders are usually faster (~45s each)."}
-        </p>
       </div>
-
-      <div className="flex justify-between">
-        <Button variant="ghost" onClick={() => setCurrentStep("mapping")}>
-          <ArrowLeft className="mr-2 w-4 h-4" /> Back to Mapping
-        </Button>
-        <Button size="lg" disabled={isLaunching || csvData.length === 0} className="bg-green-600 hover:bg-green-700 text-white px-12 font-black shadow-lg shadow-green-200" onClick={handleLaunchCampaign}>
-          {isLaunching ? (
-            <><LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> Sending...</>
-          ) : (
-            <>Launch Full Campaign <Sparkles className="ml-2 w-4 h-4" /></>
-          )}
-        </Button>
-
-      </div>
-    </div>
     );
   };
 

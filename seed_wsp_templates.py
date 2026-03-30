@@ -33,7 +33,6 @@ TEMPLATES = [
     },
     {
         "id": "test2",
-        "templateId": "897226290031810",
         "name": "test2",
         "desc": "Account Status Update Strategy",
         "color": "emerald",
