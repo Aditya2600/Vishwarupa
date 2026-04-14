@@ -55,20 +55,9 @@ const PRIORITY_PREVIEW_COLUMNS = [
 
 const DEFAULT_CAMPAIGN_STRATEGIES = [
   {
-    id: "cpstest",
-    name: "Infobip CPSTest",
-    desc: "Official WhatsApp template for debt recovery.",
-    color: "indigo",
-    whatsapp: "This is regarding loan due. Kindly follow the video for more information.",
-    scriptPersonalized:
-      "Hello {{customer_name}}. This is regarding your outstanding loan due with CredResolve. Kindly follow the information in this video for more details and repayment options.",
-    scriptUniversal:
-      "This is regarding your outstanding loan due. Kindly follow the information in this video for more details and repayment options.",
-  },
-  {
-    id: "test3",
-    templateId: "34899727692974205",
-    name: "test3",
+    id: "wsp_test2",
+    templateId: "1438951627977491",
+    name: "wsp_test2",
     desc: "Account Status Update Strategy",
     color: "emerald",
     whatsapp:
@@ -81,8 +70,7 @@ const DEFAULT_CAMPAIGN_STRATEGIES = [
 ] as const;
 
 const TEMPLATE_DISPLAY_NAME_BY_ID: Record<string, string> = {
-  cpstest: "Loan Recall Strategy",
-  test3: "Account Status Update",
+  wsp_test2: "Account Status Update",
 };
 
 function normalizeCsvKey(value: string): string {
@@ -287,13 +275,13 @@ export default function BulkSend() {
 
   const [selectedLanguage, setSelectedLanguage] = useState<string>("en-US");
   const [whatsappTemplate, setWhatsappTemplate] = useState<string>(
-    "This is regarding loan due. Kindly follow the video for more information."
+    "Hello,\n\nAn update regarding your account has been shared by CredResolve.\nKindly watch the video and take the necessary action.\n\nThank you."
   );
   const [videoScript, setVideoScript] = useState<string>(
-    "Hello {{customer_name}}. This is regarding your outstanding loan due with CredResolve. Kindly follow the information in this video for more details and repayment options."
+    "Hello {{customer_name}}. An update regarding your account has been shared by CredResolve. Kindly watch the information in this video and take the necessary action. Thank you."
   );
   const [mapping, setMapping] = useState<Record<string, string>>({});
-  const [selectedMsgTemplate, setSelectedMsgTemplate] = useState<string>("cpstest");
+  const [selectedMsgTemplate, setSelectedMsgTemplate] = useState<string>("wsp_test2");
   const [playingVoiceId, setPlayingVoiceId] = useState("");
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -463,7 +451,7 @@ export default function BulkSend() {
           description: `Bulk send campaign for ${TEMPLATE_DISPLAY_NAME_BY_ID[selectedMsgTemplate] || strategy?.name || selectedMsgTemplate} in ${selectedLanguage}.`,
           startDate: new Date(now + 60_000).toISOString(),
           endDate: new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          templateId: strategy?.id || selectedMsgTemplate || "cpstest",
+          templateId: strategy?.id || selectedMsgTemplate || "wsp_test2",
           communicationType: "WHATSAPP",
           campaignType: "WHATSAPP",
         };

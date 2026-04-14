@@ -16,25 +16,9 @@ col = db["whatsapp_templates"]
 
 TEMPLATES = [
     {
-        "id": "cpstest",
-        "name": "Infobip CPSTest",
-        "desc": "Official WhatsApp template for debt recovery.",
-        "color": "indigo",
-        "whatsapp": "This is regarding loan due. Kindly follow the video for more information.",
-        "scriptPersonalized": (
-            "Hello {{customer_name}}. This is regarding your outstanding loan due with "
-            "CredResolve. Kindly follow the information in this video for more details "
-            "and repayment options."
-        ),
-        "scriptUniversal": (
-            "This is regarding your outstanding loan due. Kindly follow the information "
-            "in this video for more details and repayment options."
-        ),
-    },
-    {
-        "id": "test3",
-        "templateId": "34899727692974205",
-        "name": "test3",
+        "id": "wsp_test2",
+        "templateId": "1438951627977491",
+        "name": "wsp_test2",
         "desc": "Account Status Update Strategy",
         "color": "emerald",
         "whatsapp": (
@@ -55,12 +39,22 @@ TEMPLATES = [
     },
 ]
 
+LEGACY_TEMPLATE_IDS = ("cpstest", "test2", "test3")
+LEGACY_VENDOR_TEMPLATE_IDS = ("34899727692974205", "897226290031810")
 
 
 async def seed():
-    # Delete the old test2 template
-    await col.delete_one({"id": "test2"})
-    print("  DELETE 'test2' if it exists")
+    delete_result = await col.delete_many(
+        {
+            "$or": [
+                {"id": {"$in": list(LEGACY_TEMPLATE_IDS)}},
+                {"name": {"$in": list(LEGACY_TEMPLATE_IDS)}},
+                {"templateId": {"$in": list(LEGACY_VENDOR_TEMPLATE_IDS)}},
+                {"template_id": {"$in": list(LEGACY_VENDOR_TEMPLATE_IDS)}},
+            ]
+        }
+    )
+    print(f"  DELETE legacy templates: {delete_result.deleted_count} removed")
     inserted = 0
     updated = 0
     for tmpl in TEMPLATES:

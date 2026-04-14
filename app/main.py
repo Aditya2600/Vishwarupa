@@ -1532,15 +1532,16 @@ async def get_whatsapp_templates():
             t["_id"] = str(t["_id"])
         
         if not templates:
-            # Fallback to the official CPSTest if DB is empty
+            # Fallback to the current WhatsApp campaign template if DB is empty
             return [{
-                "id": "cpstest",
-                "name": "Infobip CPSTest",
-                "desc": "Official WhatsApp template for debt recovery.",
-                "color": "indigo",
-                "whatsapp": "This is regarding loan due. Kindly follow the video for more information.",
-                "scriptPersonalized": "Hello {{customer_name}}. This is regarding your outstanding loan due with CredResolve. Kindly follow the information in this video for more details and repayment options.",
-                "scriptUniversal": "This is regarding your outstanding loan due. Kindly follow the information in this video for more details and repayment options."
+                "id": "wsp_test2",
+                "templateId": "1438951627977491",
+                "name": "wsp_test2",
+                "desc": "Account Status Update Strategy",
+                "color": "emerald",
+                "whatsapp": "Hello,\n\nAn update regarding your account has been shared by CredResolve.\nKindly watch the video and take the necessary action.\n\nThank you.",
+                "scriptPersonalized": "Hello {{customer_name}}. An update regarding your account has been shared by CredResolve. Kindly watch the information in this video and take the necessary action. Thank you.",
+                "scriptUniversal": "Hello. An update regarding your account has been shared by CredResolve. Kindly watch the information in this video and take the necessary action. Thank you."
             }]
         return templates
     except Exception as e:
