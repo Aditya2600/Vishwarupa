@@ -12,6 +12,7 @@ from pathlib import Path
 from bson import ObjectId
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, Depends, Query, status, Body
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -483,6 +484,22 @@ def handle_timeout_error(request: Request, exc: TimeoutError) -> JSONResponse:
     return JSONResponse(status_code=504, content={'detail': detail})
 
 
+@app.exception_handler(RequestValidationError)
+async def handle_request_validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+    raw_body = await request.body()
+    body_preview = raw_body.decode("utf-8", errors="replace")[:2000] if raw_body else "<empty>"
+    logger.error(
+        "Request validation failed | method=%s | path=%s | query=%s | content_type=%s | body=%s | errors=%s",
+        request.method,
+        request.url.path,
+        request.url.query,
+        request.headers.get("content-type"),
+        body_preview,
+        exc.errors(),
+    )
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+
+
 @app.get('/health')
 def health() -> dict:
     return {'status': 'ok', 'output_dir': str(settings.output_dir.resolve())}
@@ -948,17 +965,27 @@ async def get_pdf_status(
 @app.post("/pdf/{pdf_id}/generate-audio")
 async def generate_pdf_audio(
     pdf_id: str,
-    data: dict = Body(...),
+    data: dict | None = Body(default=None),
     language: str = "Hindi",
     gender: str = "Female",
     kind: str = Query("summary", description="Type of audio to generate: 'summary' or 'next_actions'"),
     current_user: str = Depends(get_current_user)
 ):
     # Retrieve text from body (for live edits) or fallback to DB
-    edited_text = data.get("text")
+    edited_text = (data or {}).get("text")
+    logger.info(
+        "PDF audio request received | pdf_id=%s | kind=%s | language=%s | gender=%s | has_body=%s | has_edited_text=%s",
+        pdf_id,
+        kind,
+        language,
+        gender,
+        data is not None,
+        bool(edited_text),
+    )
     from app.database import pdf_collection
     pdf = await pdf_collection.find_one({"_id": ObjectId(pdf_id), "user_id": current_user})
     if not pdf:
+        logger.warning("PDF audio request failed | pdf_id=%s | reason=pdf_not_found", pdf_id)
         raise HTTPException(status_code=404, detail="PDF not found")
     # Determine which text to convert to audio
     kind = (kind or "summary").lower()
@@ -975,10 +1002,23 @@ async def generate_pdf_audio(
     text_to_convert = edited_text
     if not text_to_convert:
         if not pdf.get(text_key):
+            logger.warning(
+                "PDF audio request failed | pdf_id=%s | kind=%s | reason=missing_text | text_key=%s",
+                pdf_id,
+                kind,
+                text_key,
+            )
             raise HTTPException(status_code=400, detail=f"{text_key} not available. Summarize the document first.")
         text_to_convert = pdf[text_key]
 
     try:
+        logger.info(
+            "PDF audio generation starting | pdf_id=%s | kind=%s | prefix=%s | text_length=%s",
+            pdf_id,
+            kind,
+            prefix,
+            len(text_to_convert),
+        )
         audio_url = await audio_service.generate_audio(
             pdf_id=pdf_id,
             text=text_to_convert,
@@ -993,13 +1033,16 @@ async def generate_pdf_audio(
                 {"_id": ObjectId(pdf_id)},
                 {"$set": {text_key: edited_text, "updated_at": datetime.utcnow()}}
             )
-            
+
+        logger.info(
+            "PDF audio generation completed | pdf_id=%s | kind=%s | audio_url=%s",
+            pdf_id,
+            kind,
+            audio_url,
+        )
         return {"status": "completed", "audio_url": audio_url}
     except Exception as e:
-        logger.error(f"Audio Generation Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    except Exception as e:
-        logger.error(f"Audio Generation Error: {e}")
+        logger.exception("Audio Generation Error | pdf_id=%s | kind=%s", pdf_id, kind)
         raise HTTPException(status_code=500, detail=str(e))
 
 # Static serving for PDF audio fallback
@@ -1183,7 +1226,7 @@ async def _proxy_cpaas_request(method: str, path: str, payload: Any | None = Non
             payload_summary["firstLead"] = leads[0] if leads else None
             payload_summary.pop("leads", None)
 
-    url = f"{settings.cpaas_api_base_url.rstrip('/')}/{path.lstrip('/')}"
+    url = f"{settings.cpaas_api_root_url.rstrip('/')}/{path.lstrip('/')}"
     headers = {
         "Accept": "application/json",
         "API-AUTH-TOKEN": settings.cpaas_api_auth_token,
@@ -1193,8 +1236,9 @@ async def _proxy_cpaas_request(method: str, path: str, payload: Any | None = Non
         headers["Content-Type"] = "application/json"
 
     logger.info(
-        "CPAAS request | method=%s | path=%s | payload=%s",
+        "CPAAS request | method=%s | url=%s | path=%s | payload=%s",
         method,
+        url,
         path,
         json.dumps(payload_summary, default=str),
     )
@@ -1203,7 +1247,7 @@ async def _proxy_cpaas_request(method: str, path: str, payload: Any | None = Non
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.request(method, url, headers=headers, json=payload)
     except httpx.HTTPError as exc:
-        logger.exception("CPAAS transport failure | method=%s | path=%s", method, path)
+        logger.exception("CPAAS transport failure | method=%s | url=%s | path=%s", method, url, path)
         raise HTTPException(status_code=502, detail=f"Failed to reach CPAAS service: {exc}") from exc
 
     content_type = response.headers.get("content-type", "")
@@ -1225,8 +1269,9 @@ async def _proxy_cpaas_request(method: str, path: str, payload: Any | None = Non
         }
 
     logger.info(
-        "CPAAS response | method=%s | path=%s | status=%s | body=%s",
+        "CPAAS response | method=%s | url=%s | path=%s | status=%s | body=%s",
         method,
+        url,
         path,
         response.status_code,
         json.dumps(body, default=str)[:4000],
@@ -1254,15 +1299,75 @@ async def _resolve_cpaas_template_key(template_id: Any) -> str | None:
     )
 
     if not template_doc:
+        logger.warning(
+            "CPAAS template resolution fell back to raw template id | requested=%s",
+            raw_template_id,
+        )
         return raw_template_id
 
     resolved_template_key = str(
         template_doc.get("id")
         or template_doc.get("name")
+        or template_doc.get("templateId")
+        or template_doc.get("template_id")
+        or template_doc.get("vendorTemplateId")
+        or template_doc.get("vendor_template_id")
         or raw_template_id
     ).strip()
 
+    logger.info(
+        "CPAAS template resolution | requested=%s | resolved=%s | doc_id=%s | doc_name=%s | vendor_template_id=%s",
+        raw_template_id,
+        resolved_template_key,
+        template_doc.get("id"),
+        template_doc.get("name"),
+        template_doc.get("templateId")
+        or template_doc.get("template_id")
+        or template_doc.get("vendorTemplateId")
+        or template_doc.get("vendor_template_id"),
+    )
+
     return resolved_template_key or raw_template_id
+
+
+def _normalize_cpaas_lead_variables(payload: dict[str, Any]) -> dict[str, Any]:
+    upstream_payload = dict(payload)
+    raw_leads = upstream_payload.get("leads")
+    if not isinstance(raw_leads, list):
+        return upstream_payload
+
+    normalized_leads: list[dict[str, Any]] = []
+    for lead in raw_leads:
+        if not isinstance(lead, dict):
+            normalized_leads.append(lead)
+            continue
+
+        normalized_lead = dict(lead)
+        raw_variables = normalized_lead.get("variables")
+        if isinstance(raw_variables, list):
+            variables_map: dict[str, str] = {}
+            for item in raw_variables:
+                if not isinstance(item, dict):
+                    continue
+                key = str(item.get("key") or item.get("name") or "").strip()
+                if not key:
+                    continue
+                value = item.get("val")
+                if value is None:
+                    value = item.get("value")
+                variables_map[key] = "" if value is None else str(value)
+
+            logger.info(
+                "Normalized CPaaS lead variables from array to object | uniqueId=%s | keys=%s",
+                normalized_lead.get("uniqueId"),
+                sorted(variables_map.keys()),
+            )
+            normalized_lead["variables"] = variables_map
+
+        normalized_leads.append(normalized_lead)
+
+    upstream_payload["leads"] = normalized_leads
+    return upstream_payload
 
 
 @app.post('/cpaas/campaigns')
@@ -1278,7 +1383,8 @@ async def create_cpaas_campaign(payload: dict, current_user: str = Depends(get_c
 
 @app.post('/cpaas/campaigns/push-lead')
 async def push_cpaas_campaign_leads(payload: dict, current_user: str = Depends(get_current_user)):
-    return await _proxy_cpaas_request("POST", "/campaigns/push-lead", payload)
+    upstream_payload = _normalize_cpaas_lead_variables(payload)
+    return await _proxy_cpaas_request("POST", "/campaigns/push-lead", upstream_payload)
 
 
 @app.post('/cpaas/campaigns/{campaign_code}/status')

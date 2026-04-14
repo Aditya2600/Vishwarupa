@@ -1,6 +1,9 @@
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+DEFAULT_CPAAS_API_PREFIX = '/cpaas/api/v1'
 
 
 class Settings(BaseSettings):
@@ -82,6 +85,13 @@ class Settings(BaseSettings):
     def remotion_path(self) -> Path:
         path = Path(self.remotion_dir)
         return path if path.is_absolute() else self.project_root / path
+
+    @property
+    def cpaas_api_root_url(self) -> str:
+        raw = self.cpaas_api_base_url.strip()
+        parsed = urlsplit(raw)
+        normalized_path = parsed.path.rstrip('/') or DEFAULT_CPAAS_API_PREFIX
+        return urlunsplit((parsed.scheme, parsed.netloc, normalized_path, '', ''))
 
     @property
     def cors_origins(self) -> list[str]:

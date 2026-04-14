@@ -13,6 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Input } from "@/components/ui/input";
 
 const PDF_ID_KEY = "pdf_summarizer_last_id";
+const DEFAULT_WHATSAPP_TEMPLATE_ID = "wsp_test2";
 const authHeader = () => ({ Authorization: `Bearer ${localStorage.getItem("token")}` });
 
 const PdfSummarizer = () => {
@@ -35,6 +36,71 @@ const PdfSummarizer = () => {
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
   const [config, setConfig] = useState<any>(null);
   const { toast } = useToast();
+
+  const requestAudioGeneration = async ({
+    targetId,
+    kind,
+    lang,
+    voiceGender,
+    text,
+  }: {
+    targetId: string;
+    kind: "summary" | "next_actions";
+    lang: string;
+    voiceGender: string;
+    text?: string | null;
+  }) => {
+    const url = `/api/pdf/${targetId}/generate-audio?language=${encodeURIComponent(lang)}&gender=${encodeURIComponent(voiceGender)}&kind=${encodeURIComponent(kind)}`;
+    const hasText = typeof text === "string" && text.trim().length > 0;
+    const headers = hasText
+      ? { ...authHeader(), "Content-Type": "application/json" }
+      : authHeader();
+
+    console.info("[pdf-audio] request:start", {
+      url,
+      kind,
+      lang,
+      voiceGender,
+      hasText,
+      textPreview: hasText ? text!.slice(0, 160) : null,
+    });
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: hasText ? JSON.stringify({ text }) : undefined,
+    });
+
+    const rawBody = await response.text();
+    let parsedBody: unknown = rawBody;
+    try {
+      parsedBody = rawBody ? JSON.parse(rawBody) : null;
+    } catch {
+      parsedBody = rawBody;
+    }
+
+    if (!response.ok) {
+      console.error("[pdf-audio] request:failed", {
+        url,
+        status: response.status,
+        statusText: response.statusText,
+        response: parsedBody,
+      });
+      const detail =
+        parsedBody && typeof parsedBody === "object" && "detail" in parsedBody
+          ? String((parsedBody as { detail?: unknown }).detail)
+          : `Audio generation failed (${response.status})`;
+      throw new Error(detail);
+    }
+
+    console.info("[pdf-audio] request:success", {
+      url,
+      status: response.status,
+      response: parsedBody,
+    });
+
+    return (parsedBody ?? {}) as { audio_url?: string };
+  };
 
   // On mount: restore last session and fetch config
   useEffect(() => {
@@ -169,24 +235,38 @@ const PdfSummarizer = () => {
       setIsGeneratingAudio(true);
       try {
         const [summaryAudioRes, nextActionsAudioRes] = await Promise.all([
-          fetch(`/api/pdf/${targetId}/generate-audio?language=${lang}&gender=${voiceGender}&kind=summary`, {
-            method: "POST", headers: authHeader(),
+          requestAudioGeneration({
+            targetId,
+            kind: "summary",
+            lang,
+            voiceGender,
+            text: data.summary,
           }),
-          data.next_actions ? fetch(`/api/pdf/${targetId}/generate-audio?language=${lang}&gender=${voiceGender}&kind=next_actions`, {
-            method: "POST", headers: authHeader(),
-          }) : Promise.resolve(null)
+          data.next_actions
+            ? requestAudioGeneration({
+                targetId,
+                kind: "next_actions",
+                lang,
+                voiceGender,
+                text: data.next_actions,
+              })
+            : Promise.resolve(null)
         ]);
-        
-        if (summaryAudioRes?.ok) {
-          const summaryAudioData = await summaryAudioRes.json();
-          setAudioUrl(summaryAudioData.audio_url);
+
+        if (summaryAudioRes?.audio_url) {
+          setAudioUrl(summaryAudioRes.audio_url);
         }
-        if (nextActionsAudioRes?.ok) {
-          const nextActionsAudioData = await nextActionsAudioRes.json();
-          setNextActionsAudioUrl(nextActionsAudioData.audio_url);
+        if (nextActionsAudioRes?.audio_url) {
+          setNextActionsAudioUrl(nextActionsAudioRes.audio_url);
         }
         toast({ title: "Audios Generated", description: "Summary and next actions audio ready.", duration: 2000 });
       } catch (audioErr) {
+        console.error("[pdf-audio] auto-generation failed", {
+          targetId,
+          lang,
+          voiceGender,
+          error: audioErr,
+        });
         toast({ variant: "destructive", title: "Audio generation failed", description: "Could not generate audio for the summary.", duration: 2000 });
       } finally {
         setIsGeneratingAudio(false);
@@ -225,19 +305,13 @@ const PdfSummarizer = () => {
     setIsGeneratingAudio(true);
     const textToUse = kind === "summary" ? summary : nextActions;
     try {
-      const response = await fetch(`/api/pdf/${pdfId}/generate-audio?language=${language}&gender=${gender}&kind=${kind}`, {
-        method: "POST", 
-        headers: {
-          ...authHeader(),
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ text: textToUse })
+      const data = await requestAudioGeneration({
+        targetId: pdfId,
+        kind,
+        lang: language,
+        voiceGender: gender,
+        text: textToUse,
       });
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.detail || "Audio generation failed");
-      }
-      const data = await response.json();
       // store urls appropriately
       if (kind === "summary") {
         setAudioUrl(data.audio_url);
@@ -247,6 +321,13 @@ const PdfSummarizer = () => {
       }
       toast({ title: "Audio Generated", description: "Voice message is ready.", duration: 2000 });
     } catch (e: any) {
+      console.error("[pdf-audio] manual-generation failed", {
+        pdfId,
+        kind,
+        language,
+        gender,
+        error: e,
+      });
       toast({ variant: "destructive", title: "Audio failed", description: e.message || "Could not generate audio.", duration: 2000 });
     } finally {
       setIsGeneratingAudio(false);
@@ -270,18 +351,27 @@ const PdfSummarizer = () => {
         description: `Direct WP send for PDF ${pdfId}`,
         startDate: new Date(now + 60_000).toISOString(),
         endDate: new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        templateId: "cpstest", // default strategy
+        templateId: DEFAULT_WHATSAPP_TEMPLATE_ID,
         communicationType: "WHATSAPP",
         campaignType: "WHATSAPP",
       };
 
+      console.info("[pdf-whatsapp] createCampaign payload", campaignPayload);
+
       const campaignResponse = await createCampaign(campaignPayload);
+      console.info("[pdf-whatsapp] createCampaign response", campaignResponse);
       const campaignCode = campaignResponse.data?.campaignCode || campaignResponse.data;
       if (!campaignCode) throw new Error("Could not retrieve campaign code from CPaaS");
 
-      const variables = [
-          { key: "url", val: shareUrl }
-      ];
+      const variables = {
+        pdfUrl: shareUrl,
+        url: shareUrl,
+      };
+
+      console.info("[pdf-whatsapp] pushCampaignLeads payload", {
+        campaignCode,
+        leads: [{ phoneNumber: cleanPhone, uniqueId: pdfId, variables }],
+      });
 
       await pushCampaignLeads({
         campaignCode: campaignCode,
