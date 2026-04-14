@@ -187,8 +187,10 @@ export default function MyVideos() {
     queryKey: ["my-videos"],
     queryFn: fetchMyVideos,
     refetchInterval: false,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 
   useEffect(() => {
