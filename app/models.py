@@ -195,3 +195,26 @@ class StyledVideoResult(BaseModel):
     subtitle_file_path: Path | None = None
     logo_file_path: Path | None = None
     subtitle_source: Literal['provider', 'transcript', 'disabled']
+
+
+class PDFRecord(BaseModel):
+    user_id: str
+    phone_number: str | None = None
+    language: str | None = 'Hindi'
+    status: Literal['pending', 'downloading', 'processing', 'summarizing', 'completed', 'failed'] = 'pending'
+    filename: str | None = None
+    pdf_url: str | None = None
+    original_text: str | None = None
+    summary_text: str | None = None
+    audio_url: str | None = None
+    error: str | None = None
+    created_at: datetime = Field(default_factory=get_ist_time)
+    updated_at: datetime = Field(default_factory=get_ist_time)
+
+
+class SharedPDFResponse(BaseModel):
+    summary_text: str | None = None
+    audio_url: str | None = None
+    filename: str | None = None
+    language: str | None = None
+    created_at: datetime
