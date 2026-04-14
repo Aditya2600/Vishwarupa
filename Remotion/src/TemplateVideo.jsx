@@ -53,60 +53,39 @@ const SAFE_TEXT_STYLE = {
 
 const UI_COPY = {
   English: {
-    titlePrefixFallback: 'Account Notice',
-    formalNotice: 'Formal Notice',
-    accountStatus: 'Account Status',
-    financialHighlights: 'Financial Highlights',
-    immediateNextStep: 'Immediate Next Step',
-    resolutionStillPossible: 'Resolution Still Possible',
-    sceneLabels: {
-      opening: 'Notice',
-      account: 'Account',
-      context: 'Review',
-      amounts: 'Amounts',
-      action: 'Action',
-      closing: 'Resolve',
-    },
-    openingIdentity: 'Lead Identity',
-    customerLabel: 'Customer',
-    clientLabel: 'Client',
-    productLabel: 'Product',
-    outstandingLabel: 'Outstanding',
-    reviewMarkers: 'Review Markers',
-    leadLabel: 'Lead',
-    accountLabel: 'Account',
-    currentDueLabel: 'Current Due',
-    amountsPrimaryHelper: 'This is the most important amount in the video',
-    urgentAction: 'Urgent Action Required',
-    actionCardHelper: 'Immediate contact is expected to discuss payment or repayment options.',
-    finalSummary: 'Final Summary',
-    contactLabel: 'Contact',
+    titlePrefixFallback: 'Account Notice', formalNotice: 'Formal Notice', accountStatus: 'Account Status', financialHighlights: 'Financial Highlights', immediateNextStep: 'Next Step', resolutionStillPossible: 'Solution Possible', sceneLabels: { opening: 'Notice', account: 'Account', context: 'Review', amounts: 'Amounts', action: 'Action', closing: 'Resolve' }, openingIdentity: 'Lead Identity', customerLabel: 'Customer', clientLabel: 'Client', productLabel: 'Product', outstandingLabel: 'Outstanding', reviewMarkers: 'Review Markers', leadLabel: 'Lead', accountLabel: 'Account', currentDueLabel: 'Current Due', amountsPrimaryHelper: 'Primary Amount', urgentAction: 'Urgent Action', actionCardHelper: 'Immediate contact expected.', finalSummary: 'Summary', contactLabel: 'Contact',
   },
   Hindi: {
-    titlePrefixFallback: 'खाता सूचना',
-    formalNotice: 'औपचारिक सूचना',
-    accountStatus: 'खाता स्थिति',
-    financialHighlights: 'वित्तीय मुख्य बिंदु',
-    immediateNextStep: 'तत्काल अगला कदम',
-    resolutionStillPossible: 'समाधान अभी भी संभव है',
-    sceneLabels: {
-      opening: 'सूचना',
-      account: 'खाता',
-      context: 'समीक्षा',
-      amounts: 'राशि',
-      action: 'कार्रवाई',
-      closing: 'समाधान',
-    },
-    openingIdentity: 'पहचान विवरण',
-    customerLabel: 'ग्राहक',
-    clientLabel: 'बैंक',
-    productLabel: 'उत्पाद',
-    outstandingLabel: 'कुल बकाया',
-    reviewMarkers: 'मुख्य संकेत',
-    leadLabel: 'ग्राहक',
-    accountLabel: 'खाता',
-    currentDueLabel: 'वर्तमान बकाया',
-    amountsPrimaryHelper: 'यह वीडियो की सबसे महत्वपूर्ण राशि है',
+    titlePrefixFallback: 'खाता सूचना', formalNotice: 'औपचारिक सूचना', accountStatus: 'खाता स्थिति', financialHighlights: 'वित्तीय मुख्य बिंदु', immediateNextStep: 'तत्काल अगला कदम', resolutionStillPossible: 'समाधान अभी भी संभव है', sceneLabels: { opening: 'सूचना', account: 'खाता', context: 'समीक्षा', amounts: 'राशि', action: 'कार्रवाई', closing: 'समाधान' }, openingIdentity: 'पहचान विवरण', customerLabel: 'ग्राहक', clientLabel: 'बैंक', productLabel: 'उत्पाद', outstandingLabel: 'कुल बकाया', reviewMarkers: 'मुख्य संकेत', leadLabel: 'ग्राहक', accountLabel: 'खाता', currentDueLabel: 'वर्तमान बकाया', amountsPrimaryHelper: 'महत्वपूर्ण राशि', urgentAction: 'कार्रवाई आवश्यक', actionCardHelper: 'त्वरित कॉल अपेक्षित है।', finalSummary: 'अंतिम सारांश', contactLabel: 'संपर्क',
+  },
+  Marathi: {
+    titlePrefixFallback: 'खाते सूचना', formalNotice: 'औपचारिक सूचना', accountStatus: 'खाते स्थिती', financialHighlights: 'आर्थिक ठळक मुद्दे', immediateNextStep: 'पुढील पाऊल', resolutionStillPossible: 'निवारण अजूनही शक्य आहे', sceneLabels: { opening: 'सूचना', account: 'खाते', context: 'समीक्षा', amounts: 'रक्कम', action: 'कार्रवाई', closing: 'निवारण' }, openingIdentity: 'ओळख तपशील', customerLabel: 'ग्राहक', clientLabel: 'बँक', productLabel: 'उत्पादन', outstandingLabel: 'एकूण थकबाकी', reviewMarkers: 'मुख्य संकेत', leadLabel: 'ग्राहक', accountLabel: 'खाते', currentDueLabel: 'वर्तमान थकबाकी', amountsPrimaryHelper: 'महत्वाची रक्कम', urgentAction: 'कृती आवश्यक', actionCardHelper: 'त्वरित संपर्क अपेक्षित आहे.', finalSummary: 'अંતિમ સારાંશ', contactLabel: 'संपर्क',
+  },
+  Tamil: {
+    titlePrefixFallback: 'கணக்கு அறிவிப்பு', formalNotice: 'முறைப்படியான அறிவிப்பு', accountStatus: 'கணக்கு நிலை', financialHighlights: 'நிதிச் சிறப்பம்சங்கள்', immediateNextStep: 'அடுத்த படி', resolutionStillPossible: 'தீர்வு இன்னும் சாத்தியமே', sceneLabels: { opening: 'அறிவிப்பு', account: 'கணக்கு', context: 'மதிப்பாய்வு', amounts: 'தொகைகள்', action: 'நடவடிக்கை', closing: 'தீர்வு' }, openingIdentity: 'அடையாள விவரங்கள்', customerLabel: 'வாடிக்கையாளர்', clientLabel: 'வங்கி', productLabel: 'தயாரிப்பு', outstandingLabel: 'மொத்த நிலுவை', reviewMarkers: 'முக்கிய குறிகள்', leadLabel: 'முன்னணி', accountLabel: 'கணக்கு', currentDueLabel: 'தற்போதைய நிலுவை', amountsPrimaryHelper: 'முக்கிய தொகை', urgentAction: 'நடவடிக்கை தேவை', actionCardHelper: 'உடனடி தொடர்பு எதிர்பார்க்கப்படுகிறது.', finalSummary: 'சுருக்கம்', contactLabel: 'தொடர்பு',
+  },
+  Telugu: {
+    titlePrefixFallback: 'ఖాతా నోటీసు', formalNotice: 'అధికారిక నోటీసు', accountStatus: 'ఖాతా స్థితి', financialHighlights: 'ఆర్థిక ముఖ్యాంశాలు', immediateNextStep: 'తదుపరి అడుగు', resolutionStillPossible: 'పరిష్కారం ఇంకా సాధ్యమే', sceneLabels: { opening: 'నోటీసు', account: 'ఖాతా', context: 'సమీక్ష', amounts: 'మొత్తాలు', action: 'చర్య', closing: 'పరిష్కారం' }, openingIdentity: 'గుర్తింపు వివరాలు', customerLabel: 'కస్టమర్', clientLabel: 'బ్యాంక్', productLabel: 'ఉత్పత్తి', outstandingLabel: 'మొత్తం బకాయి', reviewMarkers: 'ముఖ్య గుర్తులు', leadLabel: 'లీడ్', accountLabel: 'ఖాతా', currentDueLabel: 'ప్రస్తుత బకాయి', amountsPrimaryHelper: 'ముఖ్యమైన మొత్తం', urgentAction: 'చర్య అవసరం', actionCardHelper: 'తక్షణ సంప్రదింపు నిరీక్షణ.', finalSummary: 'సారాంశం', contactLabel: 'సంప్రదించండి',
+  },
+  Kannada: {
+    titlePrefixFallback: 'ಖಾತೆ ಸೂಚನೆ', formalNotice: 'ಔಪಚಾರಿಕ ಸೂಚನೆ', accountStatus: 'ಖಾತೆ ಸ್ಥಿತಿ', financialHighlights: 'ಹಣಕಾಸಿನ ಮುಖ್ಯಾಂಶಗಳು', immediateNextStep: 'ಮುಂದಿನ ಹಂತ', resolutionStillPossible: 'ಪರಿಹಾರ ಇನ್ನೂ ಸಾಧ್ಯವಿದೆ', sceneLabels: { opening: 'ಸೂಚನೆ', account: 'ಖಾತೆ', context: 'ಪರಿಶೀಲನೆ', amounts: 'ಮೊತ್ತಗಳು', action: 'ಕ್ರಮ', closing: 'ಪರಿಹಾರ' }, openingIdentity: 'ಗುರುತಿನ ಮಾಹಿತಿ', customerLabel: 'ಗ್ರಾಹಕ', clientLabel: 'ಬ್ಯಾಂಕ್', productLabel: 'ಉತ್ಪನ್ನ', outstandingLabel: 'ಒಟ್ಟು ಬಾಕಿ', reviewMarkers: 'ಮುಖ್ಯ ಗುರುತುಗಳು', leadLabel: 'ಲೀಡ್', accountLabel: 'ಖಾತೆ', currentDueLabel: 'ಪ್ರಸ್ತುತ ಬಾಕಿ', amountsPrimaryHelper: 'ಪ್ರಮುಖ ಮೊತ್ತ', urgentAction: 'ಕ್ರಮ ಅಗತ್ಯ', actionCardHelper: 'ತಕ್ಷಣದ ಸಂಪರ್ಕ ನಿರೀಕ್ಷಿಸಲಾಗಿದೆ.', finalSummary: 'ಸಾರಾಂಶ', contactLabel: 'ಸಂಪರ್ಕ',
+  },
+  Bengali: {
+    titlePrefixFallback: 'অ্যাকাউন্ট নোটিশ', formalNotice: 'আনুষ্ঠানিক নোটিশ', accountStatus: 'অ্যাকাউন্ট স্থিতি', financialHighlights: 'আর্থিক হাইলাইটস', immediateNextStep: 'পরবর্তী পদক্ষেপ', resolutionStillPossible: 'সমাধান এখনও সম্ভব', sceneLabels: { opening: 'নোটিশ', account: 'অ্যাকাউন্ট', context: 'পর্যালোচনা', amounts: 'পরিমাণ', action: 'পদক্ষেপ', closing: 'সমাধান' }, openingIdentity: 'পরিচয় বিবরণ', customerLabel: 'গ্রাহক', clientLabel: 'ব্যাঙ্ক', productLabel: 'পণ্য', outstandingLabel: 'মোট বকেয়া', reviewMarkers: 'মুখ্য সংকেত', leadLabel: 'লিড', accountLabel: 'অ্যাকাউন্ট', currentDueLabel: 'বর্তমান বকেয়া', amountsPrimaryHelper: 'প্রধান পরিমাণ', urgentAction: 'পদক্ষেপ প্রয়োজন', actionCardHelper: 'অবিলম্বে যোগাযোগ প্রত্যাশিত।', finalSummary: 'সারাংশ', contactLabel: 'যোগাযোগ',
+  },
+  Gujarati: {
+    titlePrefixFallback: 'ખાતાની સૂચના', formalNotice: 'ઔપચારિક સૂચના', accountStatus: 'ખાતાની સ્થિતિ', financialHighlights: 'નાણાકીય મુખ્ય મુદ્દાઓ', immediateNextStep: 'આગળનું પગલું', resolutionStillPossible: 'ઉકેલ હજુ પણ શક્ય છે', sceneLabels: { opening: 'સૂચના', account: 'ખાતું', context: 'સમીક્ષા', amounts: 'રકમ', action: 'પગલાં', closing: 'ઉકેલ' }, openingIdentity: 'ઓળખ વિગતો', customerLabel: 'ગ્રાહક', clientLabel: 'બેંક', productLabel: 'ઉત્પાદન', outstandingLabel: 'કુલ બાકી', reviewMarkers: 'મુખ્ય સંકેતો', leadLabel: 'લીഡ്', accountLabel: 'ખાતું', currentDueLabel: 'વર્તમાન બાકી', amountsPrimaryHelper: 'મુખ્ય રકમ', urgentAction: 'પગલાં જરૂરી', actionCardHelper: 'તાત્કાલિક સંપર્ક અપેક્ષিত છે.', finalSummary: 'સારાંશ', contactLabel: 'संपર્ક',
+  },
+  Malayalam: {
+    titlePrefixFallback: 'അക്കൗണ്ട് അറിയിപ്പ്', formalNotice: 'ഔദ്യോഗിക അറിയിപ്പ്', accountStatus: 'അക്കൗണ്ട് നില', financialHighlights: 'സാമ്പത്തിക വിവരങ്ങൾ', immediateNextStep: 'അടുത്ത ഘട്ടം', resolutionStillPossible: 'പരിഹാരം ഇപ്പോഴും സാധ്യമാണ്', sceneLabels: { opening: 'അറിയിപ്പ്', account: 'അക്കൗണ്ട്', context: 'പരിശോധന', amounts: 'തുകകൾ', action: 'നടപടി', closing: 'പരിഹാരം' }, openingIdentity: 'തിരിച്ചറിയൽ വിവരങ്ങൾ', customerLabel: 'ഉപഭോക്താവ്', clientLabel: 'ബാങ്ക്', productLabel: 'ഉൽപ്പന്നം', outstandingLabel: 'ആകെ കുടിശ്ശിക', reviewMarkers: 'പ്രധാന വിവരങ്ങൾ', leadLabel: 'ലീഡ്', accountLabel: 'അക്കൗണ്ട്', currentDueLabel: 'നിലവിലെ കുടിശ്ശിക', amountsPrimaryHelper: 'പ്രധാന തുക', urgentAction: 'നടപടി ആവശ്യമാണ്', actionCardHelper: 'ഉടനടി ബന്ധപ്പെടുക.', finalSummary: 'സംഗ്രഹം', contactLabel: 'ബന്ധപ്പെടുക',
+  },
+  Punjabi: {
+    titlePrefixFallback: 'ਖਾਤਾ ਨੋਟਿਸ', formalNotice: 'ਰਸਮੀ ਨੋਟਿਸ', accountStatus: 'ਖਾਤੇ ਦੀ ਸਥਿਤੀ', financialHighlights: 'ਵਿੱਤੀ ਮੁੱਖ ਨੁਕਤੇ', immediateNextStep: 'ਅਗਲਾ ਕਦਮ', resolutionStillPossible: 'ਹੱਲ ਅਜੇ ਵੀ ਸੰਭਵ ਹੈ', sceneLabels: { opening: 'ਨੋਟਿਸ', account: 'ਖਾਤਾ', context: 'ਸਮੀਖਿਆ', amounts: 'ਰਾਸ਼ੀ', action: 'ਕਾਰਵਾਈ', closing: 'ਹੱਲ' }, openingIdentity: 'ਪਛਾਣ ਵੇਰਵਾ', customerLabel: 'ਗਾਹਕ', clientLabel: 'ਬੈਂਕ', productLabel: 'ਉਤਪਾਦ', outstandingLabel: 'ਕੁੱਲ ਬਕਾਇਆ', reviewMarkers: 'ਮੁੱਖ ਸੰਕੇਤ', leadLabel: 'ਲੀਡ', accountLabel: 'ਖਾਤਾ', currentDueLabel: 'ਮੌਜੂਦਾ ਬਕਾਇਆ', amountsPrimaryHelper: 'ਮੁੱਖ ਰਾਸ਼ੀ', urgentAction: 'ਕਾਰਵਾਈ ਲੋੜੀਂਦੀ', actionCardHelper: 'ਤੁਰੰਤ ਸੰਪਰਕ ਦੀ ਉਮੀਦ ਹੈ।', finalSummary: 'ਸਾਰ', contactLabel: 'ਸੰਪਰਕ',
+  },
+};
+
+const getSubtitleColor = (colorName) => SUBTITLE_COLORS[colorName] || SUBTITLE_COLORS.White;
+const getUiCopy = (language) => UI_COPY[language] || UI_COPY.English;�शि है',
     urgentAction: 'तुरंत कार्रवाई आवश्यक',
     actionCardHelper: 'भुगतान समाधान या पुनर्भुगतान विकल्प के लिए त्वरित कॉल अपेक्षित है।',
     finalSummary: 'अंतिम सारांश',
@@ -115,7 +94,7 @@ const UI_COPY = {
 };
 
 const getSubtitleColor = (colorName) => SUBTITLE_COLORS[colorName] || SUBTITLE_COLORS.White;
-const getUiCopy = (language) => (language === 'English' ? UI_COPY.English : UI_COPY.Hindi);
+const getUiCopy = (language) => UI_COPY[language] || UI_COPY.English;
 
 const fitTextSize = (text, baseSize, minSize, softLimit, hardLimit) => {
   const content = safeString(text, '');

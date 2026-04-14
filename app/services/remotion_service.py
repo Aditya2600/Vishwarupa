@@ -436,6 +436,14 @@ class RemotionService:
         except Exception as e:
             logger.error(f"Failed to start Remotion rendering: {e}")
             raise e
+        finally:
+            # PRODUCTION FIX: Always cleanup the props and temporary files
+            if props_path.exists():
+                try:
+                    props_path.unlink()
+                    logger.info(f"Cleaned up Remotion props file: {props_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to cleanup props file: {e}")
 
         # Final check if output actually exists
         if not output_path.exists():

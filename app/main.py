@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 from bson import ObjectId
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, Depends, Query, status
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, Depends, Query, status, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -31,6 +31,7 @@ from app.models import (
     UserCreate,
     Token,
     UserInDB,
+    User,
     VideoRecord,
 )
 from app.services.heygen_client import HeyGenClient
@@ -43,6 +44,10 @@ from app.database import users_collection, videos_collection, drafts_collection,
 from app.auth import get_password_hash, verify_password, create_access_token, get_current_user, get_current_admin
 from app.workers.avatar_job_worker import AvatarJobWorker
 from app.workers.remotion_job_worker import RemotionJobWorker
+from app.services.pdf_service import PDFService
+from app.services.summarization_service import SummarizationService
+from app.services.audio_service import audio_service
+from app.models import PDFRecord
 
 import logging
 
@@ -120,6 +125,8 @@ styling_service = MediaStylingService(client=client)
 remotion_service = RemotionService()
 s3_service = S3Service()
 sqs_service = SQSService()
+pdf_service = PDFService()
+summarization_service = SummarizationService()
 
 GENERIC_RUNTIME_ERROR = 'Something went wrong while processing your request. Please try again.'
 GENERIC_GENERATION_ERROR = "We couldn't generate the video right now. Please try again in a moment."
@@ -797,12 +804,289 @@ async def list_voices() -> dict:
     return raw_result
 
 
+@app.post("/pdf/upload")
+async def upload_pdf(
+    file: UploadFile = File(...),
+    current_user: str = Depends(get_current_user)
+):
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+    try:
+        content = await file.read()
+        file_path = pdf_service.save_upload(content, file.filename)
+        extracted_text = pdf_service.extract_text(file_path)
+        
+        # Upload original PDF to S3 for sharing
+        s3_url = None
+        if settings.aws_access_key_id:
+            try:
+                s3_key = f"notices/{file.filename}"
+                s3_url = s3_service.upload_file(file_path, s3_key, content_type="application/pdf")
+            except Exception as e:
+                logger.error(f"Failed to upload original PDF to S3: {e}")
+
+        pdf_record = PDFRecord(
+            user_id=current_user,
+            filename=file.filename,
+            pdf_url=s3_url,
+            original_text=extracted_text,
+            status="pending"
+        )
+        from app.database import pdf_collection
+        result = await pdf_collection.insert_one(pdf_record.model_dump())
+        return {"pdf_id": str(result.inserted_id), "status": "pending"}
+    except Exception as e:
+        logger.error(f"PDF Upload Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+NEXT_ACTIONS_TEMPLATES = {
+    "Hindi": (
+        "कृपया इस नोटिस के मिलने के 15 दिनों के भीतर अपने सारे बकाया राशि का भुगतान करें।\n"
+        "भुगतान करने के बाद, कृपया भुगतान का स्क्रीनशॉट या रसीद इसी व्हाट्सएप नंबर पर हमारे साथ साझा करें।\n"
+        "किसी भी सहायता या स्पष्टीकरण के लिए, आप हमारे हेल्पलाइन नंबर पर तुरंत संपर्क कर सकते हैं।"
+    ),
+    "English": (
+        "Please pay the total outstanding amount within 15 days of receiving this notice.\n"
+        "After making the payment, please share the screenshot or receipt on this WhatsApp number for verification.\n"
+        "For any assistance or clarification, you can contact our helpline number immediately."
+    ),
+    "Marathi": (
+        "कृपया ही नोटीस मिळाल्यापासून 15 दिवसांच्या आत संपूर्ण थकबाकी भरा.\n"
+        "पेमेंट केल्यानंतर, कृपया पेमेंटचा स्क्रीनशॉट किंवा पावती पडताळणीसाठी या व्हॉट्सॲप नंबरवर शेअर करा.\n"
+        "कोणत्याही मदतीसाठी किंवा स्पष्टीकरणासाठी, तुम्ही आमच्या हेल्पलाईन नंबरवर त्वरित संपर्क साधू शकता।"
+    ),
+    "Tamil": (
+        "இந்த அறிவிப்பைப் பெற்ற 15 நாட்களுக்குள் நிலுவையில் உள்ள முழுத் தொகையைச் செலுத்தவும்.\n"
+        "பணம் செலுத்திய பிறகு, சரிபார்ப்பிற்காக இந்த வாட்ஸ்அப் எண்ணில் ஸ்கிரீன்ஷாட் அல்லது ரசீதைப் பகிரவும்.\n"
+        "ஏதேனும் உதவி அல்லது விளக்கத்திற்கு, எங்களின் உதவி எண்னை உடனடியாக தொடர்பு கொள்ளலாம்।"
+    ),
+    "Telugu": (
+        "ఈ నోటీసు అందిన 15 రోజులలోపు మొత్తం బకాయి మొత్తాన్ని చెల్లించండి.\n"
+        "చెల్లింపు చేసిన తర్వాత, దయచేసి ధృవీకరణ కోసం ఈ వాట్సాప్ నంబర్‌లో స్క్రీన్‌షాట్ లేదా రసీదును షేర్ చేయండి.\n"
+        "ఏదైనా సహాయం లేదా వివరణ కోసం, మీరు వెంటనే మా హెల్ప్‌లైన్ నంబర్‌ను సంప్రదించవచ్చు।"
+    ),
+    "Kannada": (
+        "ಈ ನೋಟಿಸ್ ಸ್ವೀಕರಿಸಿದ 15 ದಿನಗಳ ಒಳಗೆ ಬಾಕಿ ಇರುವ ಒಟ್ಟು ಮೊತ್ತವನ್ನು ಪಾವತಿಸಿ.\n"
+        "ಪಾವತಿ ಮಾಡಿದ ನಂತರ, ದಯವಿಟ್ಟು ಪರಿಶೀಲನೆಗಾಗಿ ಈ ವಾಟ್ಸಾಪ್ ಸಂಖ್ಯೆಯಲ್ಲಿ ಸ್ಕ್ರೀನ್‌ಶಾಟ್ ಅಥವಾ ರಸೀದಿಯನ್ನು ಹಂಚಿಕೊಳ್ಳಿ.\n"
+        "ಯಾವುದೇ ಸಹಾಯ ಅಥವಾ ಸ್ಪಷ್ಟೀಕರಣಕ್ಕಾಗಿ, ನೀವು ತಕ್ಷಣ ನಮ್ಮ ಸಹಾಯವಾಣಿ ಸಂಖ್ಯೆಯನ್ನು ಸಂಪರ್ಕಿಸಬಹುದು।"
+    ),
+    "Malayalam": (
+        "ഈ അറിയിപ്പ് ലഭിച്ച് 15 ദിവസത്തിനുള്ളിൽ കുടിശ്ശികയുള്ള മുഴുവൻ തുകയും ദയവായി അടയ്ക്കുക.\n"
+        "പണമടച്ചതിന് ശേഷം, വെരിഫിക്കേഷനായി പെയ്‌മെന്റ് സ്‌ക്രീൻഷോട്ടൊ രസീതോ ഈ വാട്ട്‌സ്ആപ്പ് നമ്പറിൽ പങ്കിടുക.\n"
+        "എന്തെങ്കിലും സഹായത്തിനോ വിശദീകരണത്തിനോ നിങ്ങൾക്ക് ഞങ്ങളുടെ ഹെൽപ്പ് ലൈൻ നമ്പറിൽ ഉടൻ ബന്ധപ്പെടാവുന്നതാണ്।"
+    ),
+    "Bengali": (
+        "এই নোটিশ পাওয়ার ১৫ দিনের মধ্যে দয়া করে সমস্ত বকেয়া টাকা পরিশোধ করুন।\n"
+        "পেমেন্ট করার পর, ভেরিফিকেশনের জন্য এই হোয়াটসঅ্যাপ নম্বরে স্ক্রিনশট বা রসিদ শেয়ার করুন।\n"
+        "যেকোনো সহায়তা বা স্পষ্টীকরণের জন্য, আপনি অবিলম্বে আমাদের হেল্পলাইন নম্বরে যোগাযোগ করতে পারেন।"
+    ),
+    "Gujarati": (
+        "મહેરબાની કરીને આ નોટિસ મળ્યાના 15 દિવસની અંદર બાકી રહેલી કુલ રકમ ચૂકવો.\n"
+        "ચુકવણી કર્યા પછી, કૃપા કરીને ચકાસણી માટે આ વોટ્સએપ નંબર પર સ્ક્રીનશોટ અથવા રસીદ શેર કરો.\n"
+        "કોઈ પણ મદદ અથવા સ્પષ્ટતા માટે, તમે તાત્કાલિક અમારા હેલ્પલાઇન નંબર પર સંપર્ક કરી શકો છો।"
+    )
+}
+
+def get_next_actions_template(language: str) -> str:
+    return NEXT_ACTIONS_TEMPLATES.get(language, NEXT_ACTIONS_TEMPLATES["English"])
+
+@app.post("/pdf/{pdf_id}/summarize")
+async def summarize_pdf(
+    pdf_id: str,
+    language: str = "Hindi",
+    gender: str = Query("Female", description="Gender for voice: 'Male' or 'Female'"),
+    current_user: str = Depends(get_current_user)
+):
+    from app.database import pdf_collection
+    pdf = await pdf_collection.find_one({"_id": ObjectId(pdf_id), "user_id": current_user})
+    if not pdf:
+        raise HTTPException(status_code=404, detail="PDF not found")
+    if not pdf.get("original_text"):
+        raise HTTPException(status_code=400, detail="No text found in PDF to summarize")
+    await pdf_collection.update_one(
+        {"_id": ObjectId(pdf_id)},
+        {"$set": {"status": "summarizing", "updated_at": datetime.utcnow()}}
+    )
+    try:
+        summary = await summarization_service.summarize_text(pdf["original_text"], target_language=language, gender=gender)
+        
+        # PRODUCTION CHANGE: Use a language-specific hardcoded editable template.
+        next_actions = get_next_actions_template(language)
+        
+        update_doc = {"summary_text": summary, "next_actions_text": next_actions, "status": "completed", "updated_at": datetime.utcnow()}
+
+        await pdf_collection.update_one(
+            {"_id": ObjectId(pdf_id)},
+            {"$set": update_doc}
+        )
+        return {"status": "completed", "summary": summary, "next_actions": next_actions}
+    except Exception as e:
+        await pdf_collection.update_one(
+            {"_id": ObjectId(pdf_id)},
+            {"$set": {"status": "failed", "updated_at": datetime.utcnow()}}
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/pdf/{pdf_id}/status")
+async def get_pdf_status(
+    pdf_id: str,
+    current_user: str = Depends(get_current_user)
+):
+    from app.database import pdf_collection
+    pdf = await pdf_collection.find_one({"_id": ObjectId(pdf_id), "user_id": current_user})
+    if not pdf:
+        raise HTTPException(status_code=404, detail="PDF not found")
+    return {
+        "status": pdf["status"],
+        "summary": pdf.get("summary_text"),
+        "next_actions": pdf.get("next_actions_text"),
+        "filename": pdf["filename"],
+        "audio_url": pdf.get("audio_url"),
+        "next_actions_audio_url": pdf.get("next_actions_audio_url")
+    }
+
+@app.post("/pdf/{pdf_id}/generate-audio")
+async def generate_pdf_audio(
+    pdf_id: str,
+    data: dict = Body(...),
+    language: str = "Hindi",
+    gender: str = "Female",
+    kind: str = Query("summary", description="Type of audio to generate: 'summary' or 'next_actions'"),
+    current_user: str = Depends(get_current_user)
+):
+    # Retrieve text from body (for live edits) or fallback to DB
+    edited_text = data.get("text")
+    from app.database import pdf_collection
+    pdf = await pdf_collection.find_one({"_id": ObjectId(pdf_id), "user_id": current_user})
+    if not pdf:
+        raise HTTPException(status_code=404, detail="PDF not found")
+    # Determine which text to convert to audio
+    kind = (kind or "summary").lower()
+    if kind == "summary":
+        text_key = "summary_text"
+        prefix = "summary"
+    elif kind in ("next_actions", "next-actions", "nextactions"):
+        text_key = "next_actions_text"
+        prefix = "next_actions"
+    else:
+        raise HTTPException(status_code=400, detail="Invalid kind parameter")
+
+    # Use live edited text if provided, otherwise fetch from DB
+    text_to_convert = edited_text
+    if not text_to_convert:
+        if not pdf.get(text_key):
+            raise HTTPException(status_code=400, detail=f"{text_key} not available. Summarize the document first.")
+        text_to_convert = pdf[text_key]
+
+    try:
+        audio_url = await audio_service.generate_audio(
+            pdf_id=pdf_id,
+            text=text_to_convert,
+            language=language,
+            gender=gender,
+            prefix=prefix
+        )
+        
+        # Sync the edited text back to the database so it's saved
+        if edited_text:
+            await pdf_collection.update_one(
+                {"_id": ObjectId(pdf_id)},
+                {"$set": {text_key: edited_text, "updated_at": datetime.utcnow()}}
+            )
+            
+        return {"status": "completed", "audio_url": audio_url}
+    except Exception as e:
+        logger.error(f"Audio Generation Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        logger.error(f"Audio Generation Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Static serving for PDF audio fallback
+@app.get("/pdf/audio/{filename}")
+async def get_pdf_audio_file(filename: str):
+    file_path = Path(settings.default_output_dir) / "pdf_audio" / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Audio file not found")
+    from fastapi.responses import FileResponse
+    return FileResponse(file_path)
+
+@app.post("/pdf/{pdf_id}/whatsapp-log")
+async def log_pdf_whatsapp(
+    pdf_id: str,
+    current_user: str = Depends(get_current_user)
+):
+    from app.database import pdf_collection, whatsapp_logs_collection
+    pdf = await pdf_collection.find_one({"_id": ObjectId(pdf_id), "user_id": current_user})
+    
+    if not pdf:
+        raise HTTPException(status_code=404, detail="PDF not found")
+
+    log_entry = {
+        "pdf_id": pdf_id,
+        "user_id": current_user,
+        "filename": pdf["filename"],
+        "action": "whatsapp_summary_generated",
+        "timestamp": datetime.utcnow()
+    }
+    
+    await whatsapp_logs_collection.insert_one(log_entry)
+    return {"status": "logged"}
+
+@app.get("/pdf/share/{pdf_id}")
+async def share_pdf_summary(pdf_id: str):
+    from app.database import pdf_collection
+    if not ObjectId.is_valid(pdf_id):
+        raise HTTPException(status_code=400, detail="Invalid PDF ID")
+    
+    pdf = await pdf_collection.find_one({"_id": ObjectId(pdf_id)})
+    if not pdf:
+        raise HTTPException(status_code=404, detail="Summary not found")
+        
+    # Presign all relevant URLs
+    audio_url = pdf.get("audio_url")
+    if audio_url:
+        audio_url = s3_service.presign_video_url(audio_url)
+        
+    next_actions_audio_url = pdf.get("next_actions_audio_url")
+    if next_actions_audio_url:
+        next_actions_audio_url = s3_service.presign_video_url(next_actions_audio_url)
+
+    pdf_url = pdf.get("pdf_url")
+    if not pdf_url:
+        # Fallback: Try to upload local file to S3 if missing (for older records)
+        filename = pdf.get("filename")
+        if filename:
+            local_path = Path("input/pdf") / filename
+            if local_path.exists():
+                logger.info(f"Auto-uploading missing S3 PDF for share link: {filename}")
+                s3_key = f"notices/{filename}"
+                pdf_url = s3_service.upload_file(local_path, s3_key, content_type="application/pdf")
+                if pdf_url:
+                    # Save it so we don't have to upload again next time
+                    await pdf_collection.update_one({"_id": ObjectId(pdf_id)}, {"$set": {"pdf_url": pdf_url}})
+    
+    if pdf_url:
+        pdf_url = s3_service.presign_video_url(pdf_url)
+        
+    return {
+        "summary_text": pdf.get("summary_text"),
+        "next_actions_text": pdf.get("next_actions_text"),
+        "audio_url": audio_url,
+        "next_actions_audio_url": next_actions_audio_url,
+        "pdf_url": pdf_url,
+        "filename": pdf.get("filename"),
+        "language": pdf.get("language"),
+        "created_at": pdf.get("created_at")
+    }
+
 @app.get('/meta/config')
 def get_config() -> dict:
     return {
         "default_avatar_id": settings.heygen_avatar_id,
         "default_voice_id": settings.heygen_voice_id,
         "default_template_id": settings.heygen_template_id,
+        "frontend_url": settings.frontend_url,
         "default_language": "Hindi"
     }
 
@@ -1893,3 +2177,145 @@ async def log_whatsapp_attempt(data: dict, admin: dict = Depends(get_current_adm
         return {"status": "logged"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+        await whatsapp_logs_collection.insert_one(log_entry)
+        return {"status": "logged"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post('/api/pdf/bulk-csv')
+async def bulk_process_csv(
+    file: UploadFile = File(...),
+    current_user: str = Depends(get_current_user)
+):
+    """
+    Accepts a CSV mapping (phone_number, pdf_link, language) and kicks off background processing.
+    """
+    import csv
+    import io
+
+    try:
+        content = await file.read()
+        stream = io.StringIO(content.decode('utf-8'))
+        reader = csv.DictReader(stream)
+        
+        batch_ids = []
+        for row in reader:
+            phone = row.get('phone_number')
+            url = row.get('pdf_link')
+            lang = row.get('language', 'Hindi')
+
+            if not phone or not url:
+                continue
+
+            # Create entry in "pdf_summaries" collection
+            record = PDFRecord(
+                user_id=current_user,
+                phone_number=phone,
+                language=lang,
+                pdf_url=url,
+                filename=url.split('/')[-1] if '/' in url else "notice.pdf",
+                status='pending'
+            )
+            
+            res = await pdf_collection.insert_one(record.model_dump())
+            record_id = str(res.inserted_id)
+            batch_ids.append(record_id)
+
+            # Fire and forget background task
+            asyncio.create_task(process_single_bulk_item(record_id, lang))
+
+        return {"status": "success", "batch_size": len(batch_ids), "ids": batch_ids}
+    except Exception as e:
+        logger.error(f"Bulk CSV error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def process_single_bulk_item(record_id: str, language: str):
+    """
+    Worker function to process one bulk PDF from a URL.
+    """
+    try:
+        # 1. Update status to downloading
+        await pdf_collection.update_one(
+            {"_id": ObjectId(record_id)},
+            {"$set": {"status": "downloading", "updated_at": datetime.utcnow()}}
+        )
+
+        # 2. Extract text from URL (Stream-to-Memory)
+        doc_record = await pdf_collection.find_one({"_id": ObjectId(record_id)})
+        doc_text = await pdf_service.extract_text_from_url(doc_record['pdf_url'])
+
+        # 3. Summarize (Summary via AI, Next Actions via Hardcoded Template for campaign consistency)
+        await pdf_collection.update_one(
+            {"_id": ObjectId(record_id)},
+            {"$set": {"status": "summarizing", "original_text": doc_text}}
+        )
+        
+        # Generate Summary
+        summary = await summarization_service.summarize_text(doc_text, target_language=language)
+        next_actions = get_next_actions_template(language)
+
+        # 4. Generate Audio for both
+        audio_url = await audio_service.generate_audio(
+            pdf_id=record_id,
+            text=summary,
+            language=language,
+            gender="Female",
+            prefix="summary"
+        )
+        
+        next_actions_audio_url = None
+        if next_actions:
+            try:
+                next_actions_audio_url = await audio_service.generate_audio(
+                    pdf_id=record_id,
+                    text=next_actions,
+                    language=language,
+                    gender="Female",
+                    prefix="next_actions"
+                )
+            except Exception as e:
+                logger.warning(f"Bulk Next-actions audio generation failed for {record_id}: {e}")
+
+        # 5. Finalize
+        update_fields = {
+            "status": "completed",
+            "summary_text": summary,
+            "audio_url": audio_url,
+            "updated_at": datetime.utcnow()
+        }
+        if next_actions:
+            update_fields["next_actions_text"] = next_actions
+        if next_actions_audio_url:
+            update_fields["next_actions_audio_url"] = next_actions_audio_url
+
+        await pdf_collection.update_one(
+            {"_id": ObjectId(record_id)},
+            {"$set": update_fields}
+        )
+        logger.info(f"Bulk item {record_id} completed successfully.")
+
+    except Exception as e:
+        logger.error(f"Failed processing bulk item {record_id}: {e}")
+        await pdf_collection.update_one(
+            {"_id": ObjectId(record_id)},
+            {"$set": {"status": "failed", "error": str(e), "updated_at": datetime.utcnow()}}
+        )
+
+@app.get('/api/pdf/{record_id}/status')
+async def get_pdf_status(record_id: str, current_user: str = Depends(get_current_user)):
+    """
+    Returns the processing status of a specific PDF item.
+    """
+    record = await pdf_collection.find_one({"_id": ObjectId(record_id), "user_id": current_user})
+    if not record:
+        raise HTTPException(status_code=404, detail="Bulk record not found")
+    
+    return {
+        "status": record.get("status"),
+        "phone_number": record.get("phone_number"),
+        "language": record.get("language"),
+        "summary": record.get("summary_text"),
+        "audio_url": record.get("audio_url"),
+        "filename": record.get("filename"),
+        "error": record.get("error")
+    }
