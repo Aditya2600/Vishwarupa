@@ -1,0 +1,11 @@
+{
+  "caption": false,
+  "title": "Loan Recall - {{customer_name}} - {{lan}}",
+  "variables": {
+    "customer_name": "{{customer_name}}",
+    "lan": "{{lan}}",
+    "client_name": "{{client_name}}",
+    "tos": "{{tos}}",
+    "loan_amount": "{{loan_amt}}"
+  }
+}
