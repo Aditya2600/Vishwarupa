@@ -28,6 +28,11 @@ export default function PublicPDF() {
     }
   }, [data]);
 
+  const getPdfViewerUrl = (pdfUrl: string) => {
+    const separator = pdfUrl.includes("#") ? "&" : "#";
+    return `${pdfUrl}${separator}toolbar=0&navpanes=0&scrollbar=0`;
+  };
+
   const toggleAudio = (kind: "summary" | "next_actions") => {
     const url = kind === "summary" ? data?.audio_url : data?.next_actions_audio_url;
     if (!url) return;
@@ -108,19 +113,11 @@ export default function PublicPDF() {
           
           <div className="flex-1 min-h-[600px] bg-[#1e293b] relative">
             {data.pdf_url ? (
-              <object
-                data={data.pdf_url}
-                type="application/pdf"
-                className="w-full h-full min-h-[600px]"
-              >
-                <div className="flex flex-col items-center justify-center h-full p-8 text-center text-slate-400">
-                  <FileText className="w-12 h-12 mb-4 opacity-10" />
-                  <p className="mb-4">This browser doesn't support inline PDFs.</p>
-                  <Button asChild variant="outline">
-                    <a href={data.pdf_url} target="_blank" rel="noopener noreferrer">View Original Notice</a>
-                  </Button>
-                </div>
-              </object>
+              <iframe
+                src={getPdfViewerUrl(data.pdf_url)}
+                title={data.filename || "Notice PDF"}
+                className="w-full h-full min-h-[600px] border-0"
+              />
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-4">
                  <FileText className="w-16 h-16 opacity-10" />
