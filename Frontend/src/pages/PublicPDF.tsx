@@ -70,37 +70,39 @@ export default function PublicPDF() {
     <div className="min-h-screen bg-[#0f172a] flex flex-col font-sans">
       {/* Top Action Buttons (Matching your Screenshot) */}
       <div className="p-6 bg-[#1e293b] border-b border-white/5 flex flex-wrap items-center justify-center gap-4 sticky top-0 z-50">
-        <Button 
-          className={`h-14 px-8 w-full sm:w-auto rounded-xl font-bold text-lg transition-all flex items-center gap-3 active:scale-95 shadow-lg ${
-            playingKind === "summary" 
-              ? "bg-indigo-500 text-white animate-pulse" 
-              : "bg-indigo-600 hover:bg-indigo-500 text-white"
-          }`}
-          onClick={() => toggleAudio("summary")}
-          disabled={!data.audio_url}
-        >
-          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-            <Play className={`w-4 h-4 fill-current ${playingKind === "summary" ? "hidden" : "block"}`} />
-            <Volume2 className={`w-4 h-4 ${playingKind === "summary" ? "block" : "hidden"}`} />
-          </div>
-          Play Summary
-        </Button>
+        {data.audio_url && (
+          <Button 
+            className={`h-14 px-8 w-full sm:w-auto rounded-xl font-bold text-lg transition-all flex items-center gap-3 active:scale-95 shadow-lg ${
+              playingKind === "summary" 
+                ? "bg-indigo-500 text-white animate-pulse" 
+                : "bg-indigo-600 hover:bg-indigo-500 text-white"
+            }`}
+            onClick={() => toggleAudio("summary")}
+          >
+            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+              <Play className={`w-4 h-4 fill-current ${playingKind === "summary" ? "hidden" : "block"}`} />
+              <Volume2 className={`w-4 h-4 ${playingKind === "summary" ? "block" : "hidden"}`} />
+            </div>
+            Play Summary
+          </Button>
+        )}
 
-        <Button 
-          className={`h-14 px-8 w-full sm:w-auto rounded-xl font-bold text-lg transition-all flex items-center gap-3 active:scale-95 shadow-lg ${
-            playingKind === "next_actions" 
-              ? "bg-pink-500 text-white animate-pulse" 
-              : "bg-pink-600 hover:bg-pink-500 text-white"
-          }`}
-          onClick={() => toggleAudio("next_actions")}
-          disabled={!data.next_actions_audio_url}
-        >
-          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-            <Play className={`w-4 h-4 fill-current ${playingKind === "next_actions" ? "hidden" : "block"}`} />
-            <Volume2 className={`w-4 h-4 ${playingKind === "next_actions" ? "block" : "hidden"}`} />
-          </div>
-          Play Next Actions
-        </Button>
+        {data.next_actions_audio_url && (
+          <Button 
+            className={`h-14 px-8 w-full sm:w-auto rounded-xl font-bold text-lg transition-all flex items-center gap-3 active:scale-95 shadow-lg ${
+              playingKind === "next_actions" 
+                ? "bg-pink-500 text-white animate-pulse" 
+                : "bg-pink-600 hover:bg-pink-500 text-white"
+            }`}
+            onClick={() => toggleAudio("next_actions")}
+          >
+            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+              <Play className={`w-4 h-4 fill-current ${playingKind === "next_actions" ? "hidden" : "block"}`} />
+              <Volume2 className={`w-4 h-4 ${playingKind === "next_actions" ? "block" : "hidden"}`} />
+            </div>
+            Play Next Actions
+          </Button>
+        )}
       </div>
 
       {/* Main Content: PDF Viewer */}

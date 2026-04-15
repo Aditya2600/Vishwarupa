@@ -156,7 +156,7 @@ const PdfSummarizer = () => {
           setRestoredFilename(data.filename);
           if (data.summary) setSummary(data.summary);
           if (data.audio_url) setAudioUrl(data.audio_url);
-          if (data.next_actions) setNextActions(data.next_actions);
+          setNextActions(data.next_actions ?? "");
           if (data.next_actions_audio_url) setNextActionsAudioUrl(data.next_actions_audio_url);
           toast({ title: "Session restored", description: `Resumed: ${data.filename}`, duration: 2000 });
         } else {
@@ -191,9 +191,9 @@ const PdfSummarizer = () => {
               language: data.language ?? item.language,
               pdf_url: data.pdf_url ?? item.pdf_url,
               summary_text: data.summary ?? item.summary_text,
-              next_actions: data.next_actions ?? item.next_actions,
+              next_actions: data.next_actions ?? "",
               audio_url: data.audio_url ?? item.audio_url,
-              next_actions_audio_url: data.next_actions_audio_url ?? item.next_actions_audio_url,
+              next_actions_audio_url: data.next_actions_audio_url ?? null,
               name: data.filename || item.name
             };
           }
@@ -213,7 +213,9 @@ const PdfSummarizer = () => {
     setFile(null);
     setPdfId(null);
     setSummary(null);
+    setNextActions(null);
     setAudioUrl(null);
+    setNextActionsAudioUrl(null);
     setRestoredFilename(null);
     localStorage.removeItem(PDF_ID_KEY);
     toast({ title: "Ready for new document", description: "Upload a new PDF to get started.", duration: 2000 });
@@ -278,6 +280,7 @@ const PdfSummarizer = () => {
     setSummary(null); // Clear old summary while loading new one
     setAudioUrl(null);
     setNextActionsAudioUrl(null);
+    setNextActions("");
     try {
       const response = await fetch(`/api/pdf/${targetId}/summarize?language=${lang}&gender=${voiceGender}`, {
         method: "POST", headers: authHeader(),
@@ -285,7 +288,7 @@ const PdfSummarizer = () => {
       if (!response.ok) throw new Error("Summarization failed");
       const data = await response.json();
       setSummary(data.summary);
-      if (data.next_actions) setNextActions(data.next_actions);
+      setNextActions(data.next_actions ?? "");
       toast({ title: "Summary Generated", description: `Summary ready in ${lang} (${voiceGender} voice).`, duration: 2000 });
       
       // Auto-generate both audios for the new summary
@@ -299,7 +302,7 @@ const PdfSummarizer = () => {
             voiceGender,
             text: data.summary,
           }),
-          data.next_actions
+          data.next_actions && String(data.next_actions).trim().length > 0
             ? requestAudioGeneration({
                 targetId,
                 kind: "next_actions",
@@ -316,7 +319,13 @@ const PdfSummarizer = () => {
         if (nextActionsAudioRes?.audio_url) {
           setNextActionsAudioUrl(nextActionsAudioRes.audio_url);
         }
-        toast({ title: "Audios Generated", description: "Summary and next actions audio ready.", duration: 2000 });
+        toast({
+          title: "Audio Generated",
+          description: nextActionsAudioRes?.audio_url
+            ? "Summary and next actions audio ready."
+            : "Summary audio ready. Next actions remain blank until you add text.",
+          duration: 2000
+        });
       } catch (audioErr) {
         console.error("[pdf-audio] auto-generation failed", {
           targetId,
@@ -557,21 +566,24 @@ const PdfSummarizer = () => {
       }
 
       const data = await response.json();
+      const nextActionsText = bulkNextActionsDraft.trim();
       setBulkItems((prev) =>
         prev.map((item) =>
           item._id === bulkTextEditorItem._id
             ? {
                 ...item,
                 next_actions: bulkNextActionsDraft,
-                next_actions_audio_url: data.audio_url || item.next_actions_audio_url,
+                next_actions_audio_url: nextActionsText ? (data.audio_url || item.next_actions_audio_url) : null,
               }
             : item
         )
       );
 
       toast({
-        title: "Next actions updated",
-        description: "The edited next-actions audio was regenerated successfully.",
+        title: nextActionsText ? "Next actions updated" : "Next actions cleared",
+        description: nextActionsText
+          ? "The edited next-actions audio was regenerated successfully."
+          : "Next actions text is blank, so no audio was generated.",
       });
       setBulkTextEditorItem(null);
     } catch (error: any) {
@@ -831,7 +843,7 @@ const PdfSummarizer = () => {
                                   variant="outline"
                                   className="h-12 border-primary/20 hover:bg-primary/5 font-semibold"
                                   onClick={() => handleGenerateAudioKind("next_actions")}
-                                  disabled={isGeneratingAudio || !nextActions}
+                                  disabled={isGeneratingAudio || !nextActions?.trim()}
                               >
                                 {isGeneratingAudio ? (
                                   <Loader2 className="w-4 h-4 animate-spin mr-2" />

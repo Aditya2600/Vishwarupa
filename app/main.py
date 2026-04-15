@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import sys
 import hashlib
 import json
@@ -519,10 +519,10 @@ async def list_avatars() -> dict:
     cached_data = await api_cache.get("avatars")
     if cached_data is not None:
         ms = (time.time() - start) * 1000
-        print(f"\n⚡ [AVATAR CACHE HIT] Served directly from Cache Class in {ms:.3f} ms")
+        print(f"\n[AVATAR CACHE HIT] Served directly from Cache Class in {ms:.3f} ms")
         return cached_data
 
-    print("\n⏳ [AVATAR CACHE EMPTY] Fetching data directly from HeyGen API...")
+    print("\n[AVATAR CACHE EMPTY] Fetching data directly from HeyGen API...")
 
     avatars_resp = client.list_avatars()
     try:
@@ -743,7 +743,7 @@ async def list_avatars() -> dict:
 
     await api_cache.set("avatars", result, ttl=7200)
     ms = (time.time() - start) * 1000
-    print(f"✅ [AVATAR CACHE SAVED] Fetched from HeyGen and wrote to aiocache in {ms:.3f} ms")
+    print(f"[AVATAR CACHE SAVED] Fetched from HeyGen and wrote to aiocache in {ms:.3f} ms")
 
     return result
 
@@ -756,10 +756,10 @@ async def list_voices() -> dict:
     cached_data = await api_cache.get("voices")
     if cached_data is not None:
         ms = (time.time() - start) * 1000
-        print(f"\n⚡ [VOICE CACHE HIT] Served directly from Cache Class in {ms:.3f} ms")
+        print(f"\n[VOICE CACHE HIT] Served directly from Cache Class in {ms:.3f} ms")
         return cached_data
 
-    print("\n⏳ [VOICE CACHE EMPTY] Fetching data directly from HeyGen API...")
+    print("\n[VOICE CACHE EMPTY] Fetching data directly from HeyGen API...")
 
     raw_result = client.list_voices()
     voices = raw_result.get("data", {}).get("voices", [])
@@ -817,7 +817,7 @@ async def list_voices() -> dict:
 
     await api_cache.set("voices", raw_result, ttl=7200)
     ms = (time.time() - start) * 1000
-    print(f"✅ [VOICE CACHE SAVED] Fetched from HeyGen and wrote to aiocache in {ms:.3f} ms")
+    print(f"[VOICE CACHE SAVED] Fetched from HeyGen and wrote to aiocache in {ms:.3f} ms")
 
     return raw_result
 
@@ -860,56 +860,6 @@ async def upload_pdf(
         logger.error(f"PDF Upload Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-NEXT_ACTIONS_TEMPLATES = {
-    "Hindi": (
-        "कृपया इस नोटिस के मिलने के 15 दिनों के भीतर अपने सारे बकाया राशि का भुगतान करें।\n"
-        "भुगतान करने के बाद, कृपया भुगतान का स्क्रीनशॉट या रसीद इसी व्हाट्सएप नंबर पर हमारे साथ साझा करें।\n"
-        "किसी भी सहायता या स्पष्टीकरण के लिए, आप हमारे हेल्पलाइन नंबर पर तुरंत संपर्क कर सकते हैं।"
-    ),
-    "English": (
-        "Please pay the total outstanding amount within 15 days of receiving this notice.\n"
-        "After making the payment, please share the screenshot or receipt on this WhatsApp number for verification.\n"
-        "For any assistance or clarification, you can contact our helpline number immediately."
-    ),
-    "Marathi": (
-        "कृपया ही नोटीस मिळाल्यापासून 15 दिवसांच्या आत संपूर्ण थकबाकी भरा.\n"
-        "पेमेंट केल्यानंतर, कृपया पेमेंटचा स्क्रीनशॉट किंवा पावती पडताळणीसाठी या व्हॉट्सॲप नंबरवर शेअर करा.\n"
-        "कोणत्याही मदतीसाठी किंवा स्पष्टीकरणासाठी, तुम्ही आमच्या हेल्पलाईन नंबरवर त्वरित संपर्क साधू शकता।"
-    ),
-    "Tamil": (
-        "இந்த அறிவிப்பைப் பெற்ற 15 நாட்களுக்குள் நிலுவையில் உள்ள முழுத் தொகையைச் செலுத்தவும்.\n"
-        "பணம் செலுத்திய பிறகு, சரிபார்ப்பிற்காக இந்த வாட்ஸ்அப் எண்ணில் ஸ்கிரீன்ஷாட் அல்லது ரசீதைப் பகிரவும்.\n"
-        "ஏதேனும் உதவி அல்லது விளக்கத்திற்கு, எங்களின் உதவி எண்னை உடனடியாக தொடர்பு கொள்ளலாம்।"
-    ),
-    "Telugu": (
-        "ఈ నోటీసు అందిన 15 రోజులలోపు మొత్తం బకాయి మొత్తాన్ని చెల్లించండి.\n"
-        "చెల్లింపు చేసిన తర్వాత, దయచేసి ధృవీకరణ కోసం ఈ వాట్సాప్ నంబర్‌లో స్క్రీన్‌షాట్ లేదా రసీదును షేర్ చేయండి.\n"
-        "ఏదైనా సహాయం లేదా వివరణ కోసం, మీరు వెంటనే మా హెల్ప్‌లైన్ నంబర్‌ను సంప్రదించవచ్చు।"
-    ),
-    "Kannada": (
-        "ಈ ನೋಟಿಸ್ ಸ್ವೀಕರಿಸಿದ 15 ದಿನಗಳ ಒಳಗೆ ಬಾಕಿ ಇರುವ ಒಟ್ಟು ಮೊತ್ತವನ್ನು ಪಾವತಿಸಿ.\n"
-        "ಪಾವತಿ ಮಾಡಿದ ನಂತರ, ದಯವಿಟ್ಟು ಪರಿಶೀಲನೆಗಾಗಿ ಈ ವಾಟ್ಸಾಪ್ ಸಂಖ್ಯೆಯಲ್ಲಿ ಸ್ಕ್ರೀನ್‌ಶಾಟ್ ಅಥವಾ ರಸೀದಿಯನ್ನು ಹಂಚಿಕೊಳ್ಳಿ.\n"
-        "ಯಾವುದೇ ಸಹಾಯ ಅಥವಾ ಸ್ಪಷ್ಟೀಕರಣಕ್ಕಾಗಿ, ನೀವು ತಕ್ಷಣ ನಮ್ಮ ಸಹಾಯವಾಣಿ ಸಂಖ್ಯೆಯನ್ನು ಸಂಪರ್ಕಿಸಬಹುದು।"
-    ),
-    "Malayalam": (
-        "ഈ അറിയിപ്പ് ലഭിച്ച് 15 ദിവസത്തിനുള്ളിൽ കുടിശ്ശികയുള്ള മുഴുവൻ തുകയും ദയവായി അടയ്ക്കുക.\n"
-        "പണമടച്ചതിന് ശേഷം, വെരിഫിക്കേഷനായി പെയ്‌മെന്റ് സ്‌ക്രീൻഷോട്ടൊ രസീതോ ഈ വാട്ട്‌സ്ആപ്പ് നമ്പറിൽ പങ്കിടുക.\n"
-        "എന്തെങ്കിലും സഹായത്തിനോ വിശദീകരണത്തിനോ നിങ്ങൾക്ക് ഞങ്ങളുടെ ഹെൽപ്പ് ലൈൻ നമ്പറിൽ ഉടൻ ബന്ധപ്പെടാവുന്നതാണ്।"
-    ),
-    "Bengali": (
-        "এই নোটিশ পাওয়ার ১৫ দিনের মধ্যে দয়া করে সমস্ত বকেয়া টাকা পরিশোধ করুন।\n"
-        "পেমেন্ট করার পর, ভেরিফিকেশনের জন্য এই হোয়াটসঅ্যাপ নম্বরে স্ক্রিনশট বা রসিদ শেয়ার করুন।\n"
-        "যেকোনো সহায়তা বা স্পষ্টীকরণের জন্য, আপনি অবিলম্বে আমাদের হেল্পলাইন নম্বরে যোগাযোগ করতে পারেন।"
-    ),
-    "Gujarati": (
-        "મહેરબાની કરીને આ નોટિસ મળ્યાના 15 દિવસની અંદર બાકી રહેલી કુલ રકમ ચૂકવો.\n"
-        "ચુકવણી કર્યા પછી, કૃપા કરીને ચકાસણી માટે આ વોટ્સએપ નંબર પર સ્ક્રીનશોટ અથવા રસીદ શેર કરો.\n"
-        "કોઈ પણ મદદ અથવા સ્પષ્ટતા માટે, તમે તાત્કાલિક અમારા હેલ્પલાઇન નંબર પર સંપર્ક કરી શકો છો।"
-    )
-}
-
-def get_next_actions_template(language: str) -> str:
-    return NEXT_ACTIONS_TEMPLATES.get(language, NEXT_ACTIONS_TEMPLATES["English"])
 
 @app.post("/pdf/{pdf_id}/summarize")
 async def summarize_pdf(
@@ -930,17 +880,19 @@ async def summarize_pdf(
     )
     try:
         summary = await summarization_service.summarize_text(pdf["original_text"], target_language=language, gender=gender)
-        
-        # PRODUCTION CHANGE: Use a language-specific hardcoded editable template.
-        next_actions = get_next_actions_template(language)
-        
-        update_doc = {"summary_text": summary, "next_actions_text": next_actions, "status": "completed", "updated_at": datetime.utcnow()}
+
+        update_doc = {
+            "summary_text": summary,
+            "next_actions_text": "",
+            "status": "completed",
+            "updated_at": datetime.utcnow(),
+        }
 
         await pdf_collection.update_one(
             {"_id": ObjectId(pdf_id)},
             {"$set": update_doc}
         )
-        return {"status": "completed", "summary": summary, "next_actions": next_actions}
+        return {"status": "completed", "summary": summary, "next_actions": ""}
     except Exception as e:
         await pdf_collection.update_one(
             {"_id": ObjectId(pdf_id)},
@@ -1012,8 +964,21 @@ async def generate_pdf_audio(
                 kind,
                 text_key,
             )
+            if kind in ("next_actions", "next-actions", "nextactions"):
+                await pdf_collection.update_one(
+                    {"_id": ObjectId(pdf_id)},
+                    {"$set": {text_key: "", "next_actions_audio_url": None, "updated_at": datetime.utcnow()}}
+                )
+                return {"status": "skipped", "audio_url": None}
             raise HTTPException(status_code=400, detail=f"{text_key} not available. Summarize the document first.")
         text_to_convert = pdf[text_key]
+
+    if kind in ("next_actions", "next-actions", "nextactions") and not str(text_to_convert).strip():
+        await pdf_collection.update_one(
+            {"_id": ObjectId(pdf_id)},
+            {"$set": {text_key: "", "next_actions_audio_url": None, "updated_at": datetime.utcnow()}}
+        )
+        return {"status": "skipped", "audio_url": None}
 
     try:
         logger.info(
@@ -1174,7 +1139,7 @@ def get_template_details(template_id: str, version: str = 'v3', current_user: st
     return client.get_template_details(template_id, version=version)
 
 
-# ── WhatsApp Campaign Templates (DB-backed) ───────────────────────────────────
+# â”€â”€ WhatsApp Campaign Templates (DB-backed) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @app.get('/meta/whatsapp-templates')
 async def list_whatsapp_templates(current_user: str = Depends(get_current_user)):
@@ -2407,7 +2372,7 @@ async def process_single_bulk_item(record_id: str, language: str):
         doc_record = await pdf_collection.find_one({"_id": ObjectId(record_id)})
         doc_text = await pdf_service.extract_text_from_url(doc_record['pdf_url'])
 
-        # 3. Summarize (Summary via AI, Next Actions via Hardcoded Template for campaign consistency)
+        # 3. Summarize (Summary via AI, next actions start blank for user input)
         await pdf_collection.update_one(
             {"_id": ObjectId(record_id)},
             {"$set": {"status": "summarizing", "original_text": doc_text}}
@@ -2415,7 +2380,7 @@ async def process_single_bulk_item(record_id: str, language: str):
         
         # Generate Summary
         summary = await summarization_service.summarize_text(doc_text, target_language=language)
-        next_actions = get_next_actions_template(language)
+        next_actions = ""
 
         # 4. Generate Audio for both
         audio_url = await audio_service.generate_audio(
@@ -2427,7 +2392,7 @@ async def process_single_bulk_item(record_id: str, language: str):
         )
         
         next_actions_audio_url = None
-        if next_actions:
+        if next_actions.strip():
             try:
                 next_actions_audio_url = await audio_service.generate_audio(
                     pdf_id=record_id,
@@ -2444,10 +2409,9 @@ async def process_single_bulk_item(record_id: str, language: str):
             "status": "completed",
             "summary_text": summary,
             "audio_url": audio_url,
+            "next_actions_text": next_actions,
             "updated_at": datetime.utcnow()
         }
-        if next_actions:
-            update_fields["next_actions_text"] = next_actions
         if next_actions_audio_url:
             update_fields["next_actions_audio_url"] = next_actions_audio_url
 
