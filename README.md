@@ -5,7 +5,7 @@ FastAPI backend plus a Vite/React frontend for creating personalized videos thro
 - Avatar video generation through HeyGen
 - Text-to-video rendering through the local `Remotion/` project
 
-The app also includes email/password auth, autosaved drafts, a "My Videos" library, direct video download/share actions, and subtitle/logo post-processing for avatar renders.
+The app also includes email/password auth, autosaved drafts, a "My Videos" library, direct video download/share actions, subtitle/logo post-processing for avatar renders, and a Talking PDF flow for document summaries.
 
 ## Highlights
 
@@ -13,6 +13,28 @@ The app also includes email/password auth, autosaved drafts, a "My Videos" libra
 - Subtitle controls for color and placement, plus logo position and opacity for styled outputs.
 - Share step actions for copy link, WhatsApp sharing, and direct video download.
 - Docker images for both backend and frontend, plus a root `docker-compose.yml` for local containerized runs.
+
+## Talking PDF
+
+Talking PDF is the document summarization flow for notices and other PDFs.
+
+- Upload a single PDF or process a bulk CSV with `phone_number`, `pdf_link`, and `language` columns.
+- The backend stores each PDF record in MongoDB.
+- The original PDF and generated audio files are stored in S3.
+- The summary page is shared through a public `/s/<pdfId>` link.
+- WhatsApp messages use the `wsp_test2` template and send the borrower-facing summary link.
+- Summary text is generated from the PDF content, and next-actions text can be edited before regenerating audio.
+- If next-actions text is blank, no next-actions audio is generated.
+
+Flow:
+
+1. Upload or submit the PDF URL.
+2. The backend creates a MongoDB record.
+3. The PDF is uploaded to S3 when required.
+4. The backend extracts text and generates a summary.
+5. Summary and next-actions audio are generated with Edge TTS and stored in S3.
+6. The public share page at `/s/<pdfId>` loads the borrower-facing PDF view.
+7. WhatsApp sends the same public share link to the borrower.
 
 ## Architecture & Queueing
 Deploying the heavy Text-To-Video `Remotion` pipeline and HeyGen integrations requires a robust asynchronous pipeline to scale securely avoiding `504 Gateway Timeouts`:
@@ -246,6 +268,12 @@ The CD workflow uses the built-in `GITHUB_TOKEN` to push packages to GHCR from A
 - `GET /my-videos`
 - `POST /drafts/save`
 - `GET /drafts`
+- `POST /pdf/upload`
+- `POST /pdf/{pdf_id}/summarize`
+- `GET /pdf/{pdf_id}/status`
+- `POST /pdf/{pdf_id}/generate-audio`
+- `GET /pdf/share/{pdf_id}`
+- `POST /pdf/bulk-csv`
 
 ## Notes
 
@@ -253,6 +281,7 @@ The CD workflow uses the built-in `GITHUB_TOKEN` to push packages to GHCR from A
 - Text-to-video uses the local `Remotion/` project plus `edge-tts`.
 - The Share step downloads the final video directly when the file is served by this app, and falls back to the video URL for external assets.
 - Subtitle overlays are rendered with configurable placement and a lighter background to reduce overlap with on-screen content.
+- The public Talking PDF share route is `/s/<pdfId>`.
 - Generated Remotion runtime files under `Remotion/public/audio/` and `Remotion/public/metadata.json` should not be committed.
 - If local Remotion renders fail to launch a browser, set `REMOTION_BROWSER_EXECUTABLE` explicitly.
 - The active frontend docs live in `Frontend/README.md`.
