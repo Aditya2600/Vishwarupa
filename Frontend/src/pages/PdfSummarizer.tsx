@@ -16,6 +16,39 @@ const PDF_ID_KEY = "pdf_summarizer_last_id";
 const DEFAULT_WHATSAPP_TEMPLATE_ID = "wsp_test2";
 const authHeader = () => ({ Authorization: `Bearer ${localStorage.getItem("token")}` });
 
+const normalizeCsvHeader = (value: string) =>
+  value.trim().replace(/^\uFEFF/, "").toLowerCase().replace(/\s+/g, "_");
+
+const splitCsvLine = (line: string) =>
+  line.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map((cell) => cell.trim().replace(/^"|"$/g, ""));
+
+const parseBulkCsvPreview = (csvText: string) => {
+  const lines = csvText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length < 2) return [];
+
+  const headers = splitCsvLine(lines[0]).map(normalizeCsvHeader);
+  return lines.slice(1).map((line) => {
+    const values = splitCsvLine(line);
+    const row: Record<string, string> = {};
+    headers.forEach((header, index) => {
+      row[header] = values[index] ?? "";
+    });
+    return row;
+  });
+};
+
+const firstPresent = (row: Record<string, string>, keys: string[]) => {
+  for (const key of keys) {
+    const value = row[normalizeCsvHeader(key)]?.trim();
+    if (value) return value;
+  }
+  return "";
+};
+
 const PdfSummarizer = () => {
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -32,6 +65,10 @@ const PdfSummarizer = () => {
   const [showPreview, setShowPreview] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("single");
   const [bulkItems, setBulkItems] = useState<any[]>([]); // To track multiple files/csv rows
+  const [isSendingBulk, setIsSendingBulk] = useState(false);
+  const [bulkTextEditorItem, setBulkTextEditorItem] = useState<any | null>(null);
+  const [bulkNextActionsDraft, setBulkNextActionsDraft] = useState("");
+  const [isSavingBulkNextActions, setIsSavingBulkNextActions] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
   const [config, setConfig] = useState<any>(null);
@@ -150,12 +187,13 @@ const PdfSummarizer = () => {
             return {
               ...item,
               status: data.status,
-              phone_number: data.phone_number,
-              language: data.language,
-              summary_text: data.summary,
-              next_actions: data.next_actions,
-              audio_url: data.audio_url,
-              next_actions_audio_url: data.next_actions_audio_url,
+              phone_number: data.phone_number ?? item.phone_number,
+              language: data.language ?? item.language,
+              pdf_url: data.pdf_url ?? item.pdf_url,
+              summary_text: data.summary ?? item.summary_text,
+              next_actions: data.next_actions ?? item.next_actions,
+              audio_url: data.audio_url ?? item.audio_url,
+              next_actions_audio_url: data.next_actions_audio_url ?? item.next_actions_audio_url,
               name: data.filename || item.name
             };
           }
@@ -199,10 +237,29 @@ const PdfSummarizer = () => {
     formData.append("file", uploadedFile);
 
     try {
+      const previewRows = parseBulkCsvPreview(await uploadedFile.text());
       const response = await fetch("/api/pdf/upload", { method: "POST", headers: authHeader(), body: formData });
       if (!response.ok) throw new Error("Upload failed");
       const data = await response.json();
       setPdfId(data.pdf_id);
+      const initialItems = (data.ids || []).map((id: string, idx: number) => {
+        const preview = previewRows[idx] ?? {};
+        const phoneNumber = firstPresent(preview, ["phone_number", "phone", "mobile", "mobile_number", "contact_number", "whatsapp", "whatsapp_number"]);
+        const pdfUrl = firstPresent(preview, ["pdf_link", "pdf_url", "url", "link", "source", "source_url"]);
+        const lang = firstPresent(preview, ["language", "lang", "language_name"]) || "Hindi";
+
+        return {
+          _id: id,
+          name: `Record ${idx + 1}`,
+          phone_number: phoneNumber,
+          pdf_url: pdfUrl,
+          language: lang,
+          type: "PDF LINK",
+          lang,
+          status: "pending",
+        };
+      });
+      setBulkItems(initialItems);
       toast({ title: "PDF Uploaded", description: "Text extracted. Summarizing...", duration: 2000 });
       handleSummarize(language, data.pdf_id); // Auto-summarize on upload
     } catch {
@@ -343,7 +400,8 @@ const PdfSummarizer = () => {
     setIsSendingWhatsApp(true);
     try {
       const baseUrl = config?.frontend_url || window.location.origin;
-      const shareUrl = `${baseUrl}/s/${pdfId}`;
+      const summaryPageUrl = `${baseUrl}/s/${pdfId}`;
+      const preferredUrl = summaryPageUrl;
 
       const now = Date.now();
       const campaignPayload = {
@@ -364,8 +422,12 @@ const PdfSummarizer = () => {
       if (!campaignCode) throw new Error("Could not retrieve campaign code from CPaaS");
 
       const variables = {
-        pdfUrl: shareUrl,
-        url: shareUrl,
+        url: preferredUrl,
+        pdfUrl: preferredUrl,
+        pdf_url: preferredUrl,
+        video_url: preferredUrl,
+        summaryUrl: summaryPageUrl,
+        summary_url: summaryPageUrl,
       };
 
       console.info("[pdf-whatsapp] pushCampaignLeads payload", {
@@ -386,6 +448,140 @@ const PdfSummarizer = () => {
       toast({ variant: "destructive", title: "Failed to send", description: e.message || "An API error occurred." });
     } finally {
       setIsSendingWhatsApp(false);
+    }
+  };
+
+  const handleBulkFinalizeAndSend = async () => {
+    const completedItems = bulkItems.filter((item) => item.status === "completed" && item._id);
+    if (!completedItems.length) {
+      toast({
+        variant: "destructive",
+        title: "No completed rows",
+        description: "Wait until at least one bulk PDF finishes processing before sending.",
+      });
+      return;
+    }
+
+    setIsSendingBulk(true);
+    try {
+      const baseUrl = config?.frontend_url || window.location.origin;
+      const now = Date.now();
+      const campaignPayload = {
+        name: `Bulk PDF Share ${new Date(now).toLocaleDateString("en-GB")}`,
+        description: `Bulk WhatsApp send for ${completedItems.length} PDF notices`,
+        startDate: new Date(now + 60_000).toISOString(),
+        endDate: new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        templateId: DEFAULT_WHATSAPP_TEMPLATE_ID,
+        communicationType: "WHATSAPP",
+        campaignType: "WHATSAPP",
+      };
+
+      const campaignResponse = await createCampaign(campaignPayload);
+      const campaignCode = campaignResponse.data?.campaignCode || campaignResponse.data;
+      if (!campaignCode) throw new Error("Could not retrieve campaign code from CPaaS");
+
+      const leads = completedItems
+        .map((item) => {
+          const pdfId = String(item._id || "").trim();
+          const phone = String(item.phone_number || "").trim();
+          if (!pdfId || !phone) return null;
+
+          const shareUrl = `${baseUrl}/s/${pdfId}`;
+          return {
+            phoneNumber: phone.startsWith("91") ? phone : `91${phone.replace(/\D/g, "")}`,
+            uniqueId: pdfId,
+            variables: {
+              url: shareUrl,
+              pdfUrl: shareUrl,
+              pdf_url: shareUrl,
+              video_url: shareUrl,
+              summaryUrl: shareUrl,
+              summary_url: shareUrl,
+            },
+          };
+        })
+        .filter(Boolean);
+
+      if (!leads.length) {
+        throw new Error("No valid completed rows with phone numbers were found.");
+      }
+
+      await pushCampaignLeads({
+        campaignCode,
+        leads: leads as Array<{
+          phoneNumber: string;
+          uniqueId: string;
+          variables: Record<string, string>;
+        }>,
+      });
+
+      await updateCampaignStatus(campaignCode, "STARTED");
+
+      toast({
+        title: "Bulk campaign started",
+        description: `Queued ${leads.length} WhatsApp messages using ${DEFAULT_WHATSAPP_TEMPLATE_ID}.`,
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Bulk send failed",
+        description: error?.message || "Could not start the bulk WhatsApp campaign.",
+      });
+    } finally {
+      setIsSendingBulk(false);
+    }
+  };
+
+  const openBulkTextEditor = (item: any) => {
+    setBulkTextEditorItem(item);
+    setBulkNextActionsDraft(String(item.next_actions ?? ""));
+  };
+
+  const handleSaveBulkNextActions = async () => {
+    if (!bulkTextEditorItem?._id) return;
+
+    setIsSavingBulkNextActions(true);
+    try {
+      const response = await fetch(
+        `/api/pdf/${bulkTextEditorItem._id}/generate-audio?language=${encodeURIComponent(bulkTextEditorItem.language || language)}&gender=${encodeURIComponent(gender)}&kind=next_actions`,
+        {
+          method: "POST",
+          headers: { ...authHeader(), "Content-Type": "application/json" },
+          body: JSON.stringify({ text: bulkNextActionsDraft }),
+        }
+      );
+
+      if (!response.ok) {
+        const body = await response.text();
+        throw new Error(body || "Failed to regenerate next actions audio.");
+      }
+
+      const data = await response.json();
+      setBulkItems((prev) =>
+        prev.map((item) =>
+          item._id === bulkTextEditorItem._id
+            ? {
+                ...item,
+                next_actions: bulkNextActionsDraft,
+                next_actions_audio_url: data.audio_url || item.next_actions_audio_url,
+              }
+            : item
+        )
+      );
+
+      toast({
+        title: "Next actions updated",
+        description: "The edited next-actions audio was regenerated successfully.",
+      });
+      setBulkTextEditorItem(null);
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Update failed",
+        description: error?.message || "Could not update next actions audio.",
+      });
+    } finally {
+      setIsSavingBulkNextActions(false);
     }
   };
 
@@ -756,17 +952,32 @@ const PdfSummarizer = () => {
                         formData.append("file", file);
                         
                         try {
+                          const previewRows = parseBulkCsvPreview(await file.text());
                           const res = await fetch("/api/pdf/bulk-csv", { method: "POST", headers: authHeader(), body: formData });
                           const data = await res.json();
-                          const initialItems = (data.ids || []).map((id: string, idx: number) => ({
-                            _id: id,
-                            name: `Record ${idx + 1}`,
-                            type: 'PDF LINK',
-                            lang: '...',
-                            status: 'pending'
-                          }));
+                          const initialItems = (data.ids || []).map((id: string, idx: number) => {
+                            const preview = previewRows[idx] ?? {};
+                            const phoneNumber = firstPresent(preview, ["phone_number", "phone", "mobile", "mobile_number", "contact_number", "whatsapp", "whatsapp_number"]);
+                            const pdfUrl = firstPresent(preview, ["pdf_link", "pdf_url", "url", "link", "source", "source_url"]);
+                            const lang = firstPresent(preview, ["language", "lang", "language_name"]) || "Hindi";
+
+                            return {
+                              _id: id,
+                              name: `Record ${idx + 1}`,
+                              phone_number: phoneNumber,
+                              pdf_url: pdfUrl,
+                              language: lang,
+                              type: 'PDF LINK',
+                              lang,
+                              status: 'pending'
+                            };
+                          });
                           setBulkItems(initialItems);
-                          toast({ title: "Batch Started", description: `Processing ${initialItems.length} items from CSV.` });
+                          const skippedCount = Number(data.skipped_rows || 0);
+                          const description = skippedCount > 0
+                            ? `Processing ${initialItems.length} items from CSV. Skipped ${skippedCount} rows that were missing phone or pdf link.`
+                            : `Processing ${initialItems.length} items from CSV.`;
+                          toast({ title: "Batch Started", description });
                         } catch {
                           toast({ variant: "destructive", title: "Bulk error", description: "Failed to upload mapping CSV." });
                         }
@@ -803,7 +1014,25 @@ const PdfSummarizer = () => {
                             {bulkItems.map((item, idx) => (
                               <TableRow key={idx} className="border-slate-100 dark:border-slate-800/60 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                                 <TableCell className="font-bold text-slate-800 dark:text-slate-100 pl-6 text-sm">{item.phone_number || item.name}</TableCell>
-                                <TableCell><Badge variant="outline" className="text-[9px] uppercase font-bold py-0.5 border-primary/20 text-primary/80 bg-primary/5">URL</Badge></TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className="text-[9px] uppercase font-bold py-0.5 border-primary/20 text-primary/80 bg-primary/5">URL</Badge>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-7 w-7 p-0 text-slate-300 hover:text-blue-500 hover:bg-blue-500/10"
+                                      onClick={() => {
+                                        if (!item._id) return;
+                                        const baseUrl = config?.frontend_url || window.location.origin;
+                                        window.open(`${baseUrl}/s/${item._id}`, "_blank", "noopener,noreferrer");
+                                      }}
+                                      disabled={!item._id}
+                                      title="Open borrower preview"
+                                    >
+                                      <Eye className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
                                 <TableCell className="text-slate-400 text-[10px] font-bold">{item.language?.toUpperCase() || '...'}</TableCell>
                                 <TableCell>
                                   <span className={`inline-flex items-center px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider ${
@@ -814,6 +1043,17 @@ const PdfSummarizer = () => {
                                 </TableCell>
                                 <TableCell className="text-right pr-6">
                                   <div className="flex justify-end gap-2">
+                                  {(item.summary_text || item.next_actions) && (
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-8 w-8 p-0 text-slate-300 hover:text-violet-500 hover:bg-violet-500/10"
+                                      onClick={() => openBulkTextEditor(item)}
+                                      title="View / edit text"
+                                    >
+                                      <FileText className="w-4 h-4" />
+                                    </Button>
+                                  )}
                                   {item.audio_url && (
                                     <>
                                       <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-slate-300 hover:text-emerald-500 hover:bg-emerald-500/10" onClick={() => {
@@ -850,9 +1090,14 @@ const PdfSummarizer = () => {
                     </div>
                     <Button 
                       className="bg-[#00a884] hover:bg-[#06cf9c] text-secondary font-bold h-14 px-12 shadow-2xl shadow-emerald-500/20 uppercase tracking-widest text-xs transition-all hover:scale-105 active:scale-95"
-                      disabled={bulkItems.length === 0}
+                      disabled={bulkItems.length === 0 || isSendingBulk}
+                      onClick={handleBulkFinalizeAndSend}
                     >
-                      <Send className="w-4 h-4 mr-3" />
+                      {isSendingBulk ? (
+                        <Loader2 className="w-4 h-4 mr-3 animate-spin" />
+                      ) : (
+                        <Send className="w-4 h-4 mr-3" />
+                      )}
                       Bulk Finalize & Send
                     </Button>
                   </div>
@@ -949,6 +1194,98 @@ const PdfSummarizer = () => {
                 >
                   <Send className="w-5 h-5" />
                 </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Bulk Text Editor Modal */}
+      <AnimatePresence>
+        {bulkTextEditorItem && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.96, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.96, y: 20 }}
+              className="w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl bg-white dark:bg-slate-950 shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col"
+            >
+              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">Bulk Preview and Edit</h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    {bulkTextEditorItem.phone_number || "Unknown number"} · {String(bulkTextEditorItem.language || "Hindi").toUpperCase()}
+                  </p>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setBulkTextEditorItem(null)}>
+                  <X className="w-5 h-5" />
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-5 overflow-y-auto">
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-semibold text-slate-900 dark:text-white">Summary Text</h4>
+                      {bulkTextEditorItem.audio_url && (
+                        <audio src={bulkTextEditorItem.audio_url} controls className="w-48 h-8" />
+                      )}
+                    </div>
+                    <div className="whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 rounded-lg p-4 max-h-72 overflow-y-auto">
+                      {bulkTextEditorItem.summary_text || "No summary available yet."}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-semibold text-slate-900 dark:text-white">Current Next Actions Audio</h4>
+                      {bulkTextEditorItem.next_actions_audio_url ? (
+                        <audio src={bulkTextEditorItem.next_actions_audio_url} controls className="w-48 h-8" />
+                      ) : (
+                        <span className="text-xs text-slate-400">No audio yet</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Edit the next-actions text on the right, then regenerate audio.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-semibold text-slate-900 dark:text-white">Next Actions Text</h4>
+                      <span className="text-xs text-slate-400">Editable</span>
+                    </div>
+                    <textarea
+                      value={bulkNextActionsDraft}
+                      onChange={(e) => setBulkNextActionsDraft(e.target.value)}
+                      rows={16}
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-end gap-3">
+                    <Button variant="outline" onClick={() => setBulkTextEditorItem(null)}>
+                      Close
+                    </Button>
+                    <Button
+                      onClick={handleSaveBulkNextActions}
+                      disabled={isSavingBulkNextActions}
+                      className="bg-primary hover:bg-primary/90 text-white"
+                    >
+                      {isSavingBulkNextActions ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : null}
+                      Save & Regenerate Audio
+                    </Button>
+                  </div>
+                </div>
               </div>
             </motion.div>
           </motion.div>

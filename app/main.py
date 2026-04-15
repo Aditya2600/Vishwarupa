@@ -2,6 +2,7 @@ import asyncio
 import sys
 import hashlib
 import json
+from uuid import uuid4
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
@@ -837,7 +838,10 @@ async def upload_pdf(
         s3_url = None
         if settings.aws_access_key_id:
             try:
-                s3_key = f"notices/{file.filename}"
+                # Generate a unique S3 key per upload to avoid cross-user filename collisions.
+                safe_filename = Path(file.filename).name
+                unique_token = f"{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{uuid4().hex[:8]}"
+                s3_key = f"notices/{unique_token}_{safe_filename}"
                 s3_url = s3_service.upload_file(file_path, s3_key, content_type="application/pdf")
             except Exception as e:
                 logger.error(f"Failed to upload original PDF to S3: {e}")
@@ -1103,7 +1107,8 @@ async def share_pdf_summary(pdf_id: str):
             local_path = Path("input/pdf") / filename
             if local_path.exists():
                 logger.info(f"Auto-uploading missing S3 PDF for share link: {filename}")
-                s3_key = f"notices/{filename}"
+                safe_filename = Path(filename).name
+                s3_key = f"notices/{pdf_id}_{safe_filename}"
                 pdf_url = s3_service.upload_file(local_path, s3_key, content_type="application/pdf")
                 if pdf_url:
                     # Save it so we don't have to upload again next time
@@ -2289,6 +2294,7 @@ async def log_whatsapp_attempt(data: dict, admin: dict = Depends(get_current_adm
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+@app.post('/pdf/bulk-csv')
 @app.post('/api/pdf/bulk-csv')
 async def bulk_process_csv(
     file: UploadFile = File(...),
@@ -2299,6 +2305,7 @@ async def bulk_process_csv(
     """
     import csv
     import io
+    from app.database import pdf_collection
 
     try:
         content = await file.read()
@@ -2306,12 +2313,54 @@ async def bulk_process_csv(
         reader = csv.DictReader(stream)
         
         batch_ids = []
+        skipped_rows = 0
+
+        def _normalize_row(row: dict[str, Any]) -> dict[str, str]:
+            normalized: dict[str, str] = {}
+            for key, value in row.items():
+                cleaned_key = str(key or "").strip().lstrip("\ufeff").lower().replace(" ", "_")
+                cleaned_value = "" if value is None else str(value).strip()
+                normalized[cleaned_key] = cleaned_value
+            return normalized
+
+        def _first_present(row: dict[str, str], *keys: str) -> str:
+            for key in keys:
+                value = row.get(key, "").strip()
+                if value:
+                    return value
+            return ""
+
         for row in reader:
-            phone = row.get('phone_number')
-            url = row.get('pdf_link')
-            lang = row.get('language', 'Hindi')
+            normalized_row = _normalize_row(row)
+            phone = _first_present(
+                normalized_row,
+                "phone_number",
+                "phone",
+                "mobile",
+                "mobile_number",
+                "contact_number",
+                "whatsapp",
+                "whatsapp_number",
+            )
+            url = _first_present(
+                normalized_row,
+                "pdf_link",
+                "pdf_url",
+                "url",
+                "link",
+                "source",
+                "source_url",
+            )
+            lang = _first_present(normalized_row, "language", "lang", "language_name") or "Hindi"
 
             if not phone or not url:
+                skipped_rows += 1
+                logger.warning(
+                    "Skipping bulk CSV row due to missing phone or url | phone=%s | url_present=%s | headers=%s",
+                    phone,
+                    bool(url),
+                    sorted(normalized_row.keys()),
+                )
                 continue
 
             # Create entry in "pdf_summaries" collection
@@ -2331,7 +2380,12 @@ async def bulk_process_csv(
             # Fire and forget background task
             asyncio.create_task(process_single_bulk_item(record_id, lang))
 
-        return {"status": "success", "batch_size": len(batch_ids), "ids": batch_ids}
+        return {
+            "status": "success",
+            "batch_size": len(batch_ids),
+            "skipped_rows": skipped_rows,
+            "ids": batch_ids,
+        }
     except Exception as e:
         logger.error(f"Bulk CSV error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -2340,6 +2394,8 @@ async def process_single_bulk_item(record_id: str, language: str):
     """
     Worker function to process one bulk PDF from a URL.
     """
+    from app.database import pdf_collection
+
     try:
         # 1. Update status to downloading
         await pdf_collection.update_one(
@@ -2422,7 +2478,10 @@ async def get_pdf_status(record_id: str, current_user: str = Depends(get_current
         "phone_number": record.get("phone_number"),
         "language": record.get("language"),
         "summary": record.get("summary_text"),
+        "next_actions": record.get("next_actions_text"),
         "audio_url": record.get("audio_url"),
+        "next_actions_audio_url": record.get("next_actions_audio_url"),
+        "pdf_url": record.get("pdf_url"),
         "filename": record.get("filename"),
         "error": record.get("error")
     }

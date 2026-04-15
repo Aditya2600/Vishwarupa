@@ -289,6 +289,9 @@ export default function MyVideos() {
   const openCreate = (mode: "avatar" | "remotion") => {
     navigate(`/create?mode=${mode}&fresh=1`);
   };
+  const openPdfSummarizer = () => {
+    navigate("/pdf-summarizer");
+  };
 
   const handleSoftDeleteDraft = () => {
     if (!softDeleteLocalDraft()) {
@@ -377,7 +380,7 @@ export default function MyVideos() {
               </div>
             </div>
             <div className="space-y-3 lg:w-[28rem]">
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-3">
                 <button
                   type="button"
                   onClick={() => openCreate("avatar")}
@@ -393,6 +396,14 @@ export default function MyVideos() {
                 >
                   <p className="text-sm font-semibold text-foreground">Text to Video</p>
                   <p className="mt-1 text-xs text-muted-foreground">Turn your text into engaging videos in seconds.</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={openPdfSummarizer}
+                  className="rounded-2xl border border-border bg-card p-4 text-left transition-all hover:border-primary/30 hover:bg-surface-hover"
+                >
+                  <p className="text-sm font-semibold text-foreground">PDF Summarizer</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Convert PDFs into concise multilingual voice summaries.</p>
                 </button>
               </div>
               {hasSoftDeletedDraft ? (
@@ -485,6 +496,14 @@ export default function MyVideos() {
                   className="border-border font-semibold"
                 >
                   Text to Video
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={openPdfSummarizer}
+                  className="border-border font-semibold"
+                >
+                  PDF Summarizer
                 </Button>
               </div>
             </section>
