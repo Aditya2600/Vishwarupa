@@ -43,8 +43,8 @@ class S3Service:
             logger.error(f"Failed to upload to S3: {e}")
             return None
 
-    def generate_presigned_video_url(self, s3_key: str, expires_in: int = 604800) -> str | None:
-        """Returns a temporary download URL for a private S3 object."""
+    def generate_presigned_s3_url(self, s3_key: str, expires_in: int = 604800) -> str | None:
+        """Returns a temporary download URL for any private S3 object."""
         if not self.s3 or not self.bucket:
             logger.info("S3 credentials or bucket missing. Skipping presigned URL generation.")
             return None
@@ -59,27 +59,27 @@ class S3Service:
             logger.error(f"Failed to generate presigned URL for {s3_key}: {e}")
             return None
 
-    def presign_video_url(self, video_url: str | None) -> str | None:
-        if not video_url:
-            return video_url
+    def presign_s3_url(self, asset_url: str | None) -> str | None:
+        if not asset_url:
+            return asset_url
 
         # Handle various S3 URL formats or if it's already a key
         s3_key = None
         
         # Format 1: https://bucket.s3.region.amazonaws.com/key
         prefix = f"https://{self.bucket}.s3.{settings.aws_region}.amazonaws.com/"
-        if video_url.startswith(prefix):
-            s3_key = video_url[len(prefix):]
+        if asset_url.startswith(prefix):
+            s3_key = asset_url[len(prefix):]
         
         # Format 2: https://bucket.s3.amazonaws.com/key (Legacy/Direct)
-        elif video_url.startswith(f"https://{self.bucket}.s3.amazonaws.com/"):
-            s3_key = video_url[len(f"https://{self.bucket}.s3.amazonaws.com/"):]
+        elif asset_url.startswith(f"https://{self.bucket}.s3.amazonaws.com/"):
+            s3_key = asset_url[len(f"https://{self.bucket}.s3.amazonaws.com/"):]
             
         # Format 3: Just the key itself
-        elif "/" not in video_url or video_url.startswith("notices/") or video_url.startswith("videos/") or video_url.startswith("pdf_audio/"):
-            s3_key = video_url
+        elif "/" not in asset_url or asset_url.startswith("notices/") or asset_url.startswith("videos/") or asset_url.startswith("pdf_audio/"):
+            s3_key = asset_url
             
         if not s3_key:
-            return video_url
+            return asset_url
 
-        return self.generate_presigned_video_url(s3_key) or video_url
+        return self.generate_presigned_s3_url(s3_key) or asset_url

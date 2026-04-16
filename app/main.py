@@ -10,6 +10,7 @@ from typing import Any, Literal, Optional
 from datetime import datetime
 import time
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from bson import ObjectId
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, Depends, Query, status, Body
@@ -59,6 +60,13 @@ logger.setLevel(logging.INFO)
 formatter = logging.Formatter(
     "%(asctime)s | %(levelname)s | %(message)s"
 )
+
+IST = ZoneInfo("Asia/Kolkata")
+
+
+def now_ist() -> datetime:
+    return datetime.now(IST)
+
 SAMPLE_BULK_CSV_PATH = (
     Path(__file__).resolve().parent.parent
     / "Remotion"
@@ -184,14 +192,14 @@ def _to_mongo_safe(value: object) -> object:
 
 
 def _response_video_job_result(result: VideoJobResult) -> VideoJobResult:
-    presigned_video_url = s3_service.presign_video_url(result.video_url)
+    presigned_video_url = s3_service.presign_s3_url(result.video_url)
     if presigned_video_url == result.video_url:
         return result
     return result.model_copy(update={'video_url': presigned_video_url})
 
 
 def _response_styled_video_result(result: StyledVideoResult) -> StyledVideoResult:
-    presigned_video_url = s3_service.presign_video_url(result.final_video_url)
+    presigned_video_url = s3_service.presign_s3_url(result.final_video_url)
     if presigned_video_url == result.final_video_url:
         return result
     return result.model_copy(update={'final_video_url': presigned_video_url})
@@ -255,7 +263,7 @@ def _build_avatar_job_status_response(job: dict) -> AvatarJobStatusResponse:
     return AvatarJobStatusResponse(
         _id=video_id,
         status=status_value,
-        video_url=s3_service.presign_video_url(
+        video_url=s3_service.presign_s3_url(
             str(response_payload.get('video_url') or job.get('video_url'))
         ) if (response_payload.get('video_url') or job.get('video_url')) else None,
         thumbnail_url=str(response_payload.get('thumbnail_url')) if response_payload.get('thumbnail_url') else None,
@@ -362,7 +370,7 @@ def _serialize_my_video(video: dict[str, Any]) -> dict[str, Any]:
     if isinstance(raw_url, str) and "/artifacts/" in raw_url:
         video_url = "/api/artifacts/" + raw_url.split("/artifacts/", 1)[1]
     elif isinstance(raw_url, str):
-        video_url = s3_service.presign_video_url(raw_url)
+        video_url = s3_service.presign_s3_url(raw_url)
     else:
         video_url = None
 
@@ -840,7 +848,7 @@ async def upload_pdf(
             try:
                 # Generate a unique S3 key per upload to avoid cross-user filename collisions.
                 safe_filename = Path(file.filename).name
-                unique_token = f"{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{uuid4().hex[:8]}"
+                unique_token = f"{now_ist().strftime('%Y%m%d%H%M%S')}_{uuid4().hex[:8]}"
                 s3_key = f"notices/{unique_token}_{safe_filename}"
                 s3_url = s3_service.upload_file(file_path, s3_key, content_type="application/pdf")
             except Exception as e:
@@ -876,7 +884,7 @@ async def summarize_pdf(
         raise HTTPException(status_code=400, detail="No text found in PDF to summarize")
     await pdf_collection.update_one(
         {"_id": ObjectId(pdf_id)},
-        {"$set": {"status": "summarizing", "updated_at": datetime.utcnow()}}
+        {"$set": {"status": "summarizing", "updated_at": now_ist()}}
     )
     try:
         summary = await summarization_service.summarize_text(pdf["original_text"], target_language=language, gender=gender)
@@ -885,7 +893,7 @@ async def summarize_pdf(
             "summary_text": summary,
             "next_actions_text": "",
             "status": "completed",
-            "updated_at": datetime.utcnow(),
+            "updated_at": now_ist(),
         }
 
         await pdf_collection.update_one(
@@ -896,7 +904,7 @@ async def summarize_pdf(
     except Exception as e:
         await pdf_collection.update_one(
             {"_id": ObjectId(pdf_id)},
-            {"$set": {"status": "failed", "updated_at": datetime.utcnow()}}
+            {"$set": {"status": "failed", "updated_at": now_ist()}}
         )
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -967,7 +975,7 @@ async def generate_pdf_audio(
             if kind in ("next_actions", "next-actions", "nextactions"):
                 await pdf_collection.update_one(
                     {"_id": ObjectId(pdf_id)},
-                    {"$set": {text_key: "", "next_actions_audio_url": None, "updated_at": datetime.utcnow()}}
+                    {"$set": {text_key: "", "next_actions_audio_url": None, "updated_at": now_ist()}}
                 )
                 return {"status": "skipped", "audio_url": None}
             raise HTTPException(status_code=400, detail=f"{text_key} not available. Summarize the document first.")
@@ -976,7 +984,7 @@ async def generate_pdf_audio(
     if kind in ("next_actions", "next-actions", "nextactions") and not str(text_to_convert).strip():
         await pdf_collection.update_one(
             {"_id": ObjectId(pdf_id)},
-            {"$set": {text_key: "", "next_actions_audio_url": None, "updated_at": datetime.utcnow()}}
+            {"$set": {text_key: "", "next_actions_audio_url": None, "updated_at": now_ist()}}
         )
         return {"status": "skipped", "audio_url": None}
 
@@ -1000,7 +1008,7 @@ async def generate_pdf_audio(
         if edited_text:
             await pdf_collection.update_one(
                 {"_id": ObjectId(pdf_id)},
-                {"$set": {text_key: edited_text, "updated_at": datetime.utcnow()}}
+                {"$set": {text_key: edited_text, "updated_at": now_ist()}}
             )
 
         logger.info(
@@ -1039,7 +1047,7 @@ async def log_pdf_whatsapp(
         "user_id": current_user,
         "filename": pdf["filename"],
         "action": "whatsapp_summary_generated",
-        "timestamp": datetime.utcnow()
+        "timestamp": now_ist()
     }
     
     await whatsapp_logs_collection.insert_one(log_entry)
@@ -1058,11 +1066,11 @@ async def share_pdf_summary(pdf_id: str):
     # Presign all relevant URLs
     audio_url = pdf.get("audio_url")
     if audio_url:
-        audio_url = s3_service.presign_video_url(audio_url)
+        audio_url = s3_service.presign_s3_url(audio_url)
         
     next_actions_audio_url = pdf.get("next_actions_audio_url")
     if next_actions_audio_url:
-        next_actions_audio_url = s3_service.presign_video_url(next_actions_audio_url)
+        next_actions_audio_url = s3_service.presign_s3_url(next_actions_audio_url)
 
     pdf_url = pdf.get("pdf_url")
     if not pdf_url:
@@ -1080,7 +1088,7 @@ async def share_pdf_summary(pdf_id: str):
                     await pdf_collection.update_one({"_id": ObjectId(pdf_id)}, {"$set": {"pdf_url": pdf_url}})
     
     if pdf_url:
-        pdf_url = s3_service.presign_video_url(pdf_url)
+        pdf_url = s3_service.presign_s3_url(pdf_url)
         
     return {
         "summary_text": pdf.get("summary_text"),
@@ -1433,7 +1441,7 @@ async def create_avatar_job(request: DirectVideoRequest, current_user: str = Dep
 
     video_id: str | None = None
     try:
-        now = datetime.utcnow()
+        now = now_ist()
         request_payload = _to_mongo_safe(request.model_dump(mode='python'))
         video_record = VideoRecord(
             user_id=current_user,
@@ -1470,7 +1478,7 @@ async def create_avatar_job(request: DirectVideoRequest, current_user: str = Dep
     except Exception as exc:
         if not video_id:
             raise HTTPException(status_code=502, detail=GENERIC_GENERATION_ERROR) from exc
-        failed_at = datetime.utcnow()
+        failed_at = now_ist()
         await videos_collection.update_one(
             {'_id': _mongo_id(video_id), 'user_id': current_user},
             {'$set': {
@@ -1540,7 +1548,7 @@ async def get_video_status(
             "video_id": str(doc["_id"]),
             "_id": str(doc["_id"]),
             "status": doc.get("status", "pending"),
-            "video_url": s3_service.presign_video_url(doc.get("video_url"))
+            "video_url": s3_service.presign_s3_url(doc.get("video_url"))
         }
 
     result = service.get_video_status_result(video_id, request_mode=request_mode)
@@ -1876,37 +1884,11 @@ async def get_video_details(video_id: str, current_user: str = Depends(get_curre
     if url and isinstance(url, str) and "/artifacts/" in url:
         video["video_url"] = "/api/artifacts/" + url.split("/artifacts/", 1)[1]
     elif isinstance(url, str):
-        video["video_url"] = s3_service.presign_video_url(url)
+        video["video_url"] = s3_service.presign_s3_url(url)
     
     video.pop("job_data", None)
     return video
 
-
-@app.get('/meta/whatsapp-templates')
-async def get_whatsapp_templates():
-    """Returns dynamic WhatsApp templates for bulk campaigns."""
-    try:
-        cursor = whatsapp_templates_collection.find({})
-        templates = await cursor.to_list(length=50)
-        for t in templates:
-            t["_id"] = str(t["_id"])
-        
-        if not templates:
-            # Fallback to the current WhatsApp campaign template if DB is empty
-            return [{
-                "id": "wsp_test2",
-                "templateId": "1438951627977491",
-                "name": "wsp_test2",
-                "desc": "Account Status Update Strategy",
-                "color": "emerald",
-                "whatsapp": "Hello,\n\nAn update regarding your account has been shared by CredResolve.\nKindly watch the video and take the necessary action.\n\nThank you.",
-                "scriptPersonalized": "Hello {{customer_name}}. An update regarding your account has been shared by CredResolve. Kindly watch the information in this video and take the necessary action. Thank you.",
-                "scriptUniversal": "Hello. An update regarding your account has been shared by CredResolve. Kindly watch the information in this video and take the necessary action. Thank you."
-            }]
-        return templates
-    except Exception as e:
-        logger.error(f"Failed to fetch whatsapp templates: {e}")
-        return []
 
 @app.get('/custom-avatars')
 async def get_custom_avatars():
@@ -2051,7 +2033,7 @@ async def delete_video(video_id: str, current_user: str = Depends(get_current_us
 @app.post('/drafts/save')
 async def save_draft(draft: dict, current_user: str = Depends(get_current_user)):
     print(f"DEBUG: Saving draft for {current_user}")
-    now = datetime.utcnow()
+    now = now_ist()
     result = await drafts_collection.update_one(
         {"user_id": current_user},
         {"$set": {
@@ -2147,7 +2129,7 @@ async def get_user_videos_admin(user_id: str, admin: dict = Depends(get_current_
         v['_id'] = str(v['_id'])
         url = v.get('video_url')
         if url and isinstance(url, str) and not "/artifacts/" in url:
-            v['video_url'] = s3_service.presign_video_url(url)
+            v['video_url'] = s3_service.presign_s3_url(url)
         v.pop('job_data', None)
     return videos
 
@@ -2167,7 +2149,7 @@ async def get_all_videos(search: str = "", status: str = "", admin: dict = Depen
         v['_id'] = str(v['_id'])
         url = v.get('video_url')
         if url and isinstance(url, str) and not "/artifacts/" in url:
-            v['video_url'] = s3_service.presign_video_url(url)
+            v['video_url'] = s3_service.presign_s3_url(url)
         v.pop('job_data', None)
     return videos
 
@@ -2197,7 +2179,7 @@ async def whatsapp_webhook(request: Request):
                     {"message_id": m_id},
                     {"$set": {
                         "status": status_group,
-                        "updated_at": datetime.utcnow()
+                        "updated_at": now_ist()
                     }}
                 )
         return {"status": "ok"}
@@ -2247,8 +2229,8 @@ async def log_whatsapp_attempt(data: dict, admin: dict = Depends(get_current_adm
             "customer_name": data.get("customer_name"),
             "template_id": data.get("template_id"),
             "status": "SENT",
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": now_ist(),
+            "updated_at": now_ist()
         }
         await whatsapp_logs_collection.insert_one(log_entry)
         return {"status": "logged"}
@@ -2365,7 +2347,7 @@ async def process_single_bulk_item(record_id: str, language: str):
         # 1. Update status to downloading
         await pdf_collection.update_one(
             {"_id": ObjectId(record_id)},
-            {"$set": {"status": "downloading", "updated_at": datetime.utcnow()}}
+            {"$set": {"status": "downloading", "updated_at": now_ist()}}
         )
 
         # 2. Extract text from URL (Stream-to-Memory)
@@ -2410,7 +2392,7 @@ async def process_single_bulk_item(record_id: str, language: str):
             "summary_text": summary,
             "audio_url": audio_url,
             "next_actions_text": next_actions,
-            "updated_at": datetime.utcnow()
+            "updated_at": now_ist()
         }
         if next_actions_audio_url:
             update_fields["next_actions_audio_url"] = next_actions_audio_url
@@ -2425,7 +2407,7 @@ async def process_single_bulk_item(record_id: str, language: str):
         logger.error(f"Failed processing bulk item {record_id}: {e}")
         await pdf_collection.update_one(
             {"_id": ObjectId(record_id)},
-            {"$set": {"status": "failed", "error": str(e), "updated_at": datetime.utcnow()}}
+            {"$set": {"status": "failed", "error": str(e), "updated_at": now_ist()}}
         )
 
 @app.get('/api/pdf/{record_id}/status')
@@ -2449,3 +2431,4 @@ async def get_pdf_status(record_id: str, current_user: str = Depends(get_current
         "filename": record.get("filename"),
         "error": record.get("error")
     }
+
