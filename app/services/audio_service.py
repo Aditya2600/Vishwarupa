@@ -46,10 +46,7 @@ class AudioService:
         async with self.audio_generation_semaphore:
             logger.info(f"AudioService: Processing audio request for PDF {pdf_id} (queued requests handled)")
             
-            # Rate-limiting pause for bulk stability (2.0s delay)
-            delay_seconds = float(getattr(settings, "edge_tts_delay_seconds", 2.0))
-            logger.info("PDF Audio Engine: Applying %ss delay before edge-tts request...", delay_seconds)
-            await asyncio.sleep(delay_seconds)
+
 
             voice_key = f"{language}-{gender.capitalize()}"
             voice = VOICE_MAP.get(voice_key, VOICE_MAP.get("Hindi-Female"))

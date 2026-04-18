@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     remotion_force_ipv4: bool = True
     poll_interval_seconds: int = 8
     poll_timeout_seconds: int = 1200
-    edge_tts_delay_seconds: float = 2.0
+    edge_tts_delay_seconds: float = 0.0
     strict_validation: bool = True
     cors_allow_all: bool = True
     cors_allow_origins: str = 'http://localhost:8080,http://127.0.0.1:8080,http://localhost:4173,http://127.0.0.1:4173'
@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     cpaas_api_auth_token: str | None = None
     gemini_api_key: str | None = None
     gemini_model_name: str = "gemini-2.0-flash"
+    xai_api_key: str | None = None
+    xai_model_name: str = "grok-4-1-fast-reasoning"
 
     @field_validator('heygen_avatar_id', 'heygen_voice_id', 'heygen_template_id', mode='before')
     @classmethod

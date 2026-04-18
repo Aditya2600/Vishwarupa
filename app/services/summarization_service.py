@@ -1,8 +1,7 @@
 import os
-import time
 import logging
+import httpx
 from dotenv import load_dotenv
-import google.generativeai as genai
 from app.config import settings
 
 # Force .env to override any stale system environment variables
@@ -13,26 +12,24 @@ logger = logging.getLogger("app")
 class SummarizationService:
     def __init__(self):
         # Read directly from env (post-override) to ensure .env key is used
-        self.api_key = os.getenv('GEMINI_API_KEY') or getattr(settings, 'gemini_api_key', None)
-        self.model_name = os.getenv('GEMINI_MODEL_NAME') or getattr(settings, 'gemini_model_name', 'gemini-2.0-flash')
+        self.xai_api_key = os.getenv('XAI_API_KEY') or getattr(settings, 'xai_api_key', None)
+        self.xai_model_name = os.getenv('XAI_MODEL_NAME') or getattr(settings, 'xai_model_name', 'grok-4-1-fast-reasoning')
 
-        
-        if self.api_key:
-            genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel(self.model_name)
+        if self.xai_api_key:
+            logger.info(f"SummarizationService: Initialized with xAI (Model: {self.xai_model_name})")
         else:
-            self.model = None
-            logger.warning("GEMINI_API_KEY not found in settings. Summarization will fail.")
+            logger.warning("XAI_API_KEY not found in settings. Summarization will fail.")
 
     async def summarize_text(self, text: str, target_language: str = "Hindi", gender: str = "Female") -> str:
         """
-        Summarizes the provided PDF/document text into the target language using Gemini AI.
+        Summarizes the provided PDF/document text into the target language using xAI (Grok).
         Produces a concise spoken-style summary suitable for audio narration.
         Gender affects Hindi grammar in the greeting.
         """
-        if not self.model:
-            raise RuntimeError("Gemini AI is not configured. Please check your GEMINI_API_KEY.")
+        if not self.xai_api_key:
+            raise RuntimeError("xAI AI is not configured. Please check your XAI_API_KEY.")
         
+        # RESTORED PROMPT: Exactly as in the original version
         prompt = (
             f"TASK: Create a clear, concise spoken-style summary of the following PDF/document in {target_language}.\n\n"
             f"CRITICAL: The output MUST be in PURE {target_language}. Avoid Hinglish or mixing English words unless they are proper nouns, IDs, company names, or unavoidable document terms.\n\n"
@@ -59,10 +56,28 @@ class SummarizationService:
             f"OUTPUT ONLY THE {target_language} SUMMARY:"
         )
 
-        try:
-            response = self.model.generate_content(prompt)
-            return response.text.strip()
-        except Exception as e:
-            logger.error(f"Error during Gemini summarization: {e}")
-            raise RuntimeError(f"Summarization failed: {str(e)}")
+        url = "https://api.x.ai/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self.xai_api_key}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": self.xai_model_name,
+            "messages": [
+                {"role": "system", "content": "You are a helpful assistant that summarizes legal and formal documents for narration."},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0
+        }
 
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            try:
+                response = await client.post(url, headers=headers, json=data)
+                response.raise_for_status()
+                result = response.json()
+                return result["choices"][0]["message"]["content"].strip()
+            except Exception as e:
+                logger.error(f"xAI Summarization Error: {e}")
+                if hasattr(e, 'response') and e.response:
+                    logger.error(f"xAI Response Detail: {e.response.text}")
+                raise RuntimeError(f"Summarization failed: {str(e)}")
