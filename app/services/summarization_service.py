@@ -11,35 +11,39 @@ logger = logging.getLogger("app")
 
 class SummarizationService:
     def __init__(self):
-        # xAI (Grok) Configuration
+        # 1. xAI (Grok) Configuration
         self.xai_api_key = os.getenv('XAI_API_KEY') or getattr(settings, 'xai_api_key', None)
         self.xai_model_name = os.getenv('XAI_MODEL_NAME') or getattr(settings, 'xai_model_name', 'grok-4-1-fast-reasoning')
 
-        # Gemini Configuration (Stored in code but currently not primary)
+        # 2. Gemini Configuration
         self.gemini_api_key = os.getenv('GEMINI_API_KEY') or getattr(settings, 'gemini_api_key', None)
         self.gemini_model_name = os.getenv('GEMINI_MODEL_NAME') or getattr(settings, 'gemini_model_name', 'gemini-2.0-flash')
 
-        # Initialize xAI
+        # Initialize xAI (Primary)
         if self.xai_api_key:
-            logger.info(f"SummarizationService: xAI initialized (Model: {self.xai_model_name})")
+            logger.info(f"SummarizationService: xAI Engine Initialized (Model: {self.xai_model_name})")
         
-        # Initialize Gemini (Kept in code normally as requested)
+        # Initialize Gemini Client (Kept normally in code as fallback/alternative)
+        self.gemini_client = None
+        self.gemini_model = None
+        
         if self.gemini_api_key:
             try:
                 import google.generativeai as genai
                 genai.configure(api_key=self.gemini_api_key)
+                self.gemini_client = genai # Explicitly storing the genai client
                 self.gemini_model = genai.GenerativeModel(self.gemini_model_name)
-                logger.info(f"SummarizationService: Gemini logic loaded and ready")
+                logger.info(f"SummarizationService: Gemini Client Loaded (Model: {self.gemini_model_name})")
             except Exception as e:
-                logger.warning(f"SummarizationService: Gemini pre-load failed: {e}")
+                logger.warning(f"SummarizationService: Gemini initialization failed: {e}")
 
     async def summarize_text(self, text: str, target_language: str = "Hindi", gender: str = "Female") -> str:
         """
         Summarizes the provided PDF/document text. 
-        HARDCODED to use xAI (Grok) only.
+        HARDCODED to use xAI (Grok) as the active engine.
         """
         if not self.xai_api_key:
-            raise RuntimeError("xAI API is not configured. Please check your XAI_API_KEY.")
+            raise RuntimeError("xAI API is not configured (XAI_API_KEY missing).")
 
         # RESTORED PROMPT: Exactly as in the original version
         prompt = (
@@ -68,7 +72,12 @@ class SummarizationService:
             f"OUTPUT ONLY THE {target_language} SUMMARY:"
         )
 
-        # HARDCODED: Call xAI directly. No automatic fallback to Gemini.
+        # ---------------------------------------------------------------------
+        # ENGINE CHOICE:
+        # To switch back to Gemini, change the line below to: return await self._summarize_with_gemini(prompt)
+        # ---------------------------------------------------------------------
+        
+        # ACTIVE ENGINE: xAI (Grok)
         return await self._summarize_with_xai(prompt)
 
     async def _summarize_with_xai(self, prompt: str) -> str:
@@ -98,10 +107,11 @@ class SummarizationService:
 
     async def _summarize_with_gemini(self, prompt: str) -> str:
         """
-        Kept in code for future use, but not called in the current hardcoded flow.
+        Standalone Gemini summary method. 
+        Kept in code for easy switching in the future.
         """
-        if not hasattr(self, 'gemini_model'):
-            raise RuntimeError("Gemini model not initialized.")
+        if not self.gemini_model:
+            raise RuntimeError("Gemini Client/Model not initialized (check GEMINI_API_KEY).")
             
         import asyncio
         response = await asyncio.to_thread(self.gemini_model.generate_content, prompt)
