@@ -46,6 +46,16 @@ const BASE_FRAME_WIDTH = WIDTH;
 const BASE_FRAME_HEIGHT = HEIGHT;
 const legalGavelImage = staticFile('image.png');
 const debtNoticeImage = staticFile('image copy.png');
+// Drives the PhonePe walkthrough: which screenshot to show, where (if anywhere)
+// to draw the tap indicator, and the relative time each step takes — weights
+// align with how long the narration spends on each step (LAN/amount entry is
+// longer because the digits are spoken).
+const PHONE_STEP_CONFIG = [
+  {image: staticFile('step1.png'), tap: {x: 231, y: 362}, weight: 1},   // Tap "Loan Repayment"
+  {image: staticFile('step2.png'), tap: {x: 110, y: 111}, weight: 1.2}, // Tap "TVS Credit"
+  {image: staticFile('step3.png'), tap: null,             weight: 2.4}, // Type LAN — no tap target
+  {image: staticFile('step3.png'), tap: null,             weight: 1.6}, // Type amount — no tap target
+];
 const SAFE_TEXT_STYLE = {
   overflowWrap: 'anywhere',
   wordBreak: 'break-word',
@@ -81,15 +91,6 @@ const UI_COPY = {
   },
   Punjabi: {
     titlePrefixFallback: 'ਖਾਤਾ ਨੋਟਿਸ', formalNotice: 'ਰਸਮੀ ਨੋਟਿਸ', accountStatus: 'ਖਾਤੇ ਦੀ ਸਥਿਤੀ', financialHighlights: 'ਵਿੱਤੀ ਮੁੱਖ ਨੁਕਤੇ', immediateNextStep: 'ਅਗਲਾ ਕਦਮ', resolutionStillPossible: 'ਹੱਲ ਅਜੇ ਵੀ ਸੰਭਵ ਹੈ', sceneLabels: { opening: 'ਨੋਟਿਸ', account: 'ਖਾਤਾ', context: 'ਸਮੀਖਿਆ', amounts: 'ਰਾਸ਼ੀ', action: 'ਕਾਰਵਾਈ', closing: 'ਹੱਲ' }, openingIdentity: 'ਪਛਾਣ ਵੇਰਵਾ', customerLabel: 'ਗਾਹਕ', clientLabel: 'ਬੈਂਕ', productLabel: 'ਉਤਪਾਦ', outstandingLabel: 'ਕੁੱਲ ਬਕਾਇਆ', reviewMarkers: 'ਮੁੱਖ ਸੰਕੇਤ', leadLabel: 'ਲੀਡ', accountLabel: 'ਖਾਤਾ', currentDueLabel: 'ਮੌਜੂਦਾ ਬਕਾਇਆ', amountsPrimaryHelper: 'ਮੁੱਖ ਰਾਸ਼ੀ', urgentAction: 'ਕਾਰਵਾਈ ਲੋੜੀਂਦੀ', actionCardHelper: 'ਤੁਰੰਤ ਸੰਪਰਕ ਦੀ ਉਮੀਦ ਹੈ।', finalSummary: 'ਸਾਰ', contactLabel: 'ਸੰਪਰਕ',
-  },
-};
-
-const getSubtitleColor = (colorName) => SUBTITLE_COLORS[colorName] || SUBTITLE_COLORS.White;
-const getUiCopy = (language) => UI_COPY[language] || UI_COPY.English;�शि है',
-    urgentAction: 'तुरंत कार्रवाई आवश्यक',
-    actionCardHelper: 'भुगतान समाधान या पुनर्भुगतान विकल्प के लिए त्वरित कॉल अपेक्षित है।',
-    finalSummary: 'अंतिम सारांश',
-    contactLabel: 'संपर्क',
   },
 };
 
@@ -1233,7 +1234,7 @@ const ActionScene = ({scene, frame, fps, lead, accentColor, uiCopy}) => (
   </SceneShell>
 );
 
-const PaymentPhoneWalkthroughScene = ({scene, frame, fps, lead, accentColor, uiCopy}) => (
+const PaymentPhoneWalkthroughScene = ({scene, frame, fps, lead, accentColor, uiCopy, currentTime, stepBoundaries}) => (
   <SceneShell scene={scene} frame={frame}>
     {({localFrame}) => {
       const copy = getPaymentCopy(lead.language);
@@ -1249,14 +1250,53 @@ const PaymentPhoneWalkthroughScene = ({scene, frame, fps, lead, accentColor, uiC
         title: step.title || amount,
         subtitle: index === 2 ? `${step.subtitle} ${account}` : step.subtitle,
       }));
-      const activeIndex = clamp(Math.floor(interpolate(localFrame, [12, Math.max(64, scene.duration - 20)], [0, steps.length], {
-        extrapolateLeft: 'clamp',
-        extrapolateRight: 'clamp',
-      })), 0, steps.length - 1);
+      const stepCount = Math.min(steps.length, PHONE_STEP_CONFIG.length);
+
+      // Prefer subtitle-anchored step advancement (so step transitions align with
+      // narration). Fall back to weighted localFrame when anchors are missing
+      // (e.g. preview without subtitles, or the second walkthrough pass after
+      // all anchor lines have already been spoken).
+      const anchors = Array.isArray(stepBoundaries) ? stepBoundaries : [];
+      const haveAnchors = anchors.some((t) => typeof t === 'number');
+      const sceneStartTime = scene.start / fps;
+      const sceneEndTime = scene.end / fps;
+      const anchorsInScene =
+        haveAnchors &&
+        anchors.some(
+          (t) => typeof t === 'number' && t >= sceneStartTime && t <= sceneEndTime,
+        );
+
+      let activeIndex;
+      if (anchorsInScene && typeof currentTime === 'number') {
+        activeIndex = stepCount - 1;
+        for (let i = 0; i < stepCount - 1; i += 1) {
+          const boundary = anchors[i];
+          if (typeof boundary === 'number' && currentTime < boundary) {
+            activeIndex = i;
+            break;
+          }
+        }
+      } else {
+        const totalWeight = PHONE_STEP_CONFIG.slice(0, stepCount).reduce((sum, s) => sum + s.weight, 0);
+        const elapsed = interpolate(
+          localFrame,
+          [12, Math.max(64, scene.duration - 20)],
+          [0, totalWeight],
+          {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'},
+        );
+        let cumulative = 0;
+        activeIndex = stepCount - 1;
+        for (let i = 0; i < stepCount; i += 1) {
+          cumulative += PHONE_STEP_CONFIG[i].weight;
+          if (elapsed < cumulative) {
+            activeIndex = i;
+            break;
+          }
+        }
+      }
       const screenStep = steps[activeIndex];
-      const tapX = [70, 164, 164, 204][activeIndex];
-      const tapY = [438, 258, 324, 430][activeIndex];
-      const tapPulse = 0.35 + Math.abs(Math.sin(localFrame * 0.22)) * 0.65;
+      const activeTap = PHONE_STEP_CONFIG[activeIndex]?.tap || null;
+      const tapPulse = 0.35 + Math.abs(Math.sin((localFrame / fps) * Math.PI * 2 * 1.05)) * 0.65;
 
       return (
         <div
@@ -1401,61 +1441,26 @@ const PaymentPhoneWalkthroughScene = ({scene, frame, fps, lead, accentColor, uiC
                 position: 'relative',
               }}
             >
-              <div style={{height: 78, background: '#5f259f', color: '#fff', padding: '30px 20px 12px'}}>
-                <div style={{fontSize: 24, fontWeight: 900}}>PhonePe</div>
-                <div style={{fontSize: 12, opacity: 0.82, marginTop: 2}}>{copy.phoneSecure}</div>
-              </div>
-              <div style={{padding: 18}}>
-                <div style={{fontSize: 13, color: '#64748b', fontWeight: 800, textTransform: 'uppercase'}}>
-                  {screenStep.label}
-                </div>
-                <div style={{fontSize: 27, fontWeight: 900, marginTop: 7, lineHeight: 1.06}}>
-                  {screenStep.title}
-                </div>
-                <div style={{fontSize: 13, color: '#64748b', marginTop: 7}}>
-                  {screenStep.subtitle}
-                </div>
-
-                <div style={{display: 'grid', gap: 9, marginTop: 18}}>
-                  <PhoneRow label={copy.biller} value={activeIndex >= 2 ? 'TVS Credit' : copy.selectBiller} active={activeIndex === 2} />
-                  <PhoneRow label={copy.loanAccountUi} value={account} active={activeIndex === 2} />
-                  <PhoneRow label={copy.payableAmount} value={activeIndex >= 3 ? amount : copy.enterAmount} active={activeIndex === 3} />
-                  <PhoneRow label={copy.company} value={client} active={false} />
-                </div>
-              </div>
-              <div
-                style={{
-                  position: 'absolute',
-                  left: 22,
-                  right: 22,
-                  bottom: 18,
-                  height: 50,
-                  borderRadius: 18,
-                  background: '#5f259f',
-                  color: '#fff',
-                  display: 'grid',
-                  placeItems: 'center',
-                  fontSize: 16,
-                  fontWeight: 900,
-                  boxShadow: '0 14px 28px rgba(95, 37, 159, 0.28)',
-                }}
-              >
-                {copy.proceed}
-              </div>
-              <div
-                style={{
-                  position: 'absolute',
-                  left: tapX,
-                  top: tapY,
-                  width: 42,
-                  height: 42,
-                  borderRadius: 999,
-                  border: '3px solid rgba(255,255,255,0.95)',
-                  background: `rgba(95, 37, 159, ${0.18 + tapPulse * 0.18})`,
-                  transform: `translate(-50%, -50%) scale(${0.82 + tapPulse * 0.36})`,
-                  boxShadow: '0 0 0 10px rgba(95, 37, 159, 0.12)',
-                }}
+              <Img
+                src={PHONE_STEP_CONFIG[activeIndex]?.image || PHONE_STEP_CONFIG[0].image}
+                style={{width: '100%', height: '100%', objectFit: 'cover', display: 'block'}}
               />
+              {activeTap ? (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: activeTap.x,
+                    top: activeTap.y,
+                    width: 42,
+                    height: 42,
+                    borderRadius: 999,
+                    border: '3px solid rgba(255,255,255,0.95)',
+                    background: `rgba(95, 37, 159, ${0.18 + tapPulse * 0.18})`,
+                    transform: `translate(-50%, -50%) scale(${0.82 + tapPulse * 0.36})`,
+                    boxShadow: '0 0 0 10px rgba(95, 37, 159, 0.12)',
+                  }}
+                />
+              ) : null}
             </div>
           </div>
 
@@ -1851,8 +1856,8 @@ const PaymentChecklistScene = ({scene, frame, fps, lead}) => (
   </PaymentSceneShell>
 );
 
-const PaymentPhoneScene = ({scene, frame, fps, lead}) => (
-  <PaymentPhoneWalkthroughScene scene={scene} frame={frame} fps={fps} lead={lead} accentColor="#5f259f" uiCopy={getUiCopy(lead.language)} />
+const PaymentPhoneScene = ({scene, frame, fps, lead, currentTime, stepBoundaries}) => (
+  <PaymentPhoneWalkthroughScene scene={scene} frame={frame} fps={fps} lead={lead} accentColor="#5f259f" uiCopy={getUiCopy(lead.language)} currentTime={currentTime} stepBoundaries={stepBoundaries} />
 );
 
 const PaymentSafetyScene = ({scene, frame, fps, lead}) => (
@@ -1944,16 +1949,34 @@ const PaymentSupportScene = ({scene, frame, fps, lead}) => (
   </PaymentSceneShell>
 );
 
+// Match a subtitle line by phrase (case-insensitive substring) and return its end-time in seconds.
+const findSubtitleEnd = (subtitles, phrase) => {
+  if (!Array.isArray(subtitles) || !phrase) return null;
+  const needle = phrase.toLowerCase();
+  const hit = subtitles.find((s) => typeof s?.text === 'string' && s.text.toLowerCase().includes(needle));
+  return hit && typeof hit.end === 'number' ? hit.end : null;
+};
+
 const PaymentGuidanceVideo = ({lead, frame, fps, durationInFrames}) => {
   const timeline = getSceneTimeline(durationInFrames, lead);
+  const track = getTrackMeta(lead.id);
+  const currentTime = frame / fps;
+  // Anchors: phrases that mark the END of each step's narration. Step N stays on
+  // screen until its anchor passes. These English terms appear verbatim across
+  // all localized payment_guidance scripts (see PAYMENT_GUIDANCE_TEMPLATES).
+  const stepBoundaries = [
+    findSubtitleEnd(track.subtitles, 'Loan Repayment'),
+    findSubtitleEnd(track.subtitles, 'TVS Credit'),
+    findSubtitleEnd(track.subtitles, 'Agreement number'),
+  ];
   return (
     <AbsoluteFill style={{background: '#f8fafc', fontFamily: FONT_FAMILY, overflow: 'hidden'}}>
       <PaymentTopBar lead={lead} frame={frame} />
       <PaymentWelcomeScene scene={timeline[0]} frame={frame} fps={fps} lead={lead} />
       <PaymentChecklistScene scene={timeline[1]} frame={frame} fps={fps} lead={lead} />
-      <PaymentPhoneScene scene={timeline[2]} frame={frame} fps={fps} lead={lead} />
+      <PaymentPhoneScene scene={timeline[2]} frame={frame} fps={fps} lead={lead} currentTime={currentTime} stepBoundaries={stepBoundaries} />
       <PaymentSafetyScene scene={timeline[3]} frame={frame} fps={fps} lead={lead} />
-      <PaymentPhoneScene scene={timeline[4]} frame={frame} fps={fps} lead={lead} />
+      <PaymentPhoneScene scene={timeline[4]} frame={frame} fps={fps} lead={lead} currentTime={currentTime} stepBoundaries={stepBoundaries} />
       <PaymentSupportScene scene={timeline[5]} frame={frame} fps={fps} lead={lead} />
     </AbsoluteFill>
   );
