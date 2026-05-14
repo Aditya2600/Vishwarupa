@@ -10,6 +10,7 @@ interface GenderedTemplate {
 }
 
 type TemplateValue = string | GenderedTemplate;
+export type RemotionTemplateKey = "account_notice" | "payment_guidance";
 
 function getGenderedText(value: TemplateValue, gender: Gender): string {
   if (typeof value === "string") return value;
@@ -116,6 +117,94 @@ Thank you.`,
   }
 };
 
+export const PAYMENT_GUIDANCE_TEMPLATES: Record<string, TemplateValue> = {
+  English: `Welcome {{ customer_name }}.
+This is a personalized payment guidance video for your {{ client_name }} loan account {{ lan }}.
+To make the payment, open the payment link shared with you or open the PhonePe app on your phone.
+Go to Loan Payment, select TVS Credit, enter or verify your loan account number {{ lan }}, and type the payable amount {{ tos }}.
+Check the details carefully and complete the payment.
+For any other information or support, please contact {{ contact_details }}.
+Thank you.`,
+  Hindi: {
+    male: `नमस्ते {{ customer_name }}।
+यह आपके {{ client_name }} लोन अकाउंट {{ lan }} के लिए एक व्यक्तिगत भुगतान मार्गदर्शन वीडियो है।
+भुगतान करने के लिए आपके साथ साझा किया गया पेमेंट लिंक खोलें या अपने फोन पर PhonePe ऐप खोलें।
+Loan Payment में जाएं, TVS Credit चुनें, अपना लोन अकाउंट नंबर {{ lan }} दर्ज करें या जांचें, और देय राशि {{ tos }} भरें।
+विवरण ध्यान से जांचकर भुगतान पूरा करें।
+किसी भी अन्य जानकारी या सहायता के लिए कृपया {{ contact_details }} पर संपर्क करें।
+धन्यवाद।`,
+    female: `नमस्ते {{ customer_name }}।
+यह आपके {{ client_name }} लोन अकाउंट {{ lan }} के लिए एक व्यक्तिगत भुगतान मार्गदर्शन वीडियो है।
+भुगतान करने के लिए आपके साथ साझा किया गया पेमेंट लिंक खोलें या अपने फोन पर PhonePe ऐप खोलें।
+Loan Payment में जाएं, TVS Credit चुनें, अपना लोन अकाउंट नंबर {{ lan }} दर्ज करें या जांचें, और देय राशि {{ tos }} भरें।
+विवरण ध्यान से जांचकर भुगतान पूरा करें।
+किसी भी अन्य जानकारी या सहायता के लिए कृपया {{ contact_details }} पर संपर्क करें।
+धन्यवाद।`
+  },
+  Marathi: `नमस्कार {{ customer_name }}.
+हा तुमच्या {{ client_name }} लोन खाते {{ lan }} साठी वैयक्तिक पेमेंट मार्गदर्शन व्हिडिओ आहे.
+पेमेंट करण्यासाठी तुम्हाला शेअर केलेली पेमेंट लिंक उघडा किंवा फोनवरील PhonePe अॅप उघडा.
+Loan Payment मध्ये जा, TVS Credit निवडा, तुमचा लोन खाते क्रमांक {{ lan }} तपासा, आणि देय रक्कम {{ tos }} भरा.
+तपशील काळजीपूर्वक तपासा आणि पेमेंट पूर्ण करा.
+इतर कोणत्याही माहितीसाठी किंवा सहाय्यासाठी कृपया {{ contact_details }} वर संपर्क करा.
+धन्यवाद.`,
+  Tamil: `வணக்கம் {{ customer_name }}.
+உங்கள் {{ client_name }} கடன் கணக்கு {{ lan }} க்கான தனிப்பட்ட கட்டண வழிகாட்டி வீடியோ இது.
+கட்டணம் செலுத்த, உங்களுடன் பகிரப்பட்ட கட்டண இணைப்பைத் திறக்கவும் அல்லது PhonePe ஆப்பைத் திறக்கவும்.
+Loan Payment பகுதிக்குச் சென்று, TVS Credit தேர்வு செய்து, உங்கள் கடன் கணக்கு எண் {{ lan }} சரிபார்த்து, செலுத்த வேண்டிய தொகை {{ tos }} உள்ளிடவும்.
+விவரங்களை கவனமாக சரிபார்த்து கட்டணத்தை முடிக்கவும்.
+வேறு தகவல் அல்லது உதவிக்கு {{ contact_details }} எண்ணில் தொடர்புகொள்ளவும்.
+நன்றி.`,
+  Telugu: `నమస్కారం {{ customer_name }}.
+ఇది మీ {{ client_name }} లోన్ ఖాతా {{ lan }} కోసం వ్యక్తిగత చెల్లింపు మార్గదర్శక వీడియో.
+చెల్లించడానికి మీకు షేర్ చేసిన చెల్లింపు లింక్ తెరవండి లేదా PhonePe యాప్ తెరవండి.
+Loan Payment కి వెళ్లి, TVS Credit ఎంచుకుని, మీ లోన్ ఖాతా సంఖ్య {{ lan }} ను తనిఖీ చేసి, చెల్లించవలసిన మొత్తం {{ tos }} నమోదు చేయండి.
+వివరాలను జాగ్రత్తగా తనిఖీ చేసి చెల్లింపును పూర్తి చేయండి.
+ఇతర సమాచారం లేదా సహాయం కోసం దయచేసి {{ contact_details }} ని సంప్రదించండి.
+ధన్యవాదాలు.`,
+  Kannada: `ನಮಸ್ಕಾರ {{ customer_name }}.
+ಇದು ನಿಮ್ಮ {{ client_name }} ಸಾಲ ಖಾತೆ {{ lan }} ಗಾಗಿ ವೈಯಕ್ತಿಕ ಪಾವತಿ ಮಾರ್ಗದರ್ಶಿ ವೀಡಿಯೊ.
+ಪಾವತಿಸಲು ನಿಮಗೆ ಹಂಚಿದ ಪಾವತಿ ಲಿಂಕ್ ತೆರೆಯಿರಿ ಅಥವಾ PhonePe ಆಪ್ ತೆರೆಯಿರಿ.
+Loan Payment ಗೆ ಹೋಗಿ, TVS Credit ಆಯ್ಕೆಮಾಡಿ, ನಿಮ್ಮ ಸಾಲ ಖಾತೆ ಸಂಖ್ಯೆ {{ lan }} ಪರಿಶೀಲಿಸಿ, ಮತ್ತು ಪಾವತಿಸಬೇಕಾದ ಮೊತ್ತ {{ tos }} ನಮೂದಿಸಿ.
+ವಿವರಗಳನ್ನು ಎಚ್ಚರಿಕೆಯಿಂದ ಪರಿಶೀಲಿಸಿ ಪಾವತಿಯನ್ನು ಪೂರ್ಣಗೊಳಿಸಿ.
+ಯಾವುದೇ ಇತರ ಮಾಹಿತಿ ಅಥವಾ ಸಹಾಯಕ್ಕಾಗಿ ದಯವಿಟ್ಟು {{ contact_details }} ಗೆ ಸಂಪರ್ಕಿಸಿ.
+ಧನ್ಯವಾದಗಳು.`,
+  Bengali: `নমস্কার {{ customer_name }}।
+এটি আপনার {{ client_name }} ঋণ অ্যাকাউন্ট {{ lan }}-এর জন্য একটি ব্যক্তিগত পেমেন্ট নির্দেশিকা ভিডিও।
+পেমেন্ট করতে আপনার সঙ্গে শেয়ার করা পেমেন্ট লিঙ্ক খুলুন অথবা PhonePe অ্যাপ খুলুন।
+Loan Payment-এ যান, TVS Credit নির্বাচন করুন, আপনার ঋণ অ্যাকাউন্ট নম্বর {{ lan }} যাচাই করুন, এবং প্রদেয় পরিমাণ {{ tos }} লিখুন।
+বিবরণ ভালোভাবে যাচাই করে পেমেন্ট সম্পন্ন করুন।
+অন্য কোনও তথ্য বা সহায়তার জন্য অনুগ্রহ করে {{ contact_details }}-এ যোগাযোগ করুন।
+ধন্যবাদ।`,
+  Gujarati: `નમસ્તે {{ customer_name }}.
+આ તમારા {{ client_name }} લોન ખાતા {{ lan }} માટે વ્યક્તિગત ચુકવણી માર્ગદર્શન વિડિયો છે.
+ચુકવણી કરવા માટે શેર કરેલી ચુકવણી લિંક ખોલો અથવા PhonePe એપ ખોલો.
+Loan Payment માં જાઓ, TVS Credit પસંદ કરો, તમારો લોન ખાતા નંબર {{ lan }} તપાસો, અને ચુકવવાની રકમ {{ tos }} દાખલ કરો.
+વિગતો કાળજીપૂર્વક તપાસી ચુકવણી પૂર્ણ કરો.
+અન્ય માહિતી અથવા સહાય માટે કૃપા કરીને {{ contact_details }} પર સંપર્ક કરો.
+આભાર.`,
+  Malayalam: `നമസ്കാരം {{ customer_name }}.
+ഇത് നിങ്ങളുടെ {{ client_name }} വായ്പ അക്കൗണ്ട് {{ lan }} നുള്ള വ്യക്തിഗത പേയ്മെന്റ് ഗൈഡ് വീഡിയോയാണ്.
+പേയ്മെന്റ് ചെയ്യാൻ നിങ്ങൾക്ക് പങ്കുവെച്ച പേയ്മെന്റ് ലിങ്ക് തുറക്കുക അല്ലെങ്കിൽ PhonePe ആപ്പ് തുറക്കുക.
+Loan Payment-ലേക്ക് പോകുക, TVS Credit തിരഞ്ഞെടുക്കുക, നിങ്ങളുടെ വായ്പ അക്കൗണ്ട് നമ്പർ {{ lan }} പരിശോധിക്കുക, അടയ്ക്കേണ്ട തുക {{ tos }} നൽകുക.
+വിവരങ്ങൾ ശ്രദ്ധാപൂർവ്വം പരിശോധിച്ച് പേയ്മെന്റ് പൂർത്തിയാക്കുക.
+മറ്റ് വിവരങ്ങൾക്കോ സഹായത്തിനോ ദയവായി {{ contact_details }} ബന്ധപ്പെടുക.
+നന്ദി.`,
+};
+
+export const REMOTION_TEMPLATE_OPTIONS: Array<{ key: RemotionTemplateKey; name: string; description: string }> = [
+  {
+    key: "account_notice",
+    name: "Account Notice",
+    description: "Formal personalized account update with amount and contact details.",
+  },
+  {
+    key: "payment_guidance",
+    name: "Payment Guidance",
+    description: "Personalized walkthrough for paying through a link or PhonePe loan payment.",
+  },
+];
+
 export const UNIVERSAL_TEMPLATES: Record<string, TemplateValue> = {
   English: `Hello. I am speaking on behalf of our team with an important formal update regarding your account. Our records show that the outstanding balance remains unresolved despite earlier communication. Please treat this notification seriously and contact our office immediately to discuss a suitable repayment arrangement. A timely response may help avoid further account escalation. Thank you.`,
   Hindi: {
@@ -189,8 +278,17 @@ export const AVATAR_TEMPLATES: Record<string, string> = Object.fromEntries(
 
 export const REMOTION_SUPPORTED_LANGUAGES = Object.keys(REMOTION_TEMPLATES).filter((l) => l !== "Punjabi");
 
-export function getDefaultRemotionTranscript(language: string, mode: "personalized" | "universal" = "personalized", gender: "male" | "female" | null = "female"): string {
+export function getDefaultRemotionTranscript(
+  language: string,
+  mode: "personalized" | "universal" = "personalized",
+  gender: "male" | "female" | null = "female",
+  templateKey: RemotionTemplateKey = "account_notice",
+): string {
   const resolvedGender = resolveNarratorGender(gender);
+  if (mode === "personalized" && templateKey === "payment_guidance") {
+    const val = PAYMENT_GUIDANCE_TEMPLATES[language] ?? PAYMENT_GUIDANCE_TEMPLATES.English;
+    return getGenderedText(val, resolvedGender);
+  }
   if (mode === "universal") {
     const val = UNIVERSAL_TEMPLATES[language] ?? UNIVERSAL_TEMPLATES.English;
     return getGenderedText(val, resolvedGender);

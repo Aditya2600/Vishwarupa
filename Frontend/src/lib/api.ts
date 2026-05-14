@@ -46,6 +46,7 @@ export interface DirectVideoPayload {
   video_width?: number;
   video_height?: number;
   voice_gender?: "male" | "female";
+  template_key?: "account_notice" | "payment_guidance";
 }
 
 export interface AvatarJobAck {
@@ -1129,6 +1130,9 @@ export async function generateRemotionVideo(payload: RemotionVideoPayload): Prom
   }
   if (payload.video_variety) {
     formData.set("video_variety", payload.video_variety);
+  }
+  if (payload.template_key) {
+    formData.set("template_key", payload.template_key);
   }
 
   if (payload.tos?.trim()) {

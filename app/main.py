@@ -424,6 +424,7 @@ async def _parse_remotion_payload(request: Request) -> RemotionVideoRequest:
 
     payload = {
         'video_variety': _form_text(form.get('video_variety')) or 'personalized',
+        'template_key': _form_text(form.get('template_key')) or 'account_notice',
         'customer_name': _form_text(form.get('customer_name')),
         'lan': _form_text(form.get('lan')),
         'client_name': _form_text(form.get('client_name')),

@@ -126,6 +126,7 @@ class DirectVideoRequest(LeadRecord):
 
 class RemotionVideoRequest(DirectVideoRequest):
     video_variety: Literal['personalized', 'universal'] | None = 'personalized'
+    template_key: Literal['account_notice', 'payment_guidance'] | None = 'account_notice'
     title_prefix: str = 'Loan Recall'
     subtitle_color: str = 'White'
     subtitle_position: str = 'Bottom'
