@@ -46,6 +46,7 @@ export interface WizardState {
   includeCaptions: boolean;
   titlePrefix: string;
   productType: string;
+  remotionTemplateKey: "account_notice" | "payment_guidance";
   videoType: "avatar" | "remotion";
   videoVariety: "personalized" | "universal";
   avatarJobId: string;
@@ -95,6 +96,7 @@ const defaultState: WizardState = {
   includeCaptions: true,
   titlePrefix: "Legal Notice",
   productType: "loan",
+  remotionTemplateKey: "account_notice",
   videoType: "avatar",
   videoVariety: "universal",
   avatarJobId: "",
@@ -124,7 +126,13 @@ function restoreSavedState(savedState: Partial<WizardState>): WizardState {
     resolveNarratorGender(savedVoiceGender ?? savedAvatarGender),
   );
   const savedVariety = (savedState.videoVariety ?? defaultState.videoVariety) as "personalized" | "universal";
-  const defaultRemotionTranscript = getDefaultRemotionTranscript(savedState.language ?? defaultState.language, savedVariety);
+  const savedTemplateKey = savedState.remotionTemplateKey ?? defaultState.remotionTemplateKey;
+  const defaultRemotionTranscript = getDefaultRemotionTranscript(
+    savedState.language ?? defaultState.language,
+    savedVariety,
+    savedVoiceGender,
+    savedTemplateKey,
+  );
   const restored = {
     ...defaultState,
     ...savedState,

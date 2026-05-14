@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WizardState } from "@/store/wizardStore";
 import { VoiceOption } from "@/lib/api";
-import { UNIVERSAL_TEMPLATES, REMOTION_TEMPLATES, getDefaultRemotionTranscript, getDefaultAvatarScript } from "@/lib/templates";
+import { REMOTION_TEMPLATE_OPTIONS, getDefaultRemotionTranscript, getDefaultAvatarScript, type RemotionTemplateKey } from "@/lib/templates";
 
 const RESET_GENERATION_STATE = {
   generatedVideo: null,
@@ -269,7 +269,7 @@ export function StepTranscript({ state, update, voices = [] }: StepTranscriptPro
       const gen = state.voiceGender || "female";
       if (state.videoVariety === "universal") {
         if (!state.remotionTranscriptCustomized || shouldForceReset) {
-          const langUniversal = getDefaultRemotionTranscript(state.language, "universal", gen);
+          const langUniversal = getDefaultRemotionTranscript(state.language, "universal", gen, state.remotionTemplateKey);
           if (state.remotionTranscript !== langUniversal) {
             updates.remotionTranscript = langUniversal;
             updates.remotionTranscriptCustomized = false; // reset flag if we forced it
@@ -279,7 +279,7 @@ export function StepTranscript({ state, update, voices = [] }: StepTranscriptPro
       } else {
         // Personalized mode
         if (!state.remotionTranscriptCustomized || shouldForceReset) {
-          const langDefault = getDefaultRemotionTranscript(state.language, "personalized", gen);
+          const langDefault = getDefaultRemotionTranscript(state.language, "personalized", gen, state.remotionTemplateKey);
           if (state.remotionTranscript !== langDefault) {
             updates.remotionTranscript = langDefault;
             updates.remotionTranscriptCustomized = false; // reset flag if we forced it
@@ -330,7 +330,7 @@ export function StepTranscript({ state, update, voices = [] }: StepTranscriptPro
 
   const handleResetToDefault = () => {
     if (isRemotion) {
-      const defaultValue = getDefaultRemotionTranscript(state.language, state.videoVariety);
+      const defaultValue = getDefaultRemotionTranscript(state.language, state.videoVariety, state.voiceGender, state.remotionTemplateKey);
       update({
         remotionTranscript: defaultValue,
         remotionTranscriptCustomized: false,
@@ -381,6 +381,25 @@ const handleDemoTab =
     updateField(update, fieldKey, DEMO_FIELD_VALUES[fieldKey]);
   };
 
+const handleRemotionTemplateSelect = (templateKey: RemotionTemplateKey) => {
+  const nextVariety = templateKey === "payment_guidance" ? "personalized" : state.videoVariety;
+  update({
+    remotionTemplateKey: templateKey,
+    videoVariety: nextVariety,
+    remotionTranscript: getDefaultRemotionTranscript(
+      state.language,
+      nextVariety,
+      state.voiceGender,
+      templateKey,
+    ),
+    remotionTranscriptCustomized: false,
+    titlePrefix: templateKey === "payment_guidance" ? "Payment Guidance" : state.titlePrefix,
+    productType: "loan",
+    ...RESET_GENERATION_STATE,
+  });
+  toast.success(`${REMOTION_TEMPLATE_OPTIONS.find((option) => option.key === templateKey)?.name ?? "Template"} selected.`);
+};
+
 // Helper to get fallback values for Avatar mode if blank
 const getDisplayValue = (fieldKey: WizardFieldKey) => {
   const val = getFieldValue(state, fieldKey);
@@ -393,6 +412,29 @@ const getDisplayValue = (fieldKey: WizardFieldKey) => {
 
 return (
   <div className="max-w-5xl">
+    {isRemotion ? (
+      <div className="mb-6 grid gap-3 sm:grid-cols-2">
+        {REMOTION_TEMPLATE_OPTIONS.map((template) => {
+          const isSelected = state.remotionTemplateKey === template.key;
+          return (
+            <button
+              key={template.key}
+              type="button"
+              onClick={() => handleRemotionTemplateSelect(template.key)}
+              className={`rounded-xl border p-4 text-left transition-all ${
+                isSelected
+                  ? "border-primary bg-primary/5 shadow-sm"
+                  : "border-border bg-card hover:border-primary/30 hover:bg-surface-hover"
+              }`}
+            >
+              <p className="text-sm font-semibold text-foreground">{template.name}</p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{template.description}</p>
+            </button>
+          );
+        })}
+      </div>
+    ) : null}
+
     <div className="mb-6 flex justify-center">
       <Tabs
         value={state.videoVariety}
@@ -405,8 +447,8 @@ return (
 
           // Auto-populate when switching tabs if content is default or empty
           const gen = state.voiceGender || "female";
-          const currentUniversal = getDefaultRemotionTranscript(state.language, "universal", gen);
-          const currentPersonalized = getDefaultRemotionTranscript(state.language, "personalized", gen);
+          const currentUniversal = getDefaultRemotionTranscript(state.language, "universal", gen, state.remotionTemplateKey);
+          const currentPersonalized = getDefaultRemotionTranscript(state.language, "personalized", gen, state.remotionTemplateKey);
 
           if (newVariety === "universal") {
             if (isRemotion) {

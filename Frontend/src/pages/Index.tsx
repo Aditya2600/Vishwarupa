@@ -623,10 +623,10 @@ const Index = () => {
           ? state.transcript
           : buildAvatarDefaultTranscript(language, preservedAvatar.avatarGender, preservedVoice.voiceGender),
       remotionTranscript: requestedFreshDraft
-        ? getDefaultRemotionTranscript(language, state.videoVariety, state.voiceGender)
+        ? getDefaultRemotionTranscript(language, state.videoVariety, state.voiceGender, state.remotionTemplateKey)
         : state.remotionTranscriptCustomized
           ? state.remotionTranscript
-          : getDefaultRemotionTranscript(language, state.videoVariety, state.voiceGender),
+          : getDefaultRemotionTranscript(language, state.videoVariety, state.voiceGender, state.remotionTemplateKey),
       avatarTranscriptCustomized: requestedFreshDraft ? false : state.avatarTranscriptCustomized,
       remotionTranscriptCustomized: requestedFreshDraft ? false : state.remotionTranscriptCustomized,
       ...RESET_GENERATION_STATE,
@@ -682,7 +682,7 @@ const Index = () => {
         : {}),
       ...(!state.remotionTranscriptCustomized
         ? {
-          remotionTranscript: getDefaultRemotionTranscript(language, state.videoVariety, nextVoiceGender),
+          remotionTranscript: getDefaultRemotionTranscript(language, state.videoVariety, nextVoiceGender, state.remotionTemplateKey),
           remotionTranscriptCustomized: false,
         }
         : {}),
@@ -705,7 +705,7 @@ const Index = () => {
         : {}),
       ...(!state.remotionTranscriptCustomized
         ? {
-          remotionTranscript: getDefaultRemotionTranscript(state.language, state.videoVariety, state.voiceGender),
+          remotionTranscript: getDefaultRemotionTranscript(state.language, state.videoVariety, state.voiceGender, state.remotionTemplateKey),
           remotionTranscriptCustomized: false,
         }
         : {}),
@@ -865,6 +865,7 @@ const Index = () => {
         logoPosition: state.logoPosition,
         logoOpacity: state.logoOpacity,
         logoFile,
+        template_key: state.remotionTemplateKey,
       });
     } else {
       generateVideoMutation.mutate(payload);
@@ -929,7 +930,7 @@ const Index = () => {
                 partial.avatarTranscriptCustomized = false;
               }
               if (!state.remotionTranscriptCustomized) {
-                partial.remotionTranscript = getDefaultRemotionTranscript(state.language, state.videoVariety, gender);
+                partial.remotionTranscript = getDefaultRemotionTranscript(state.language, state.videoVariety, gender, state.remotionTemplateKey);
                 partial.remotionTranscriptCustomized = false;
               }
 
@@ -968,7 +969,7 @@ const Index = () => {
                   : {}),
                 ...(!state.remotionTranscriptCustomized
                   ? {
-                    remotionTranscript: getDefaultRemotionTranscript(state.language, state.videoVariety, gender),
+                    remotionTranscript: getDefaultRemotionTranscript(state.language, state.videoVariety, gender, state.remotionTemplateKey),
                     remotionTranscriptCustomized: false,
                   }
                   : {}),

@@ -46,6 +46,15 @@ VOICE_MAP = {
 DEFAULT_SCRIPT_EN = "Hello {{ customer_name }}. I am calling from {{ client_name }} regarding your {{ product_type }} account. The total outstanding balance is {{ tos }}. Please contact us at {{ contact_details }} to discuss repayment options."
 DEFAULT_SCRIPT_HI = "नमस्ते {{ customer_name }}। मैं {{ client_name }} से आपके {{ product_type }} खाते के संबंध में बोल रही हूँ। आपकी कुल बकाया राशि {{ tos }} है। कृपया भुगतान विकल्पों पर चर्चा करने के लिए हमसे {{ contact_details }} पर संपर्क करें।"
 
+
+def _prepare_tts_pronunciation(text: str) -> str:
+    # Keep the brand spelling in scripts/subtitles, but guide TTS to say "PhonePay".
+    return re.sub(r'\bPhonePe\b', 'PhonePay', text, flags=re.IGNORECASE)
+
+
+def _restore_display_spellings(text: str) -> str:
+    return re.sub(r'\bPhonePay\b', 'PhonePe', text, flags=re.IGNORECASE)
+
 class RemotionService:
     def __init__(self):
         self.remotion_path = settings.remotion_path
@@ -117,12 +126,14 @@ class RemotionService:
                 client_name=request.client_name,
                 product_type=request.product_type,
                 tos=request.tos,
+                loan_amount=request.loan_amount,
+                lan=request.lan,
                 contact_details=request.contact_details,
             )
 
-        tts_text = script_text
+        tts_text = _prepare_tts_pronunciation(script_text)
         if request.language == "Hindi":
-            tts_text = normalize_hindi_numbers(script_text)
+            tts_text = normalize_hindi_numbers(tts_text)
             logger.info(f"TTS Output: {tts_text}")
 
         import tempfile
@@ -161,6 +172,9 @@ class RemotionService:
 
             if not audio_file.exists():
                 raise Exception(f"TTS file {audio_file} was not created by edge-tts")
+
+            if vtt_file.exists():
+                vtt_file.write_text(_restore_display_spellings(vtt_file.read_text(encoding='utf-8')), encoding='utf-8')
 
         finally:
             if os.path.exists(temp_text_file):
@@ -249,6 +263,9 @@ class RemotionService:
         }
 
     def build_scene_payload(self, request: RemotionVideoRequest, outstanding_value: str, loan_value: str, urgency_level: str) -> dict[str, Any]:
+        if request.template_key == 'payment_guidance':
+            return self.build_payment_guidance_scene_payload(request, outstanding_value, loan_value)
+
         product_content = self._product_content(request.product_type, request.language)
         
         i18n = {
@@ -338,6 +355,46 @@ class RemotionService:
             'ui_copy': t.get('ui', i18n['English']['ui'])
         }
 
+    def build_payment_guidance_scene_payload(self, request: RemotionVideoRequest, outstanding_value: str, loan_value: str) -> dict[str, Any]:
+        customer = request.customer_name or "Customer"
+        client = request.client_name or "TVS Credit"
+        lan = request.lan or "N/A"
+        contact = request.contact_details or "1800-555-999"
+        payable = outstanding_value or loan_value or request.loan_amount or "0"
+        payment_i18n = {
+            'English': {
+                'headline': f"{customer}, here is how to complete your payment",
+                'body': f"Open your payment link or PhonePe app, choose Loan Payment, select TVS Credit, verify account {lan}, enter {payable}, and complete the payment.",
+                'contact_body': f"For any other help, contact {contact}.",
+                'ui': {'formalNotice': 'Payment Guidance', 'accountStatus': 'Account Details', 'financialHighlights': 'Payment Amount', 'immediateNextStep': 'PhonePe Walkthrough', 'resolutionStillPossible': 'Support Available', 'customerLabel': 'Customer', 'clientLabel': 'Company', 'productLabel': 'Product', 'outstandingLabel': 'Payable', 'finalSummary': 'Summary', 'contactLabel': 'Contact'},
+                'context_eyebrow': 'Payment link guidance', 'context_headline': 'Follow these simple steps', 'amount_headline': 'Amount to enter', 'amount_note': 'Check details before confirming the payment.', 'action_headline': 'Open PhonePe and pay', 'cta_label': 'Help number', 'closing_headline': 'Payment support is available',
+            },
+            'Hindi': {
+                'headline': f"{customer} जी, भुगतान करने की आसान प्रक्रिया",
+                'body': f"अपने भुगतान लिंक या PhonePe ऐप से Loan Payment खोलें, TVS Credit चुनें, खाता संख्या {lan} और राशि {payable} जांचकर भुगतान करें।",
+                'contact_body': f"किसी भी सहायता के लिए {contact} पर संपर्क करें।",
+                'ui': {'formalNotice': 'भुगतान मार्गदर्शन', 'accountStatus': 'खाता विवरण', 'financialHighlights': 'भुगतान राशि', 'immediateNextStep': 'PhonePe प्रक्रिया', 'resolutionStillPossible': 'सहायता उपलब्ध है', 'customerLabel': 'ग्राहक', 'clientLabel': 'कंपनी', 'productLabel': 'उत्पाद', 'outstandingLabel': 'देय राशि', 'finalSummary': 'सारांश', 'contactLabel': 'संपर्क'},
+                'context_eyebrow': 'पेमेंट लिंक मार्गदर्शन', 'context_headline': 'इन आसान चरणों का पालन करें', 'amount_headline': 'दर्ज करने की राशि', 'amount_note': 'भुगतान पुष्टि से पहले विवरण जांचें।', 'action_headline': 'PhonePe खोलें और भुगतान करें', 'cta_label': 'सहायता नंबर', 'closing_headline': 'भुगतान सहायता उपलब्ध है',
+            },
+        }
+        t = payment_i18n.get(request.language, payment_i18n['English'])
+        headline = t['headline']
+        body = t['body']
+        contact_body = t['contact_body']
+        ui = t['ui']
+
+        return {
+            'opening': {'eyebrow': ui['formalNotice'], 'headline': headline, 'subheadline': f'{client} | Account {lan}'},
+            'account': {'eyebrow': 'Welcome', 'headline': f'Account {lan}', 'supporting': f'Payable amount {payable}', 'badge': 'Personalized guidance'},
+            'context': {'eyebrow': t['context_eyebrow'], 'headline': t['context_headline'], 'body': body},
+            'amounts': {'eyebrow': ui['financialHighlights'], 'headline': t['amount_headline'], 'body': f'Loan amount: {loan_value or payable}', 'note': t['amount_note']},
+            'action': {'eyebrow': ui['immediateNextStep'], 'headline': t['action_headline'], 'body': body, 'cta_label': t['cta_label'], 'cta_value': contact},
+            'closing': {'eyebrow': ui['resolutionStillPossible'], 'headline': t['closing_headline'], 'body': contact_body},
+            'headline_text': headline,
+            'cta_text': contact_body,
+            'ui_copy': ui,
+        }
+
     def build_render_payload(self, request: RemotionVideoRequest, video_id: str, script_text: str, audio_path: str, vtt_path: Path, scene_payload: dict[str, Any]) -> dict[str, Any]:
         subtitles = self.parse_vtt(vtt_path)
         is_universal = (request.video_variety or "personalized") == "universal"
@@ -345,6 +402,7 @@ class RemotionService:
             "id": video_id,
             "language": request.language,
             "video_variety": request.video_variety or "personalized",
+            "template_key": request.template_key or "account_notice",
             "audio_url": audio_path,
             "subtitles": subtitles,
             "customer_name": "" if is_universal else request.customer_name,
@@ -352,6 +410,8 @@ class RemotionService:
             "client_name": "" if is_universal else request.client_name,
             "tos": "" if is_universal else (request.tos or ""),
             "loan_amount": "" if is_universal else (request.loan_amount or ""),
+            "contact_details": "" if is_universal else (request.contact_details or ""),
+            "product_type": "" if is_universal else (request.product_type or "loan"),
             "scene_payload": scene_payload,
             "branding": {
                 "logo": {
