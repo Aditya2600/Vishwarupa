@@ -10,7 +10,7 @@ interface GenderedTemplate {
 }
 
 type TemplateValue = string | GenderedTemplate;
-export type RemotionTemplateKey = "account_notice" | "payment_guidance";
+export type RemotionTemplateKey = "account_notice" | "payment_guidance" | "payment_link_guidance";
 
 function getGenderedText(value: TemplateValue, gender: Gender): string {
   if (typeof value === "string") return value;
@@ -192,6 +192,20 @@ Thank you.`,
 നന്ദി.`,
 };
 
+export const PAYMENT_LINK_GUIDANCE_TEMPLATES: Record<string, TemplateValue> = {
+  English: `Welcome {{ customer_name }}.
+This video will guide you through completing payment from the payment link.
+First, enter your agreement number and captcha exactly as shown.
+Next, accept the terms and review the payable amount for account {{ lan }}.
+Then tap proceed to pay and choose your preferred payment method.
+For support, please contact {{ contact_details }}.
+Thank you.`,
+  Hindi: {
+    male: `नमस्ते {{ customer_name }}। सब से पहले SMS में दिए गए लिंक पर क्लिक करें। इसके बाद अपना एग्रीमेंट नंबर और कैप्चा ठीक से दर्ज करें। फिर नियम और शर्तें स्वीकार करें और अपनी राशि जांचें। इसके बाद आगे बढ़ने के लिए Proceed to Pay पर टैप करें और अपनी पसंद का भुगतान तरीका चुनें। सहायता के लिए कृपया {{ contact_details }} पर संपर्क करें। धन्यवाद।`,
+    female: `नमस्ते {{ customer_name }}। सब se pehle SMS mein diye gaye link par click karein. Iske baad apna agreement number aur captcha thik se darj karein. Phir niyam aur shartein swikar karein aur apni rashi jaanchein. Iske baad aage badhne ke liye Proceed to Pay par tap karein aur apni pasand ka bhugtan tareeka chunein. Sahayata ke liye kripya {{ contact_details }} par sampark karein. Dhanyawad.`,
+  },
+};
+
 export const REMOTION_TEMPLATE_OPTIONS: Array<{ key: RemotionTemplateKey; name: string; description: string }> = [
   {
     key: "account_notice",
@@ -202,6 +216,11 @@ export const REMOTION_TEMPLATE_OPTIONS: Array<{ key: RemotionTemplateKey; name: 
     key: "payment_guidance",
     name: "Payment Guidance",
     description: "Personalized walkthrough for paying through a link or PhonePe loan payment.",
+  },
+  {
+    key: "payment_link_guidance",
+    name: "Payment Link Guidance",
+    description: "Screenshot-based guide for captcha, terms, amount review, and payment options.",
   },
 ];
 
@@ -287,6 +306,10 @@ export function getDefaultRemotionTranscript(
   const resolvedGender = resolveNarratorGender(gender);
   if (mode === "personalized" && templateKey === "payment_guidance") {
     const val = PAYMENT_GUIDANCE_TEMPLATES[language] ?? PAYMENT_GUIDANCE_TEMPLATES.English;
+    return getGenderedText(val, resolvedGender);
+  }
+  if (mode === "personalized" && templateKey === "payment_link_guidance") {
+    const val = PAYMENT_LINK_GUIDANCE_TEMPLATES[language] ?? PAYMENT_LINK_GUIDANCE_TEMPLATES.English;
     return getGenderedText(val, resolvedGender);
   }
   if (mode === "universal") {

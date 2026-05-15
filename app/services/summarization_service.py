@@ -2,7 +2,7 @@ import os
 import logging
 from pathlib import Path
 from app.config import settings
-from app.services.llm_clients import GrokClient, GeminiClient
+from app.services.llm_clients import GrokClient
 
 logger = logging.getLogger("app")
 
@@ -10,7 +10,6 @@ class SummarizationService:
     def __init__(self):
         # Initialize Clients
         self.grok = self._init_grok()
-        self.gemini = self._init_gemini()
         
         # Load external prompt
         self.prompt_template = self._load_prompt_template()
@@ -22,12 +21,7 @@ class SummarizationService:
             return GrokClient(api_key, model)
         return None
 
-    def _init_gemini(self) -> GeminiClient:
-        api_key = os.getenv('GEMINI_API_KEY') or getattr(settings, 'gemini_api_key', None)
-        model = os.getenv('GEMINI_MODEL_NAME') or getattr(settings, 'gemini_model_name', 'gemini-2.0-flash')
-        if api_key:
-            return GeminiClient(api_key, model)
-        return None
+
 
     def _load_prompt_template(self) -> str:
         prompt_path = Path(__file__).parent.parent / "prompts" / "summarization_prompt.txt"
@@ -53,6 +47,5 @@ class SummarizationService:
             text=text
         )
 
-        # HARDCODED: Call Grok specifically. 
-        # (Gemini is available in self.gemini but ignored as requested)
+        # Call Grok specifically for PDF tasks
         return await self.grok.generate(prompt)

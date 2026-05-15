@@ -1666,6 +1666,9 @@ async def generate_template(request: TemplateVideoRequest, wait: bool = True, cu
 async def generate_remotion(request: Request, current_user: str = Depends(get_current_user)):
 
     payload = await _parse_remotion_payload(request)
+    if payload.template_key == 'payment_link_guidance':
+        payload.video_width = 1080
+        payload.video_height = 1920
     logger.info(f"Remotion video payload ended:")
     # 1. Create a deterministic hash of the entire configuration payload
     payload_dict = payload.model_dump(exclude_none=True)
@@ -1736,34 +1739,44 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         saved_to=None,
     )
     
-    # NOTE: Render and S3 Upload logic has been moved to the RemotionJobWorker 
-    # for asynchronous processing to prevent API timeouts.
-    logger.info(f"Job record {video_id} persisted to database. Handing off to SQS queue...")
-    
-    # 3. Submit to SQS
-    try:
-        from app.services.sqs_service import SQSService
-        from app.constants import SQS_QUEUE_URL
-        sqs_svc = SQSService()
-        sqs_svc.send_job(
-            payload={
-                '_id': video_id,
-                'request_mode': 'remotion'
-            },
-            queue_url=SQS_QUEUE_URL
+    if payload.template_key == 'payment_link_guidance':
+        # This template depends on newly bundled local screenshot assets. Keep it
+        # on the current runtime so an older shared SQS worker cannot claim it and
+        # render the account-notice fallback.
+        logger.info(
+            "Payment Link Guidance job %s will be rendered by the local Remotion worker.",
+            video_id,
         )
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        with open("sqs_fail.log", "a") as f:
-            f.write(f"SQS FAIL: {e}\n{traceback.format_exc()}\n")
-        await videos_collection.delete_one({'_id': _mongo_id(video_id)})
-        raise HTTPException(status_code=500, detail=f"Failed to enqueue remotion video generation: {e}")
+        asyncio.create_task(RemotionJobWorker()._process_job(video_id, None))
+    else:
+        # NOTE: Render and S3 Upload logic has been moved to the RemotionJobWorker
+        # for asynchronous processing to prevent API timeouts.
+        logger.info(f"Job record {video_id} persisted to database. Handing off to SQS queue...")
 
-    # Local development fallback: process the job in the current API process
-    # immediately as well. The worker claims only queued jobs, so this does not
-    # double-render when SQS polling is healthy.
-    asyncio.create_task(RemotionJobWorker()._process_job(video_id, None))
+        # 3. Submit to SQS
+        try:
+            from app.services.sqs_service import SQSService
+            from app.constants import SQS_QUEUE_URL
+            sqs_svc = SQSService()
+            sqs_svc.send_job(
+                payload={
+                    '_id': video_id,
+                    'request_mode': 'remotion'
+                },
+                queue_url=SQS_QUEUE_URL
+            )
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            with open("sqs_fail.log", "a") as f:
+                f.write(f"SQS FAIL: {e}\n{traceback.format_exc()}\n")
+            await videos_collection.delete_one({'_id': _mongo_id(video_id)})
+            raise HTTPException(status_code=500, detail=f"Failed to enqueue remotion video generation: {e}")
+
+        # Local development fallback: process the job in the current API process
+        # immediately as well. The worker claims only queued jobs, so this does not
+        # double-render when SQS polling is healthy.
+        asyncio.create_task(RemotionJobWorker()._process_job(video_id, None))
 
     # Return the 'queued' result instantly.
     # The background worker will handle the render and update the DB status.
@@ -2432,4 +2445,3 @@ async def get_pdf_status(record_id: str, current_user: str = Depends(get_current
         "filename": record.get("filename"),
         "error": record.get("error")
     }
-

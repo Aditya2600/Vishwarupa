@@ -46,7 +46,7 @@ export interface WizardState {
   includeCaptions: boolean;
   titlePrefix: string;
   productType: string;
-  remotionTemplateKey: "account_notice" | "payment_guidance";
+  remotionTemplateKey: "account_notice" | "payment_guidance" | "payment_link_guidance";
   videoType: "avatar" | "remotion";
   videoVariety: "personalized" | "universal";
   avatarJobId: string;

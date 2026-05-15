@@ -1,5 +1,7 @@
 import {Composition} from 'remotion';
 import {TemplateVideo} from './TemplateVideo';
+import {PaymentLinkGuidanceTemplate} from './templates/PaymentLinkGuidanceTemplate';
+import {PAYMENT_LINK_GUIDANCE_DURATION} from './templates/PaymentLinkGuidanceTemplate/scenes';
 import {FPS, getDurationInFrames, getLeadDimensions, leads} from './videoData';
 
 export const RemotionRoot = () => {
@@ -16,6 +18,14 @@ export const RemotionRoot = () => {
         width={defaultDimensions.width}
         height={defaultDimensions.height}
         defaultProps={{leadId: primaryLead.id}}
+      />
+      <Composition
+        id="PaymentLinkGuidanceTemplate"
+        component={PaymentLinkGuidanceTemplate}
+        durationInFrames={PAYMENT_LINK_GUIDANCE_DURATION}
+        fps={30}
+        width={1080}
+        height={1920}
       />
       {leads.map((lead) => {
         const dimensions = getLeadDimensions(lead);

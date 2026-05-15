@@ -382,7 +382,14 @@ const handleDemoTab =
   };
 
 const handleRemotionTemplateSelect = (templateKey: RemotionTemplateKey) => {
-  const nextVariety = templateKey === "payment_guidance" ? "personalized" : state.videoVariety;
+  const isPaymentTemplate = templateKey === "payment_guidance" || templateKey === "payment_link_guidance";
+  const nextVariety = isPaymentTemplate ? "personalized" : state.videoVariety;
+  const nextTitlePrefix =
+    templateKey === "payment_guidance"
+      ? "Payment Guidance"
+      : templateKey === "payment_link_guidance"
+        ? "Payment Link Guidance"
+        : state.titlePrefix;
   update({
     remotionTemplateKey: templateKey,
     videoVariety: nextVariety,
@@ -393,7 +400,7 @@ const handleRemotionTemplateSelect = (templateKey: RemotionTemplateKey) => {
       templateKey,
     ),
     remotionTranscriptCustomized: false,
-    titlePrefix: templateKey === "payment_guidance" ? "Payment Guidance" : state.titlePrefix,
+    titlePrefix: nextTitlePrefix,
     productType: "loan",
     ...RESET_GENERATION_STATE,
   });

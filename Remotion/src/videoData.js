@@ -6,6 +6,7 @@ export const DEFAULT_DURATION_SECONDS = 12;
 export const TRANSITION_FRAMES = 12;
 export const WIDTH = 1280;
 export const HEIGHT = 720;
+export const PAYMENT_LINK_GUIDANCE_DURATION = 960;
 const MIN_VIDEO_WIDTH = 540;
 const MIN_VIDEO_HEIGHT = 540;
 const MAX_VIDEO_WIDTH = 2160;
@@ -340,6 +341,7 @@ export const getTrackMeta = (leadId) => {
 };
 
 export const getDurationInFrames = (leadId) => {
+  const lead = getLeadById(leadId);
   const track = getTrackMeta(leadId);
   const lastSubtitleEnd = track.subtitles.reduce((max, item) => {
     if (item && typeof item.end === 'number' && Number.isFinite(item.end)) {
@@ -347,7 +349,11 @@ export const getDurationInFrames = (leadId) => {
     }
     return max;
   }, 0);
-  const totalSeconds = Math.max(track.duration, lastSubtitleEnd, DEFAULT_DURATION_SECONDS);
+  const templateMinSeconds =
+    lead?.template_key === 'payment_link_guidance'
+      ? PAYMENT_LINK_GUIDANCE_DURATION / FPS
+      : DEFAULT_DURATION_SECONDS;
+  const totalSeconds = Math.max(track.duration, lastSubtitleEnd, templateMinSeconds);
   return Math.ceil(totalSeconds * FPS) + Math.round(FPS * 1.5);
 };
 

@@ -50,8 +50,7 @@ class Settings(BaseSettings):
     sqs_max_receive_count: int = 3
     cpaas_api_base_url: str
     cpaas_api_auth_token: str | None = None
-    gemini_api_key: str | None = None
-    gemini_model_name: str = "gemini-2.0-flash"
+
     xai_api_key: str | None = None
     xai_model_name: str = "grok-4-1-fast-reasoning"
 

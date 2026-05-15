@@ -46,7 +46,7 @@ export interface DirectVideoPayload {
   video_width?: number;
   video_height?: number;
   voice_gender?: "male" | "female";
-  template_key?: "account_notice" | "payment_guidance";
+  template_key?: "account_notice" | "payment_guidance" | "payment_link_guidance";
 }
 
 export interface AvatarJobAck {

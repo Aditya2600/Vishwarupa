@@ -9,6 +9,7 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from 'remotion';
+import {PaymentLinkGuidanceTemplate} from './templates/PaymentLinkGuidanceTemplate';
 import {
   TRANSITION_FRAMES,
   HEIGHT,
@@ -39,6 +40,7 @@ const SUBTITLE_COLORS = {
   Red: '#f87171',
   Yellow: '#facc15',
   Teal: '#2dd4bf',
+  Black: '#000000',
 };
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
@@ -452,6 +454,7 @@ const SubtitlePanel = ({subtitle, subtitleProgress, branding, fallbackText}) => 
   const activeWordIndex = subtitle
     ? Math.min(words.length - 1, Math.floor(subtitleProgress * words.length))
     : -1;
+  const isDark = subtitleColor === '#000000';
 
   return (
     <div
@@ -477,11 +480,14 @@ const SubtitlePanel = ({subtitle, subtitleProgress, branding, fallbackText}) => 
               fontSize: 20,
               lineHeight: 1.35,
               fontWeight: 600,
-              color: '#94a3b8',
+              color: isDark ? 'rgba(30, 30, 30, 0.7)' : '#94a3b8',
               flexWrap: 'wrap',
               display: 'flex',
               justifyContent: 'center',
               gap: '0 6px',
+              backgroundColor: isDark ? 'rgba(255,255,255,0.82)' : 'transparent',
+              borderRadius: isDark ? 12 : 0,
+              padding: isDark ? '6px 14px' : 0,
             }}
           >
             {words.map((word, i) => {
@@ -491,11 +497,15 @@ const SubtitlePanel = ({subtitle, subtitleProgress, branding, fallbackText}) => 
                 <span
                   key={i}
                   style={{
-                    color: isPast ? '#e2e8f0' : isCurrent ? subtitleColor : 'rgba(226, 232, 240, 0.74)',
+                    color: isDark
+                      ? (isCurrent ? '#000000' : isPast ? '#374151' : 'rgba(55, 65, 81, 0.65)')
+                      : (isPast ? '#e2e8f0' : isCurrent ? subtitleColor : 'rgba(226, 232, 240, 0.74)'),
                     fontWeight: isCurrent ? 800 : isPast ? 600 : 500,
-                    textShadow: isCurrent
-                      ? `0 0 18px ${subtitleColor}, 0 4px 16px rgba(2, 6, 23, 0.95)`
-                      : '0 4px 16px rgba(2, 6, 23, 0.95)',
+                    textShadow: isDark
+                      ? 'none'
+                      : (isCurrent
+                        ? `0 0 18px ${subtitleColor}, 0 4px 16px rgba(2, 6, 23, 0.95)`
+                        : '0 4px 16px rgba(2, 6, 23, 0.95)'),
                     transition: 'none',
                     display: 'inline-block',
                   }}
@@ -511,8 +521,11 @@ const SubtitlePanel = ({subtitle, subtitleProgress, branding, fallbackText}) => 
               fontSize: 20,
               lineHeight: 1.35,
               fontWeight: 500,
-              color: 'rgba(226, 232, 240, 0.76)',
-              textShadow: '0 4px 16px rgba(2, 6, 23, 0.95)',
+              color: isDark ? 'rgba(30, 30, 30, 0.7)' : 'rgba(226, 232, 240, 0.76)',
+              textShadow: isDark ? 'none' : '0 4px 16px rgba(2, 6, 23, 0.95)',
+              backgroundColor: isDark ? 'rgba(255,255,255,0.82)' : 'transparent',
+              borderRadius: isDark ? 12 : 0,
+              padding: isDark ? '6px 14px' : 0,
             }}
           >
             {fallbackText}
@@ -1957,6 +1970,13 @@ const findSubtitleEnd = (subtitles, phrase) => {
   return hit && typeof hit.end === 'number' ? hit.end : null;
 };
 
+const findSubtitleStart = (subtitles, phrase) => {
+  if (!Array.isArray(subtitles) || !phrase) return null;
+  const needle = phrase.toLowerCase();
+  const hit = subtitles.find((s) => typeof s?.text === 'string' && s.text.toLowerCase().includes(needle));
+  return hit && typeof hit.start === 'number' ? hit.start : null;
+};
+
 const PaymentGuidanceVideo = ({lead, frame, fps, durationInFrames}) => {
   const timeline = getSceneTimeline(durationInFrames, lead);
   const track = getTrackMeta(lead.id);
@@ -2360,6 +2380,47 @@ export const TemplateVideo = ({leadId}) => {
             subtitle={currentSubtitle}
             subtitleProgress={subtitleProgress}
             branding={subtitleBranding}
+            fallbackText={safeString(lead.cta_text, paymentCopy.fallbackSubtitle)}
+          />
+        ) : null}
+      </AbsoluteFill>
+    );
+  }
+
+  if (lead.template_key === 'payment_link_guidance') {
+    const paymentCopy = getPaymentCopy(lead.language);
+    // Aligning step boundaries with the Payment Link Guidance narration phrases
+    // findSubtitleEnd returns seconds → convert to frames
+    const toFrames = (secs) => secs != null ? Math.round(secs * fps) : null;
+    const stepBoundaries = [
+      toFrames(findSubtitleStart(track.subtitles, 'payment link') || 60),                                                  // Step 0 (Link Click) ends
+      toFrames(findSubtitleStart(track.subtitles, 'agreement number') || findSubtitleEnd(track.subtitles, 'payment link')), // Step 1 (Intro) ends
+      toFrames(findSubtitleStart(track.subtitles, 'captcha') || findSubtitleEnd(track.subtitles, 'agreement number')),      // Step 2 ends
+      toFrames(findSubtitleStart(track.subtitles, 'terms') || findSubtitleEnd(track.subtitles, 'captcha') || findSubtitleStart(track.subtitles, 'shartein')), // Step 3 ends
+      toFrames(findSubtitleStart(track.subtitles, 'payable amount') || findSubtitleEnd(track.subtitles, 'terms') || findSubtitleStart(track.subtitles, 'rashi')), // Step 4 ends
+      toFrames(findSubtitleStart(track.subtitles, 'proceed to pay') || findSubtitleEnd(track.subtitles, 'payable amount') || findSubtitleStart(track.subtitles, 'aage')), // Step 5 ends
+      toFrames(findSubtitleStart(track.subtitles, 'payment method') || findSubtitleStart(track.subtitles, 'bhugtan') || findSubtitleEnd(track.subtitles, 'proceed to pay')), // Step 6 ends
+      toFrames(findSubtitleStart(track.subtitles, 'contact') || findSubtitleStart(track.subtitles, 'support') || findSubtitleStart(track.subtitles, 'sampark') || findSubtitleEnd(track.subtitles, 'transaction')), // Step 7 ends
+    ];
+
+    return (
+      <AbsoluteFill style={{backgroundColor: '#f7fbff', fontFamily: FONT_FAMILY, overflow: 'hidden'}}>
+        {audioSrc ? <Audio src={audioSrc} /> : null}
+        <PaymentLinkGuidanceTemplate
+          enableNarration={false}
+          customerName={lead.customer_name}
+          lan={lead.lan}
+          clientName={lead.client_name}
+          contactDetails={lead.contact_details}
+          payableAmount={lead.tos}
+          stepBoundaries={stepBoundaries}
+        />
+        <LogoOverlay logo={logoBranding} />
+        {subtitleBranding.enabled ? (
+          <SubtitlePanel
+            subtitle={currentSubtitle}
+            subtitleProgress={subtitleProgress}
+            branding={{...subtitleBranding, color: 'Black'}}
             fallbackText={safeString(lead.cta_text, paymentCopy.fallbackSubtitle)}
           />
         ) : null}

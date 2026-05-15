@@ -32,25 +32,3 @@ class GrokClient:
             result = response.json()
             return result["choices"][0]["message"]["content"].strip()
 
-class GeminiClient:
-    def __init__(self, api_key: str, model_name: str):
-        self.api_key = api_key
-        self.model_name = model_name
-        self.model = None
-        self._initialize()
-
-    def _initialize(self):
-        try:
-            import google.generativeai as genai
-            genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel(self.model_name)
-        except Exception as e:
-            logger.error(f"GeminiClient: Failed to initialize: {e}")
-
-    async def generate(self, prompt: str) -> str:
-        if not self.model:
-            raise RuntimeError("GeminiClient not initialized correctly.")
-        
-        # Run in thread to keep it async-friendly
-        response = await asyncio.to_thread(self.model.generate_content, prompt)
-        return response.text.strip()

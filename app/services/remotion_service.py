@@ -403,6 +403,8 @@ class RemotionService:
             "language": request.language,
             "video_variety": request.video_variety or "personalized",
             "template_key": request.template_key or "account_notice",
+            "video_width": 1080 if request.template_key == "payment_link_guidance" else None,
+            "video_height": 1920 if request.template_key == "payment_link_guidance" else None,
             "audio_url": audio_path,
             "subtitles": subtitles,
             "customer_name": "" if is_universal else request.customer_name,
