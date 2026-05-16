@@ -118,6 +118,13 @@ class RemotionJobWorker:
             return
 
         # 3. Mark as processing, clearing any prior failure state so retries can run cleanly.
+        # CRITICAL FIX: Only process jobs that are explicitly Remotion jobs.
+        # If an Avatar job is found in SQS, let the AvatarJobWorker handle it.
+        request_mode = job_doc.get("request_mode", "")
+        if "remotion" not in str(request_mode).lower():
+            logger.info(f"RemotionJobWorker: skipping video_id={video_id} because request_mode={request_mode} is not Remotion.")
+            return
+
         now = datetime.utcnow()
         await self.videos_collection_ref.update_one(
             {"_id": _mongo_id(video_id)},
