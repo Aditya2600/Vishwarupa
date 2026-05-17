@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     avatar_id_rahul: str = "932371fea0eb462ea9beccff656d4823"
     avatar_id_priya: str = "c56120f1c7564d20b1f87416a6b8d0d1"
     avatar_id_adv_aditi_mehra: str = "b8d00c953a114b299792b6197a80cc70"
+    avatar_id_adv_dev_kumar: str = "871e5a926b6449e38e1d776f461e783c"
     default_video_width: int = 1280
     default_video_height: int = 720
     default_background_color: str = '#F4F4F4'
@@ -35,7 +36,7 @@ class Settings(BaseSettings):
     remotion_renderer_port: int | None = None
     remotion_force_ipv4: bool = True
     poll_interval_seconds: int = 8
-    poll_timeout_seconds: int = 1200
+    poll_timeout_seconds: int = 2400
     edge_tts_delay_seconds: float = 0.0
     strict_validation: bool = True
     cors_allow_all: bool = True
