@@ -66,7 +66,7 @@ const BRANDING_DEFAULTS = fallbackLead.branding;
 
 const normalizeSubtitleColor = (value) => {
   const cleaned = safeString(value, BRANDING_DEFAULTS.subtitles.color);
-  return ['White', 'Blue', 'Green', 'Red', 'Yellow', 'Teal'].includes(cleaned)
+  return ['White', 'Blue', 'Green', 'Red', 'Yellow', 'Teal', 'Black'].includes(cleaned)
     ? cleaned
     : BRANDING_DEFAULTS.subtitles.color;
 };

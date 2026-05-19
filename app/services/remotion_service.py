@@ -418,8 +418,13 @@ class RemotionService:
             "branding": {
                 "logo": {
                     "public_path": f"assets/{request.logo_filename}" if request.logo_filename else None,
-                    "position": "Top Right",
-                    "opacity": 80
+                    "position": request.logo_position or "Top Right",
+                    "opacity": request.logo_opacity if request.logo_opacity is not None else 80
+                },
+                "subtitles": {
+                    "enabled": request.include_captions,
+                    "color": request.subtitle_color or "White",
+                    "position": request.subtitle_position or "Bottom"
                 },
                 "primary_color": request.primary_color or "#003366",
                 "secondary_color": request.secondary_color or "#FF9900"

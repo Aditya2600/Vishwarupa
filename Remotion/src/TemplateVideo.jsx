@@ -536,17 +536,22 @@ const SubtitlePanel = ({subtitle, subtitleProgress, branding, fallbackText}) => 
   );
 };
 
-const LogoOverlay = ({logo}) => {
-  if (!logo?.public_path || logo.position === 'Top Right' || !logo.position) {
+const LogoOverlay = ({logo, forceAll = false}) => {
+  if (!logo?.public_path) {
     return null;
   }
+  if (!forceAll && (logo.position === 'Top Right' || !logo.position)) {
+    return null;
+  }
+
+  const logoPosition = logo.position || 'Top Right';
 
   return (
     <div
       style={{
         position: 'absolute',
         zIndex: 24,
-        ...getLogoPlacement(logo.position),
+        ...getLogoPlacement(logoPosition),
       }}
     >
       <Img
@@ -2373,8 +2378,9 @@ export const TemplateVideo = ({leadId}) => {
     const paymentCopy = getPaymentCopy(lead.language);
     return (
       <AbsoluteFill style={{backgroundColor: '#f8fafc', fontFamily: FONT_FAMILY, overflow: 'hidden'}}>
-        {audioSrc ? <Audio src={audioSrc} /> : null}
+        {audioSrc ? <Audio src={audioSrc} /> : null} 
         <PaymentGuidanceVideo lead={lead} frame={frame} fps={fps} durationInFrames={durationInFrames} />
+        <LogoOverlay logo={logoBranding} forceAll={true} />
         {subtitleBranding.enabled ? (
           <SubtitlePanel
             subtitle={currentSubtitle}
@@ -2415,7 +2421,7 @@ export const TemplateVideo = ({leadId}) => {
           payableAmount={lead.tos}
           stepBoundaries={stepBoundaries}
         />
-        <LogoOverlay logo={logoBranding} />
+        <LogoOverlay logo={logoBranding} forceAll={true} />
         {subtitleBranding.enabled ? (
           <SubtitlePanel
             subtitle={currentSubtitle}
