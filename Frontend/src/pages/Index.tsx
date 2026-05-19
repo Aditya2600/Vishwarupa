@@ -356,11 +356,16 @@ const Index = () => {
       reset();
 
       // 2. Apply the specific pipeline they asked for
-      update({ videoType: requestedMode === "remotion" ? "remotion" : "avatar" });
+      const requestedTemplate = searchParams.get("template");
+      update({
+        videoType: requestedMode === "remotion" ? "remotion" : "avatar",
+        ...(requestedMode === "remotion" && requestedTemplate ? { remotionTemplateKey: requestedTemplate as any } : {}),
+      });
 
-      // 3. Silently scrub '?fresh=1' from the URL so it doesn't trigger again on normal re-renders
+      // 3. Silently scrub '?fresh=1' and '&template=...' from the URL so it doesn't trigger again on normal re-renders
       const newParams = new URLSearchParams(searchParams);
       newParams.delete("fresh");
+      newParams.delete("template");
       setSearchParams(newParams, { replace: true });
     }
   }, [requestedFreshDraft, requestedMode, reset, update, searchParams, setSearchParams]);
@@ -593,6 +598,11 @@ const Index = () => {
     }
 
     const language = requestedFreshDraft ? "Hindi" : state.language;
+    const requestedTemplate = searchParams.get("template");
+    const templateKey = (requestedFreshDraft && requestedMode === "remotion" && requestedTemplate)
+      ? requestedTemplate
+      : state.remotionTemplateKey;
+
     const preservedAvatar =
       requestedFreshDraft || requestedMode === "remotion"
         ? EMPTY_AVATAR_SELECTION
@@ -617,16 +627,17 @@ const Index = () => {
       videoType: requestedMode,
       ...preservedAvatar,
       ...preservedVoice,
+      ...(requestedMode === "remotion" ? { remotionTemplateKey: templateKey as any } : {}),
       transcript: requestedFreshDraft
         ? getDefaultAvatarScript(language, "female")
         : state.avatarTranscriptCustomized
           ? state.transcript
           : buildAvatarDefaultTranscript(language, preservedAvatar.avatarGender, preservedVoice.voiceGender),
       remotionTranscript: requestedFreshDraft
-        ? getDefaultRemotionTranscript(language, state.videoVariety, state.voiceGender, state.remotionTemplateKey)
+        ? getDefaultRemotionTranscript(language, state.videoVariety, state.voiceGender, templateKey as any)
         : state.remotionTranscriptCustomized
           ? state.remotionTranscript
-          : getDefaultRemotionTranscript(language, state.videoVariety, state.voiceGender, state.remotionTemplateKey),
+          : getDefaultRemotionTranscript(language, state.videoVariety, state.voiceGender, templateKey as any),
       avatarTranscriptCustomized: requestedFreshDraft ? false : state.avatarTranscriptCustomized,
       remotionTranscriptCustomized: requestedFreshDraft ? false : state.remotionTranscriptCustomized,
       ...RESET_GENERATION_STATE,
@@ -638,6 +649,7 @@ const Index = () => {
     requestedMode,
     reset,
     setSearchParams,
+    searchParams,
     update,
   ]);
 

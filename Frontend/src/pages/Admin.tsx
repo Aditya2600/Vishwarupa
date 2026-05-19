@@ -301,8 +301,8 @@ const AdminDashboard = () => {
             { label: "Completed", val: stats?.completed, color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-100" },
             { label: "Queued", val: stats?.queued, color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-100" },
             { label: "Failed", val: stats?.failed, color: "text-red-500", bg: "bg-red-50", border: "border-red-100" },
-            { label: "Remotion", val: stats?.remotion, color: "text-indigo-600", bg: "bg-indigo-50", border: "border-indigo-100" },
-            { label: "Direct", val: stats?.direct, color: "text-cyan-600", bg: "bg-cyan-50", border: "border-cyan-100" },
+            { label: "Custom Layouts", val: stats?.remotion, color: "text-indigo-600", bg: "bg-indigo-50", border: "border-indigo-100" },
+            { label: "AI Narrator", val: stats?.direct, color: "text-cyan-600", bg: "bg-cyan-50", border: "border-cyan-100" },
           ].map((s, i) => (
             <Card key={i} className={`${s.bg} border ${s.border} rounded-2xl overflow-hidden shadow-none`}>
               <CardContent className="p-4">
@@ -349,9 +349,9 @@ const AdminDashboard = () => {
               </CardHeader>
               <CardContent className="p-6 space-y-4">
                 {[
-                  { label: "Remotion Videos", val: stats?.remotion ?? 0, total: stats?.total_videos ?? 1, color: "bg-purple-500" },
-                  { label: "Direct (HeyGen)", val: stats?.direct ?? 0, total: stats?.total_videos ?? 1, color: "bg-indigo-400" },
-                  { label: "Template Based", val: stats?.template ?? 0, total: stats?.total_videos ?? 1, color: "bg-violet-400" },
+                  { label: "Custom Layout Videos", val: stats?.remotion ?? 0, total: stats?.total_videos ?? 1, color: "bg-purple-500" },
+                  { label: "Narrator Videos", val: stats?.direct ?? 0, total: stats?.total_videos ?? 1, color: "bg-indigo-400" },
+                  { label: "API Templates", val: stats?.template ?? 0, total: stats?.total_videos ?? 1, color: "bg-violet-400" },
                 ].map((b) => (
                   <div key={b.label}>
                     <div className="flex justify-between text-xs font-bold mb-1.5">
