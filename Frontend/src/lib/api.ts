@@ -46,7 +46,24 @@ export interface DirectVideoPayload {
   video_width?: number;
   video_height?: number;
   voice_gender?: "male" | "female";
-  template_key?: "account_notice" | "payment_guidance" | "payment_link_guidance";
+  template_key?: "account_notice" | "payment_guidance" | "payment_link_guidance" | "overdue_template" | "loan_offer_interactive";
+  max_loan_amount?: string;
+  max_tenure?: string;
+  max_emi?: string;
+  loan_id?: string;
+  month_24_loan_amount?: string;
+  month_30_loan_amount?: string;
+  month_36_loan_amount?: string;
+  month_42_loan_amount?: string;
+  month_48_loan_amount?: string;
+  month_60_loan_amount?: string;
+  emi_calculation24?: string;
+  emi_calculation30?: string;
+  emi_calculation36?: string;
+  emi_calculation42?: string;
+  emi_calculation48?: string;
+  emi_calculation60?: string;
+  cta_phone_number?: string;
 }
 
 export interface AvatarJobAck {
@@ -75,7 +92,21 @@ export interface VideoJobResult {
   saved_to: string | null;
   video_path?: string | null;
   audio_path?: string | null;
+  interactive_url?: string | null;
   error?: string | null;
+}
+
+export interface InteractiveLoanOffer {
+  id: string;
+  title: string;
+  video_url: string;
+  customer_name: string;
+  client_name: string;
+  contact_details: string;
+  primary_color: string;
+  secondary_color: string;
+  loan_offer: Record<string, string | number | null>;
+  subtitles?: Array<{ text: string; start: number; end: number }>;
 }
 
 export interface StyledVideoResult {
@@ -1114,6 +1145,25 @@ export async function fetchVideoStatus(videoId: string, requestMode: "direct" | 
   return requestJson<VideoJobResult>(`/videos/${videoId}/status?request_mode=${requestMode}`);
 }
 
+export async function fetchInteractiveLoanOffer(videoId: string): Promise<InteractiveLoanOffer> {
+  return requestJson<InteractiveLoanOffer>(`/interactive/loan-offer/${videoId}`);
+}
+
+export async function recordInteractiveLoanOfferEvent(
+  videoId: string,
+  payload: {
+    action: string;
+    selected_loan_amount?: string;
+    selected_tenure?: string;
+    selected_emi?: string;
+  },
+): Promise<{ status: string }> {
+  return requestJson<{ status: string }>(`/interactive/loan-offer/${videoId}/events`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function generateRemotionVideo(payload: RemotionVideoPayload): Promise<VideoJobResult> {
   const formData = new FormData();
   formData.set("customer_name", payload.customer_name);
@@ -1165,6 +1215,30 @@ export async function generateRemotionVideo(payload: RemotionVideoPayload): Prom
   if (payload.logoFile) {
     formData.set("logo_file", payload.logoFile);
   }
+  [
+    "max_loan_amount",
+    "max_tenure",
+    "max_emi",
+    "loan_id",
+    "month_24_loan_amount",
+    "month_30_loan_amount",
+    "month_36_loan_amount",
+    "month_42_loan_amount",
+    "month_48_loan_amount",
+    "month_60_loan_amount",
+    "emi_calculation24",
+    "emi_calculation30",
+    "emi_calculation36",
+    "emi_calculation42",
+    "emi_calculation48",
+    "emi_calculation60",
+    "cta_phone_number",
+  ].forEach((key) => {
+    const value = payload[key as keyof RemotionVideoPayload];
+    if (typeof value === "string" && value.trim()) {
+      formData.set(key, value.trim());
+    }
+  });
 
   return requestJson<VideoJobResult>("/generate/remotion", {
     method: "POST",

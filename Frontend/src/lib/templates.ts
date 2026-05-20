@@ -10,7 +10,7 @@ interface GenderedTemplate {
 }
 
 type TemplateValue = string | GenderedTemplate;
-export type RemotionTemplateKey = "account_notice" | "payment_guidance" | "payment_link_guidance";
+export type RemotionTemplateKey = "account_notice" | "payment_guidance" | "payment_link_guidance" | "overdue_template" | "loan_offer_interactive";
 
 function getGenderedText(value: TemplateValue, gender: Gender): string {
   if (typeof value === "string") return value;
@@ -206,6 +206,27 @@ Thank you.`,
   },
 };
 
+export const OVERDUE_TEMPLATES: Record<string, TemplateValue> = {
+  English: `Dear {{ customer_name }}. Your {{ client_name }} credit card ending with {{ lan }} has an overdue amount of {{ tos }}. If this continues beyond 90 days, your account will be classified as a Non-Performing Asset (NPA). Non-payment can lead to legal action to recover dues, restrictions on future loans or credit cards, and a lasting negative impact on your financial credibility. But you can take action now. Clear your outstanding balance and avoid these consequences. Timely repayment protects your credit score, ensures access to future loans, and avoids late fees or penalties. We understand that life can be challenging. If full repayment is difficult, you can pay the minimum amount due of {{ loan_amount }} or reach out for further assistance. Act now to protect your financial future. Call us at {{ contact_details }} for assistance. Thank you for choosing {{ client_name }}.`,
+  Hindi: {
+    male: `प्रिय {{ customer_name }}। आपके {{ client_name }} क्रेडिट कार्ड, जिसके अंत में {{ lan }} है, का बकाया भुगतान {{ tos }} है। यदि यह 90 दिनों से अधिक जारी रहता है, तो आपके खाते को NPA वर्गीकृत किया जाएगा। भुगतान न करने से कानूनी कार्रवाई हो सकती है, भविष्य के ऋणों या क्रेडिट कार्डों पर प्रतिबंध लग सकते हैं, और आपके क्रेडिट इतिहास पर बुरा प्रभाव पड़ सकता है। लेकिन आप अभी कदम उठा सकते हैं। अपना बकाया चुकाएं और इन परिणामों से बचें। समय पर भुगतान आपके क्रेडिट स्कोर को सुरक्षित रखता है, नए लोन सुनिश्चित करता है, और विलंब शुल्क या पेनल्टी से बचाता है। हम समझते हैं कि जीवन चुनौतीपूर्ण हो सकता है। यदि पूरा भुगतान कठिन है, तो आप न्यूनतम देय राशि {{ loan_amount }} का भुगतान कर सकते हैं या सहायता के लिए संपर्क कर सकते हैं। अपने वित्तीय भविष्य की सुरक्षा के लिए अभी कदम उठाएं। सहायता के लिए हमें {{ contact_details }} पर कॉल करें। {{ client_name }} को चुनने के लिए धन्यवाद।`,
+    female: `प्रिय {{ customer_name }}। आपके {{ client_name }} क्रेडिट कार्ड, जिसके अंत में {{ lan }} है, का बकाया भुगतान {{ tos }} है। यदि यह 90 दिनों से अधिक जारी रहता है, तो आपके खाते को NPA वर्गीकृत किया जाएगा। भुगतान न करने से कानूनी कार्रवाई हो सकती है, भविष्य के ऋणों या क्रेडिट कार्डों पर प्रतिबंध लग सकते हैं, और आपके क्रेडिट इतिहास पर बुरा प्रभाव पड़ सकता. लेकिन आप अभी कदम उठा सकते हैं। अपना बकाया चुकाएं और इन परिणामों से बचें। समय पर भुगतान आपके क्रेडिट स्कोर को सुरक्षित रखता है, नए लोन सुनिश्चित करता है, और विलंब शुल्क या पेनल्टी से बचाता है। हम समझते हैं कि जीवन चुनौतीपूर्ण हो सकता है। यदि पूरा भुगतान कठिन है, तो आप न्यूनतम देय राशि {{ loan_amount }} का भुगतान कर सकते हैं या सहायता के लिए संपर्क कर सकते हैं। अपने वित्तीय भविष्य की सुरक्षा के लिए अभी कदम उठाएं। सहायता के लिए हमें {{ contact_details }} पर कॉल करें। {{ client_name }} को चुनने के लिए धन्यवाद।`,
+  },
+};
+
+export const LOAN_OFFER_INTERACTIVE_TEMPLATES: Record<string, TemplateValue> = {
+  English: `Congratulations {{ customer_name }}.
+You have a personalized loan offer from {{ client_name }}.
+You can avail a loan amount up to {{ loan_amount }} with flexible tenure options.
+Tap Avail Now, choose your preferred loan amount and tenure, then confirm your loan offer.
+For assistance, call {{ contact_details }}.
+Thank you.`,
+  Hindi: {
+    male: `नमस्ते {{ customer_name }}। {{ client_name }} की ओर से आपके लिए एक व्यक्तिगत लोन ऑफर उपलब्ध है। आप {{ loan_amount }} तक की राशि और सुविधाजनक अवधि चुन सकते हैं। Avail Now पर टैप करें, अपनी पसंद की लोन राशि और अवधि चुनें, फिर Confirm Loan Offer पर टैप करें। सहायता के लिए {{ contact_details }} पर कॉल करें। धन्यवाद।`,
+    female: `नमस्ते {{ customer_name }}। {{ client_name }} की ओर से आपके लिए एक व्यक्तिगत लोन ऑफर उपलब्ध है। आप {{ loan_amount }} तक की राशि और सुविधाजनक अवधि चुन सकती हैं। Avail Now पर टैप करें, अपनी पसंद की लोन राशि और अवधि चुनें, फिर Confirm Loan Offer पर टैप करें। सहायता के लिए {{ contact_details }} पर कॉल करें। धन्यवाद।`,
+  },
+};
+
 export const REMOTION_TEMPLATE_OPTIONS: Array<{ key: RemotionTemplateKey; name: string; description: string }> = [
   {
     key: "account_notice",
@@ -221,6 +242,16 @@ export const REMOTION_TEMPLATE_OPTIONS: Array<{ key: RemotionTemplateKey; name: 
     key: "payment_link_guidance",
     name: "Payment Link Guidance",
     description: "Screenshot-based guide for captcha, terms, amount review, and payment options.",
+  },
+  {
+    key: "overdue_template",
+    name: "Credit Card Overdue Notice",
+    description: "Overdue alert sequence detailing NPA classification, credit score impact, and payment options.",
+  },
+  {
+    key: "loan_offer_interactive",
+    name: "Interactive Loan Offer",
+    description: "Brand-editable loan offer with Avail Now, amount/tenure selection, EMI summary, and confirm CTA.",
   },
 ];
 
@@ -310,6 +341,14 @@ export function getDefaultRemotionTranscript(
   }
   if (mode === "personalized" && templateKey === "payment_link_guidance") {
     const val = PAYMENT_LINK_GUIDANCE_TEMPLATES[language] ?? PAYMENT_LINK_GUIDANCE_TEMPLATES.English;
+    return getGenderedText(val, resolvedGender);
+  }
+  if (mode === "personalized" && templateKey === "overdue_template") {
+    const val = OVERDUE_TEMPLATES[language] ?? OVERDUE_TEMPLATES.English;
+    return getGenderedText(val, resolvedGender);
+  }
+  if (mode === "personalized" && templateKey === "loan_offer_interactive") {
+    const val = LOAN_OFFER_INTERACTIVE_TEMPLATES[language] ?? LOAN_OFFER_INTERACTIVE_TEMPLATES.English;
     return getGenderedText(val, resolvedGender);
   }
   if (mode === "universal") {

@@ -126,7 +126,7 @@ class DirectVideoRequest(LeadRecord):
 
 class RemotionVideoRequest(DirectVideoRequest):
     video_variety: Literal['personalized', 'universal'] | None = 'personalized'
-    template_key: Literal['account_notice', 'payment_guidance', 'payment_link_guidance'] | None = 'account_notice'
+    template_key: Literal['account_notice', 'payment_guidance', 'payment_link_guidance', 'overdue_template', 'loan_offer_interactive'] | None = 'account_notice'
     title_prefix: str = 'Loan Recall'
     subtitle_color: str = 'White'
     subtitle_position: str = 'Bottom'
@@ -136,6 +136,23 @@ class RemotionVideoRequest(DirectVideoRequest):
     logo_bytes: bytes | None = None
     primary_color: str | None = "#003366"
     secondary_color: str | None = "#FF9900"
+    max_loan_amount: str | float | int | None = None
+    max_tenure: str | float | int | None = None
+    max_emi: str | float | int | None = None
+    loan_id: str | None = None
+    month_24_loan_amount: str | float | int | None = None
+    month_30_loan_amount: str | float | int | None = None
+    month_36_loan_amount: str | float | int | None = None
+    month_42_loan_amount: str | float | int | None = None
+    month_48_loan_amount: str | float | int | None = None
+    month_60_loan_amount: str | float | int | None = None
+    emi_calculation24: str | float | int | None = None
+    emi_calculation30: str | float | int | None = None
+    emi_calculation36: str | float | int | None = None
+    emi_calculation42: str | float | int | None = None
+    emi_calculation48: str | float | int | None = None
+    emi_calculation60: str | float | int | None = None
+    cta_phone_number: str | None = None
 
     @field_validator('tos', 'loan_amount', 'contact_details', 'product_type', mode='before')
     @classmethod
@@ -184,6 +201,7 @@ class VideoJobResult(BaseModel):
     saved_to: Path | str | None = None
     video_path: str | None = None
     audio_path: str | None = None
+    interactive_url: str | None = None
 
 
 class StyledVideoResult(BaseModel):

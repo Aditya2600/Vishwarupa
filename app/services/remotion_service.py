@@ -46,6 +46,9 @@ VOICE_MAP = {
 DEFAULT_SCRIPT_EN = "Hello {{ customer_name }}. I am calling from {{ client_name }} regarding your {{ product_type }} account. The total outstanding balance is {{ tos }}. Please contact us at {{ contact_details }} to discuss repayment options."
 DEFAULT_SCRIPT_HI = "नमस्ते {{ customer_name }}। मैं {{ client_name }} से आपके {{ product_type }} खाते के संबंध में बोल रही हूँ। आपकी कुल बकाया राशि {{ tos }} है। कृपया भुगतान विकल्पों पर चर्चा करने के लिए हमसे {{ contact_details }} पर संपर्क करें।"
 
+DEFAULT_LOAN_OFFER_EN = "Congratulations {{ customer_name }}. {{ client_name }} has a pre-approved loan offer for you up to {{ loan_amount }}. Please select your preferred amount and tenure to proceed. Our team will assist you in completing the next steps."
+DEFAULT_LOAN_OFFER_HI = "बधाई हो {{ customer_name }}। {{ client_name }} के पास आपके लिए {{ loan_amount }} तक का प्री-अप्रूव्ड लोन ऑफर है। कृपया अपनी पसंद की राशि और अवधि चुनें। हमारी टीम अगले कदम पूरे करने में आपकी मदद करेगी।"
+
 
 def _prepare_tts_pronunciation(text: str) -> str:
     # Keep the brand spelling in scripts/subtitles, but guide TTS to say "PhonePay".
@@ -113,7 +116,10 @@ class RemotionService:
         
         is_universal = (request.video_variety or "personalized") == "universal"
 
-        raw_script = request.script_text or (DEFAULT_SCRIPT_HI if request.language == "Hindi" else DEFAULT_SCRIPT_EN)
+        if request.template_key == 'loan_offer_interactive':
+            raw_script = request.script_text or (DEFAULT_LOAN_OFFER_HI if request.language == "Hindi" else DEFAULT_LOAN_OFFER_EN)
+        else:
+            raw_script = request.script_text or (DEFAULT_SCRIPT_HI if request.language == "Hindi" else DEFAULT_SCRIPT_EN)
 
         if is_universal:
             # Universal transcripts have no placeholders — use the text verbatim
@@ -265,6 +271,10 @@ class RemotionService:
     def build_scene_payload(self, request: RemotionVideoRequest, outstanding_value: str, loan_value: str, urgency_level: str) -> dict[str, Any]:
         if request.template_key == 'payment_guidance':
             return self.build_payment_guidance_scene_payload(request, outstanding_value, loan_value)
+        if request.template_key == 'overdue_template':
+            return self.build_overdue_scene_payload(request, outstanding_value, loan_value)
+        if request.template_key == 'loan_offer_interactive':
+            return self.build_loan_offer_scene_payload(request)
 
         product_content = self._product_content(request.product_type, request.language)
         
@@ -357,7 +367,7 @@ class RemotionService:
 
     def build_payment_guidance_scene_payload(self, request: RemotionVideoRequest, outstanding_value: str, loan_value: str) -> dict[str, Any]:
         customer = request.customer_name or "Customer"
-        client = request.client_name or "TVS Credit"
+        client = request.client_name or "Finance Partner"
         lan = request.lan or "N/A"
         contact = request.contact_details or "1800-555-999"
         payable = outstanding_value or loan_value or request.loan_amount or "0"
@@ -395,6 +405,73 @@ class RemotionService:
             'ui_copy': ui,
         }
 
+    def build_overdue_scene_payload(self, request: RemotionVideoRequest, outstanding_value: str, loan_value: str) -> dict[str, Any]:
+        customer = request.customer_name or "Customer"
+        client = request.client_name or "HDFC Bank"
+        lan = request.lan or "N/A"
+        contact = request.contact_details or "1800-555-999"
+        payable = outstanding_value or request.tos or "0"
+        min_due = loan_value or request.loan_amount or "0"
+        
+        overdue_i18n = {
+            'English': {
+                'headline': f"Dear {customer}",
+                'body': f"Your {client} credit card ending with {lan} has an overdue amount of {payable}. Timely repayment protects your credit score, ensures access to future loans, and avoids late fees or penalties.",
+                'contact_body': f"For any help, contact {contact}.",
+                'ui': {'formalNotice': 'Overdue Notice', 'accountStatus': 'Account details', 'financialHighlights': 'Due Summary', 'immediateNextStep': 'Contact Information', 'resolutionStillPossible': 'Repayment Options', 'customerLabel': 'Customer', 'clientLabel': 'Bank', 'productLabel': 'Product', 'outstandingLabel': 'Overdue', 'finalSummary': 'Summary', 'contactLabel': 'Contact'},
+            },
+            'Hindi': {
+                'headline': f"प्रिय {customer}",
+                'body': f"आपके {client} क्रेडिट कार्ड जिसके अंत में {lan} है, का बकाया भुगतान {payable} है। समय पर भुगतान आपके क्रेडिट स्कोर को सुरक्षित रखता है और भविष्य के लोन सुनिश्चित करता है।",
+                'contact_body': f"किसी भी सहायता के लिए {contact} पर संपर्क करें।",
+                'ui': {'formalNotice': 'बकाया नोटिस', 'accountStatus': 'खाता विवरण', 'financialHighlights': 'देय विवरण', 'immediateNextStep': 'संपर्क जानकारी', 'resolutionStillPossible': 'भुगतान विकल्प', 'customerLabel': 'ग्राहक', 'clientLabel': 'बैंक', 'productLabel': 'उत्पाद', 'outstandingLabel': 'बकाया राशि', 'finalSummary': 'सारांश', 'contactLabel': 'संपर्क'},
+            }
+        }
+        t = overdue_i18n.get(request.language, overdue_i18n['English'])
+        
+        return {
+            'opening': {'eyebrow': t['ui']['formalNotice'], 'headline': t['headline'], 'subheadline': f'{client} | Card {lan}'},
+            'account': {'eyebrow': 'Welcome', 'headline': f'Card {lan}', 'supporting': f'Overdue {payable}', 'badge': 'Overdue'},
+            'context': {'eyebrow': 'Account status', 'headline': 'NPA Alert', 'body': t['body']},
+            'amounts': {'eyebrow': 'Amounts', 'headline': 'Payable Summary', 'body': f'Min Due: {min_due} | Total Due: {payable}', 'note': 'Act now to avoid NPA.'},
+            'action': {'eyebrow': 'Timely repayment benefits', 'headline': 'Repayment Benefits', 'body': t['body'], 'cta_label': 'Call', 'cta_value': contact},
+            'closing': {'eyebrow': 'Outro', 'headline': 'Thank you', 'body': t['contact_body']},
+            'headline_text': t['headline'],
+            'cta_text': t['contact_body'],
+            'ui_copy': t['ui'],
+        }
+
+    def build_loan_offer_scene_payload(self, request: RemotionVideoRequest) -> dict[str, Any]:
+        customer = request.customer_name or "Customer"
+        client = request.client_name or "TVS Credit"
+        max_amount = request.max_loan_amount or request.loan_amount or "105000"
+        max_tenure = request.max_tenure or "60"
+        max_emi = request.max_emi or request.tos or "3398"
+        contact = request.cta_phone_number or request.contact_details or "1800-555-999"
+
+        return {
+            'opening': {
+                'eyebrow': 'Pre-approved offer',
+                'headline': f'Congratulations {customer}',
+                'subheadline': f'{client} loan offer up to {max_amount}',
+            },
+            'account': {
+                'eyebrow': 'Offer details',
+                'headline': f'Max loan amount {max_amount}',
+                'supporting': f'Max tenure {max_tenure} months | EMI {max_emi}',
+                'badge': 'Interactive selection',
+            },
+            'action': {
+                'eyebrow': 'Confirm your offer',
+                'headline': 'Choose loan amount and tenure',
+                'body': f'Customer can select amount, tenure, and confirm the offer. Call CTA: {contact}',
+                'cta_label': 'Call now',
+                'cta_value': contact,
+            },
+            'headline_text': f'Congratulations {customer}, your loan offer is ready',
+            'cta_text': f'Choose your preferred loan amount and tenure. For help, call {contact}.',
+        }
+
     def build_render_payload(self, request: RemotionVideoRequest, video_id: str, script_text: str, audio_path: str, vtt_path: Path, scene_payload: dict[str, Any]) -> dict[str, Any]:
         subtitles = self.parse_vtt(vtt_path)
         is_universal = (request.video_variety or "personalized") == "universal"
@@ -403,8 +480,8 @@ class RemotionService:
             "language": request.language,
             "video_variety": request.video_variety or "personalized",
             "template_key": request.template_key or "account_notice",
-            "video_width": 1080 if request.template_key == "payment_link_guidance" else None,
-            "video_height": 1920 if request.template_key == "payment_link_guidance" else None,
+            "video_width": 1080 if request.template_key in ("payment_link_guidance", "overdue_template", "loan_offer_interactive") else None,
+            "video_height": 1920 if request.template_key in ("payment_link_guidance", "overdue_template", "loan_offer_interactive") else None,
             "audio_url": audio_path,
             "subtitles": subtitles,
             "customer_name": "" if is_universal else request.customer_name,
@@ -414,6 +491,25 @@ class RemotionService:
             "loan_amount": "" if is_universal else (request.loan_amount or ""),
             "contact_details": "" if is_universal else (request.contact_details or ""),
             "product_type": "" if is_universal else (request.product_type or "loan"),
+            "loan_offer": {
+                "max_loan_amount": request.max_loan_amount or request.loan_amount or "105000",
+                "max_tenure": request.max_tenure or "60",
+                "max_emi": request.max_emi or request.tos or "3398",
+                "loan_id": request.loan_id or request.lan or "124356",
+                "cta_phone_number": request.cta_phone_number or request.contact_details or "1800-555-999",
+                "month_24_loan_amount": request.month_24_loan_amount or "75000",
+                "month_30_loan_amount": request.month_30_loan_amount or "90000",
+                "month_36_loan_amount": request.month_36_loan_amount or "105000",
+                "month_42_loan_amount": request.month_42_loan_amount or "NA",
+                "month_48_loan_amount": request.month_48_loan_amount or "NA",
+                "month_60_loan_amount": request.month_60_loan_amount or request.max_loan_amount or request.loan_amount or "105000",
+                "emi_calculation24": request.emi_calculation24 or "",
+                "emi_calculation30": request.emi_calculation30 or "",
+                "emi_calculation36": request.emi_calculation36 or "",
+                "emi_calculation42": request.emi_calculation42 or "",
+                "emi_calculation48": request.emi_calculation48 or "",
+                "emi_calculation60": request.emi_calculation60 or request.max_emi or request.tos or "3398",
+            },
             "scene_payload": scene_payload,
             "branding": {
                 "logo": {
@@ -540,7 +636,8 @@ class RemotionService:
             "audio_path": self.remotion_path / "public" / tts['audio_path'].lstrip('/'),
             "audio_url": tts['audio_path'],
             "video_id": tts['video_id'], 
-            "text": tts['text']
+            "text": tts['text'],
+            "subtitles": render_p.get("subtitles")
         }
 
     async def _persist_logo_asset(self, file_content: bytes, filename: str) -> str:

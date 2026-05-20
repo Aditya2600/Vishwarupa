@@ -29,7 +29,9 @@ interface VideoListItem {
   title: string;
   status: string;
   request_mode: string;
+  template_key?: string | null;
   video_url: string | null;
+  interactive_url?: string | null;
   thumbnail_url?: string | null;
   created_at: string;
   isLocalDraft?: boolean;
@@ -116,6 +118,7 @@ function buildLocalDraftItem(): VideoListItem | null {
     status,
     request_mode: `${draft.videoType} (local draft)`,
     video_url: localVideoUrl,
+    interactive_url: draft.generatedVideo?.interactive_url ?? null,
     created_at: new Date().toISOString(),
     isLocalDraft: true,
   };
@@ -229,10 +232,12 @@ export default function MyVideos() {
   };
 
   const handleShare = async (video: VideoListItem) => {
-    if (!video.video_url) {
+    const shareTarget = video.interactive_url || video.video_url;
+    if (!shareTarget) {
       toast.error("This video does not have a link yet.");
       return;
     }
+    const absoluteShareUrl = new URL(shareTarget, window.location.origin).toString();
 
     try {
       if (navigator.share) {
@@ -240,12 +245,12 @@ export default function MyVideos() {
         // the domain (HeyGen) to display as the primary subtitle in the OS UI.
         await navigator.share({
           title: video.title || "Shared video",
-          text: `Here is the video: ${video.video_url}`,
+          text: `Here is the video: ${absoluteShareUrl}`,
         });
         return;
       }
 
-      await navigator.clipboard.writeText(video.video_url);
+      await navigator.clipboard.writeText(absoluteShareUrl);
       toast.success("Video link copied.");
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
@@ -654,9 +659,9 @@ export default function MyVideos() {
                     </div>
 
                     {video.video_url && (
-                      <Button variant="link" className="p-0 h-auto text-primary text-xs" onClick={() => window.open(video.video_url, '_blank')}>
+                      <Button variant="link" className="p-0 h-auto text-primary text-xs" onClick={() => window.open(video.interactive_url || video.video_url || "", '_blank')}>
                         <ExternalLink className="mr-1 h-3 w-3" />
-                        Open Video
+                        {video.interactive_url ? "Open Interactive Link" : "Open Video"}
                       </Button>
                     )}
                   </div>

@@ -871,6 +871,19 @@ const Index = () => {
     if (state.videoType === "remotion") {
       generateRemotionMutation.mutate({
         ...payload,
+        ...(state.remotionTemplateKey === "loan_offer_interactive"
+          ? {
+              max_loan_amount: state.loanAmount.trim() || undefined,
+              max_tenure: "60",
+              max_emi: state.tos.trim() || undefined,
+              loan_id: state.lan.trim() || undefined,
+              month_24_loan_amount: state.loanAmount.trim() || undefined,
+              month_36_loan_amount: state.loanAmount.trim() || undefined,
+              month_60_loan_amount: state.loanAmount.trim() || undefined,
+              emi_calculation60: state.tos.trim() || undefined,
+              cta_phone_number: state.contactDetails.trim() || undefined,
+            }
+          : {}),
         video_variety: state.videoVariety,
         subtitleColor: state.subtitleColor,
         subtitlePosition: state.subtitlePosition,

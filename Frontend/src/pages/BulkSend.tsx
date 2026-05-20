@@ -231,6 +231,10 @@ function buildLeadVariables(row: Record<string, unknown>, videoUrl?: string | nu
   return variables;
 }
 
+function getShareableVideoUrl(video: any): string | null {
+  return video?.interactive_url ?? video?.video_url ?? null;
+}
+
 function extractCampaignCode(data: unknown): string {
   if (typeof data === "string") {
     return data.trim();
@@ -297,6 +301,7 @@ export default function BulkSend() {
       return myVideos?.find(v => (v._id || v.video_id) === videoIdFromUrl);
     }
   });
+  const referenceShareUrl = getShareableVideoUrl(referenceVideoQuery.data);
 
 
   useEffect(() => {
@@ -436,7 +441,7 @@ export default function BulkSend() {
     let successCount = 0;
     let failCount = 0;
     const shouldUseCampaignSend = mode === "universal" || isFromVideo;
-    const referenceVideoUrl = referenceVideoQuery.data?.video_url ?? null;
+    const referenceVideoUrl = getShareableVideoUrl(referenceVideoQuery.data);
 
     const promise = (async () => {
       if (shouldUseCampaignSend) {
@@ -1359,14 +1364,14 @@ export default function BulkSend() {
                       csvHeaders,
                       mapping,
                       mode,
-                      referenceVideoQuery.data?.video_url,
+                      referenceShareUrl,
                     );
                     const previewLinkLabel = getVideoLinkPreviewLabel(
                       row,
                       csvHeaders,
                       mapping,
                       mode,
-                      referenceVideoQuery.data?.video_url,
+                      referenceShareUrl,
                     );
 
                     return (
@@ -1417,7 +1422,7 @@ export default function BulkSend() {
             <div className="space-y-1">
               <p className="text-sm font-bold text-foreground">Video link guidance</p>
               <p className="text-sm leading-6 text-muted-foreground">
-                {shouldUseCampaignSend && referenceVideoQuery.data?.video_url
+                {shouldUseCampaignSend && referenceShareUrl
                   ? "All recipients will receive the same video link."
                   : shouldUseCampaignSend
                     ? "A shared preview link is shown here. The same video link will be used for every recipient."

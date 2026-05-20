@@ -10,6 +10,8 @@ import {
   useVideoConfig,
 } from 'remotion';
 import {PaymentLinkGuidanceTemplate} from './templates/PaymentLinkGuidanceTemplate';
+import {OverdueTemplate} from './templates/OverdueTemplate';
+import {LoanOfferInteractiveTemplate} from './templates/LoanOfferInteractiveTemplate';
 import {
   TRANSITION_FRAMES,
   HEIGHT,
@@ -143,6 +145,12 @@ const getSubtitlePanelPlacement = (position) => {
         left: 84,
         right: 84,
         transform: 'translateY(-50%)',
+      };
+    case 'OverdueBottom':
+      return {
+        bottom: 240,
+        left: 84,
+        right: 84,
       };
     default:
       return {
@@ -2393,6 +2401,43 @@ export const TemplateVideo = ({leadId}) => {
     );
   }
 
+  if (lead.template_key === 'overdue_template') {
+    const toFrames = (secs) => secs != null ? Math.round(secs * fps) : null;
+    const stepBoundaries = [
+      toFrames(findSubtitleStart(track.subtitles, 'ending with') || findSubtitleStart(track.subtitles, 'के अंत में') || findSubtitleStart(track.subtitles, 'card') || findSubtitleStart(track.subtitles, 'क्रेडिट') || 4.0),
+      toFrames(findSubtitleStart(track.subtitles, '90 days') || findSubtitleStart(track.subtitles, '90 दिनों') || 9.0),
+      toFrames(findSubtitleStart(track.subtitles, 'legal action') || findSubtitleStart(track.subtitles, 'consequences') || findSubtitleStart(track.subtitles, 'कानूनी') || findSubtitleStart(track.subtitles, 'परिणामों') || 14.0),
+      toFrames(findSubtitleStart(track.subtitles, 'repayment protects') || findSubtitleStart(track.subtitles, 'protects your') || findSubtitleStart(track.subtitles, 'समय पर') || 20.0),
+      toFrames(findSubtitleStart(track.subtitles, 'minimum amount') || findSubtitleStart(track.subtitles, 'outstanding balance') || findSubtitleStart(track.subtitles, 'न्यूनतम') || findSubtitleStart(track.subtitles, 'बकाया') || 25.0),
+      toFrames(findSubtitleStart(track.subtitles, 'Call us') || findSubtitleStart(track.subtitles, 'contact') || findSubtitleStart(track.subtitles, 'कॉल करें') || findSubtitleStart(track.subtitles, 'संपर्क') || 31.0),
+    ];
+
+    return (
+      <AbsoluteFill style={{backgroundColor: '#090d16', fontFamily: FONT_FAMILY, overflow: 'hidden'}}>
+        {audioSrc ? <Audio src={audioSrc} /> : null}
+        <OverdueTemplate
+          enableNarration={false}
+          customerName={lead.customer_name}
+          lan={lead.lan}
+          clientName={lead.client_name}
+          contactDetails={lead.contact_details}
+          payableAmount={lead.tos}
+          minimumAmountDue={lead.loan_amount}
+          stepBoundaries={stepBoundaries}
+        />
+        <LogoOverlay logo={logoBranding} forceAll={true} />
+        {subtitleBranding.enabled ? (
+          <SubtitlePanel
+            subtitle={currentSubtitle}
+            subtitleProgress={subtitleProgress}
+            branding={{...subtitleBranding, position: subtitleBranding.position === 'Bottom' ? 'OverdueBottom' : subtitleBranding.position}}
+            fallbackText={safeString(lead.cta_text, 'Thank you')}
+          />
+        ) : null}
+      </AbsoluteFill>
+    );
+  }
+
   if (lead.template_key === 'payment_link_guidance') {
     const paymentCopy = getPaymentCopy(lead.language);
     // Aligning step boundaries with the Payment Link Guidance narration phrases
@@ -2433,6 +2478,37 @@ export const TemplateVideo = ({leadId}) => {
       </AbsoluteFill>
     );
   }
+
+  if (lead.template_key === 'loan_offer_interactive') {
+    const toFrames = (secs) => secs != null ? Math.round(secs * fps) : null;
+    const stepBoundaries = [
+      toFrames(findSubtitleStart(track.subtitles, 'select your') || findSubtitleStart(track.subtitles, 'preferred') || findSubtitleStart(track.subtitles, 'पसंद की') || findSubtitleStart(track.subtitles, 'अवधि') || 10.8),
+      toFrames(findSubtitleStart(track.subtitles, 'our team') || findSubtitleStart(track.subtitles, 'assist') || findSubtitleStart(track.subtitles, 'हमारी टीम') || findSubtitleStart(track.subtitles, 'मदद') || 22.0),
+    ];
+
+    return (
+      <AbsoluteFill style={{backgroundColor: '#ffffff', fontFamily: FONT_FAMILY, overflow: 'hidden'}}>
+        {audioSrc ? <Audio src={audioSrc} /> : null}
+        <LoanOfferInteractiveTemplate
+          customerName={lead.customer_name}
+          clientName={lead.client_name}
+          contactDetails={lead.contact_details}
+          loanOffer={lead.loan_offer}
+          stepBoundaries={stepBoundaries}
+        />
+        <LogoOverlay logo={logoBranding} forceAll={true} />
+        {subtitleBranding.enabled ? (
+          <SubtitlePanel
+            subtitle={currentSubtitle}
+            subtitleProgress={subtitleProgress}
+            branding={{...subtitleBranding, color: 'Black'}}
+            fallbackText={safeString(lead.cta_text, 'Choose your loan offer.')}
+          />
+        ) : null}
+      </AbsoluteFill>
+    );
+  }
+
 
   return (
     <AbsoluteFill

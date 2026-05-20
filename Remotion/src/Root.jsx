@@ -1,8 +1,9 @@
 import {Composition} from 'remotion';
 import {TemplateVideo} from './TemplateVideo';
 import {PaymentLinkGuidanceTemplate} from './templates/PaymentLinkGuidanceTemplate';
+import {LoanOfferInteractiveTemplate} from './templates/LoanOfferInteractiveTemplate';
 import {PAYMENT_LINK_GUIDANCE_DURATION} from './templates/PaymentLinkGuidanceTemplate/scenes';
-import {FPS, getDurationInFrames, getLeadDimensions, leads} from './videoData';
+import {FPS, LOAN_OFFER_INTERACTIVE_DURATION, getDurationInFrames, getLeadDimensions, leads} from './videoData';
 
 export const RemotionRoot = () => {
   const primaryLead = leads[0];
@@ -23,6 +24,14 @@ export const RemotionRoot = () => {
         id="PaymentLinkGuidanceTemplate"
         component={PaymentLinkGuidanceTemplate}
         durationInFrames={PAYMENT_LINK_GUIDANCE_DURATION}
+        fps={30}
+        width={1080}
+        height={1920}
+      />
+      <Composition
+        id="LoanOfferInteractiveTemplate"
+        component={LoanOfferInteractiveTemplate}
+        durationInFrames={LOAN_OFFER_INTERACTIVE_DURATION}
         fps={30}
         width={1080}
         height={1920}

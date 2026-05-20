@@ -143,6 +143,23 @@ GENERIC_GENERATION_ERROR = "We couldn't generate the video right now. Please try
 GENERIC_GENERATION_TIMEOUT_ERROR = 'Video generation is taking longer than expected. Please try again shortly.'
 
 
+class LoanOfferInteractionEvent(BaseModel):
+    action: str
+    selected_loan_amount: str | None = None
+    selected_tenure: str | None = None
+    selected_emi: str | None = None
+
+
+def _frontend_public_url(path: str) -> str:
+    base_url = (settings.frontend_url or "").strip().rstrip("/")
+    normalized_path = path if path.startswith("/") else f"/{path}"
+    return f"{base_url}{normalized_path}" if base_url else normalized_path
+
+
+def _interactive_loan_offer_url(video_id: str) -> str:
+    return _frontend_public_url(f"/i/loan-offer/{video_id}")
+
+
 @app.get("/sample-csvs/bulk-campaign")
 async def download_bulk_campaign_sample_csv():
     if not SAMPLE_BULK_CSV_PATH.exists():
@@ -376,13 +393,19 @@ def _serialize_my_video(video: dict[str, Any]) -> dict[str, Any]:
 
     created_at = video.get("created_at")
     updated_at = video.get("updated_at")
+    job_data = video.get("job_data") if isinstance(video.get("job_data"), dict) else {}
+    request_payload = job_data.get("request_payload") if isinstance(job_data.get("request_payload"), dict) else {}
+    template_key = str(request_payload.get("template_key") or "")
+    interactive_url = _interactive_loan_offer_url(video_id) if template_key == "loan_offer_interactive" else None
 
     return {
         "_id": video_id,
         "title": str(video.get("title") or ""),
         "status": str(video.get("status") or "queued"),
         "request_mode": str(video.get("request_mode") or ""),
+        "template_key": template_key or None,
         "video_url": video_url,
+        "interactive_url": interactive_url,
         "thumbnail_url": str(video.get("thumbnail_url")) if video.get("thumbnail_url") else None,
         "created_at": created_at.isoformat() if isinstance(created_at, datetime) else created_at,
         "updated_at": updated_at.isoformat() if isinstance(updated_at, datetime) else updated_at,
@@ -463,6 +486,23 @@ async def _parse_remotion_payload(request: Request) -> RemotionVideoRequest:
         'logo_filename': logo_filename,
         'logo_bytes': logo_bytes,
         'voice_gender': _form_text(form.get('voice_gender')) or 'female',
+        'max_loan_amount': _form_text(form.get('max_loan_amount')),
+        'max_tenure': _form_text(form.get('max_tenure')),
+        'max_emi': _form_text(form.get('max_emi')),
+        'loan_id': _form_text(form.get('loan_id')),
+        'month_24_loan_amount': _form_text(form.get('month_24_loan_amount')),
+        'month_30_loan_amount': _form_text(form.get('month_30_loan_amount')),
+        'month_36_loan_amount': _form_text(form.get('month_36_loan_amount')),
+        'month_42_loan_amount': _form_text(form.get('month_42_loan_amount')),
+        'month_48_loan_amount': _form_text(form.get('month_48_loan_amount')),
+        'month_60_loan_amount': _form_text(form.get('month_60_loan_amount')),
+        'emi_calculation24': _form_text(form.get('emi_calculation24')),
+        'emi_calculation30': _form_text(form.get('emi_calculation30')),
+        'emi_calculation36': _form_text(form.get('emi_calculation36')),
+        'emi_calculation42': _form_text(form.get('emi_calculation42')),
+        'emi_calculation48': _form_text(form.get('emi_calculation48')),
+        'emi_calculation60': _form_text(form.get('emi_calculation60')),
+        'cta_phone_number': _form_text(form.get('cta_phone_number')),
     }
 
     try:
@@ -1549,7 +1589,10 @@ async def get_video_status(
             "video_id": str(doc["_id"]),
             "_id": str(doc["_id"]),
             "status": doc.get("status", "pending"),
-            "video_url": s3_service.presign_s3_url(doc.get("video_url"))
+            "video_url": s3_service.presign_s3_url(doc.get("video_url")),
+            "interactive_url": _interactive_loan_offer_url(str(doc["_id"]))
+            if doc.get("job_data", {}).get("request_payload", {}).get("template_key") == "loan_offer_interactive"
+            else None,
         }
 
     result = service.get_video_status_result(video_id, request_mode=request_mode)
@@ -1666,7 +1709,7 @@ async def generate_template(request: TemplateVideoRequest, wait: bool = True, cu
 async def generate_remotion(request: Request, current_user: str = Depends(get_current_user)):
 
     payload = await _parse_remotion_payload(request)
-    if payload.template_key == 'payment_link_guidance':
+    if payload.template_key in ('payment_link_guidance', 'loan_offer_interactive'):
         payload.video_width = 1080
         payload.video_height = 1920
     logger.info(f"Remotion video payload ended:")
@@ -1689,6 +1732,8 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         # Reconstruct the VideoJobResult from the stored dataset directly
         job_data = cached_record['job_data'].copy()
         job_data.pop('payload_hash', None)
+        if payload.template_key == 'loan_offer_interactive':
+            job_data['interactive_url'] = _interactive_loan_offer_url(str(cached_record.get('_id') or job_data.get('video_id') or ''))
         return _response_video_job_result(VideoJobResult(**job_data))
 
     from bson import ObjectId
@@ -1705,6 +1750,7 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         title=f"{payload.title_prefix} - {payload.customer_name} - {payload.lan}",
         raw_response={},
         saved_to=None,
+        interactive_url=_interactive_loan_offer_url(video_id) if payload.template_key == 'loan_offer_interactive' else None,
     )
 
     embeddable_job_data = {
@@ -1737,14 +1783,15 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         title=f"{payload.title_prefix} - {payload.customer_name} - {payload.lan}",
         raw_response={},
         saved_to=None,
+        interactive_url=_interactive_loan_offer_url(video_id) if payload.template_key == 'loan_offer_interactive' else None,
     )
     
-    if payload.template_key == 'payment_link_guidance':
+    if payload.template_key in ('payment_link_guidance', 'loan_offer_interactive'):
         # This template depends on newly bundled local screenshot assets. Keep it
         # on the current runtime so an older shared SQS worker cannot claim it and
         # render the account-notice fallback.
         logger.info(
-            "Payment Link Guidance job %s will be rendered by the local Remotion worker.",
+            "Interactive Remotion job %s will be rendered by the local Remotion worker.",
             video_id,
         )
         asyncio.create_task(RemotionJobWorker()._process_job(video_id, None))
@@ -1899,9 +1946,90 @@ async def get_video_details(video_id: str, current_user: str = Depends(get_curre
         video["video_url"] = "/api/artifacts/" + url.split("/artifacts/", 1)[1]
     elif isinstance(url, str):
         video["video_url"] = s3_service.presign_s3_url(url)
+
+    job_data = video.get("job_data") if isinstance(video.get("job_data"), dict) else {}
+    request_payload = job_data.get("request_payload") if isinstance(job_data.get("request_payload"), dict) else {}
+    if request_payload.get("template_key") == "loan_offer_interactive":
+        video["interactive_url"] = _interactive_loan_offer_url(str(video["_id"]))
     
     video.pop("job_data", None)
     return video
+
+
+@app.get('/interactive/loan-offer/{video_id}')
+async def get_interactive_loan_offer(video_id: str):
+    video = await videos_collection.find_one({"_id": _mongo_id(video_id)})
+    if not video:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Interactive video not found")
+
+    job_data = video.get("job_data") if isinstance(video.get("job_data"), dict) else {}
+    request_payload = job_data.get("request_payload") if isinstance(job_data.get("request_payload"), dict) else {}
+    if request_payload.get("template_key") != "loan_offer_interactive":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Interactive loan offer not found")
+
+    raw_url = video.get("video_url")
+    if isinstance(raw_url, str) and "/artifacts/" in raw_url:
+        video_url = "/api/artifacts/" + raw_url.split("/artifacts/", 1)[1]
+    elif isinstance(raw_url, str):
+        video_url = s3_service.presign_s3_url(raw_url)
+    else:
+        video_url = None
+
+    if not video_url:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Interactive video is still processing")
+
+    def field(name: str, fallback: object = "") -> object:
+        value = request_payload.get(name)
+        return fallback if value is None or str(value).strip() == "" else value
+
+    return {
+        "id": str(video.get("_id") or video_id),
+        "title": str(video.get("title") or "Interactive Loan Offer"),
+        "video_url": video_url,
+        "customer_name": field("customer_name", "Customer"),
+        "client_name": field("client_name", "Finance Partner"),
+        "contact_details": field("contact_details", "1800-555-999"),
+        "primary_color": field("primary_color", "#053666"),
+        "secondary_color": field("secondary_color", "#0f7734"),
+        "loan_offer": {
+            "max_loan_amount": field("max_loan_amount", field("loan_amount", "105000")),
+            "max_tenure": field("max_tenure", "60"),
+            "max_emi": field("max_emi", field("tos", "3398")),
+            "loan_id": field("loan_id", field("lan", "")),
+            "cta_phone_number": field("cta_phone_number", field("contact_details", "1800-555-999")),
+            "month_24_loan_amount": field("month_24_loan_amount", "75000"),
+            "month_30_loan_amount": field("month_30_loan_amount", "90000"),
+            "month_36_loan_amount": field("month_36_loan_amount", "105000"),
+            "month_42_loan_amount": field("month_42_loan_amount", "NA"),
+            "month_48_loan_amount": field("month_48_loan_amount", "NA"),
+            "month_60_loan_amount": field("month_60_loan_amount", field("max_loan_amount", "105000")),
+            "emi_calculation24": field("emi_calculation24", ""),
+            "emi_calculation30": field("emi_calculation30", ""),
+            "emi_calculation36": field("emi_calculation36", ""),
+            "emi_calculation42": field("emi_calculation42", ""),
+            "emi_calculation48": field("emi_calculation48", ""),
+            "emi_calculation60": field("emi_calculation60", field("max_emi", "3398")),
+        },
+        "subtitles": video.get("subtitles") or [],
+    }
+
+
+@app.post('/interactive/loan-offer/{video_id}/events')
+async def record_interactive_loan_offer_event(video_id: str, event: LoanOfferInteractionEvent):
+    update = {
+        "action": event.action,
+        "selected_loan_amount": event.selected_loan_amount,
+        "selected_tenure": event.selected_tenure,
+        "selected_emi": event.selected_emi,
+        "created_at": now_ist().isoformat(),
+    }
+    result = await videos_collection.update_one(
+        {"_id": _mongo_id(video_id), "job_data.request_payload.template_key": "loan_offer_interactive"},
+        {"$push": {"interaction_events": update}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Interactive loan offer not found")
+    return {"status": "ok"}
 
 
 @app.get('/custom-avatars')

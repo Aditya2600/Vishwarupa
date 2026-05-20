@@ -7,6 +7,8 @@ export const TRANSITION_FRAMES = 12;
 export const WIDTH = 1280;
 export const HEIGHT = 720;
 export const PAYMENT_LINK_GUIDANCE_DURATION = 960;
+export const OVERDUE_TEMPLATE_DURATION = 1050;
+export const LOAN_OFFER_INTERACTIVE_DURATION = 900;
 const MIN_VIDEO_WIDTH = 540;
 const MIN_VIDEO_HEIGHT = 540;
 const MAX_VIDEO_WIDTH = 2160;
@@ -233,6 +235,19 @@ const buildScenePayload = (lead, displayAmounts, urgencyLevel) => {
   const clientName = safeString(lead.client_name, 'Bank');
   const lan = safeString(lead.lan, 'N/A');
   const contactDetails = safeString(lead.contact_details, '1800-555-999');
+
+  if (lead.template_key === 'overdue_template') {
+    return {
+      headline_text: `Dear ${customerName}`,
+      cta_text: `For any help, contact ${contactDetails}.`,
+      opening: {
+        eyebrow: 'Overdue Notice',
+        headline: `Dear ${customerName}`,
+        subheadline: `${clientName} | Card ${lan}`,
+      },
+    };
+  }
+
   const productContent = getProductContent(lead.product_type);
   const outstandingValue = displayAmounts.primary.value;
   const loanValue = displayAmounts.secondary.value;
@@ -352,6 +367,10 @@ export const getDurationInFrames = (leadId) => {
   const templateMinSeconds =
     lead?.template_key === 'payment_link_guidance'
       ? PAYMENT_LINK_GUIDANCE_DURATION / FPS
+      : lead?.template_key === 'overdue_template'
+      ? OVERDUE_TEMPLATE_DURATION / FPS
+      : lead?.template_key === 'loan_offer_interactive'
+      ? LOAN_OFFER_INTERACTIVE_DURATION / FPS
       : DEFAULT_DURATION_SECONDS;
   const totalSeconds = Math.max(track.duration, lastSubtitleEnd, templateMinSeconds);
   return Math.ceil(totalSeconds * FPS) + Math.round(FPS * 1.5);

@@ -154,6 +154,7 @@ class RemotionJobWorker:
                 {"$set": {
                     "status": "completed",
                     "video_url": final_url,
+                    "subtitles": result_payload.get("subtitles"),
                     "updated_at": datetime.utcnow(),
                 }}
             )

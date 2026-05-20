@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { LayoutTemplate, Loader2, Video, Smartphone, FileText, Sparkles } from "lucide-react";
+import { LayoutTemplate, Loader2, Video, Smartphone, FileText, Sparkles, AlertTriangle, HandCoins } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { HeaderBar } from "@/components/HeaderBar";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,18 @@ export default function TemplateLibrary() {
         return (
           <div className="p-3 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 text-emerald-400 border border-emerald-500/10">
             <Smartphone className="h-6 w-6" />
+          </div>
+        );
+      case "overdue_template":
+        return (
+          <div className="p-3 rounded-xl bg-gradient-to-br from-rose-500/20 to-orange-500/20 text-rose-400 border border-rose-500/10">
+            <AlertTriangle className="h-6 w-6" />
+          </div>
+        );
+      case "loan_offer_interactive":
+        return (
+          <div className="p-3 rounded-xl bg-gradient-to-br from-green-500/20 to-sky-500/20 text-green-400 border border-green-500/10">
+            <HandCoins className="h-6 w-6" />
           </div>
         );
       default:
@@ -185,4 +197,3 @@ export default function TemplateLibrary() {
     </div>
   );
 }
-

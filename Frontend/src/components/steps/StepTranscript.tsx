@@ -87,7 +87,7 @@ const FIELD_DEFINITIONS: FieldDefinition[] = [
 const DEMO_FIELD_VALUES: Record<WizardFieldKey, string> = {
   customerName: "Ramesh Kumar",
   lan: "LAN12345",
-  clientName: "ABC Finance",
+  clientName: "CredResolve",
   tos: "38450",
   loanAmount: "120000",
   contactDetails: "1800-555-999",
@@ -382,14 +382,22 @@ const handleDemoTab =
   };
 
 const handleRemotionTemplateSelect = (templateKey: RemotionTemplateKey) => {
-  const isPaymentTemplate = templateKey === "payment_guidance" || templateKey === "payment_link_guidance";
+  const isPaymentTemplate =
+    templateKey === "payment_guidance" ||
+    templateKey === "payment_link_guidance" ||
+    templateKey === "overdue_template" ||
+    templateKey === "loan_offer_interactive";
   const nextVariety = isPaymentTemplate ? "personalized" : state.videoVariety;
   const nextTitlePrefix =
     templateKey === "payment_guidance"
       ? "Payment Guidance"
       : templateKey === "payment_link_guidance"
         ? "Payment Link Guidance"
-        : state.titlePrefix;
+        : templateKey === "overdue_template"
+          ? "Credit Card Overdue Notice"
+          : templateKey === "loan_offer_interactive"
+            ? "Loan Offer"
+            : state.titlePrefix;
   update({
     remotionTemplateKey: templateKey,
     videoVariety: nextVariety,
