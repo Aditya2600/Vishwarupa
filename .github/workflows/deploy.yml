@@ -31,7 +31,7 @@ jobs:
       - name: Build and push Frontend
         run: |
           docker build \
-            --build-arg VITE_API_BASE_URL=/api \
+            --build-arg VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }} \
             -t $FRONTEND_IMAGE \
             -f Frontend/Dockerfile Frontend/
           docker push $FRONTEND_IMAGE
@@ -45,15 +45,14 @@ jobs:
           script: |
             ssh -o StrictHostKeyChecking=no -i ~/.ssh/credresolve-master-key.pem ubuntu@${{ secrets.GIT_ACT_STAGE_HOST }} "
               echo '${{ secrets.DOCKER_PASS }}' | sudo docker login -u '${{ secrets.DOCKER_USER }}' --password-stdin &&
-              (sudo docker network create app-network || true) &&
               
               sudo docker pull ${{ env.BACKEND_IMAGE }} &&
               sudo docker pull ${{ env.FRONTEND_IMAGE }} &&
 
-              (sudo docker stop ${{ env.BACKEND_CONTAINER }} || true) &&
-              (sudo docker rm ${{ env.BACKEND_CONTAINER }} || true) &&
-              (sudo docker stop ${{ env.FRONTEND_CONTAINER }} || true) &&
-              (sudo docker rm ${{ env.FRONTEND_CONTAINER }} || true) &&
+              sudo docker stop ${{ env.BACKEND_CONTAINER }} || true &&
+              sudo docker rm ${{ env.BACKEND_CONTAINER }} || true &&
+              sudo docker stop ${{ env.FRONTEND_CONTAINER }} || true &&
+              sudo docker rm ${{ env.FRONTEND_CONTAINER }} || true &&
 
               sudo docker run -d \
                 --name ${{ env.BACKEND_CONTAINER }} \
@@ -65,13 +64,12 @@ jobs:
                 --env AWS_REGION='${{ secrets.AWS_REGION }}' \
                 --env S3_BUCKET_NAME='${{ secrets.S3_BUCKET_NAME }}' \
                 --restart always \
-                ${{ env.BACKEND_IMAGE }} &&
+                ${{ env.BACKEND_IMAGE }}
 
               sudo docker run -d \
                 --name ${{ env.FRONTEND_CONTAINER }} \
                  --network app-network \
                  -p 3000:80 \
-                -e BACKEND_ORIGIN=http://${{ env.BACKEND_CONTAINER }}:8000 \
                 --restart always \
                 ${{ env.FRONTEND_IMAGE }}
             "
