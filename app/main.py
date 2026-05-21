@@ -2,6 +2,8 @@ import asyncio
 import sys
 import hashlib
 import json
+import re
+import shutil
 from uuid import uuid4
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
@@ -27,6 +29,8 @@ from app.models import (
     AvatarJobAck,
     AvatarJobStatusResponse,
     DirectVideoRequest,
+    HybridRemotionAvatarPipRequest,
+    HybridRemotionAvatarPipResponse,
     RemotionVideoRequest,
     StyledVideoResult,
     TemplateVideoRequest,
@@ -40,6 +44,12 @@ from app.models import (
 from app.services.heygen_client import HeyGenClient
 from app.services.media_styling_service import MediaStylingService, StyleRequest
 from app.services.remotion_service import RemotionService
+from app.services.hybrid_remotion_avatar_pip_service import (
+    HybridAvatarGenerationError,
+    HybridRenderError,
+    generate_raw_avatar_for_hybrid,
+    render_hybrid_avatar_pip_video,
+)
 from app.services.sqs_service import SQSService
 from app.services.video_service import VideoService
 from app.services.s3_service import S3Service
@@ -79,6 +89,10 @@ app = FastAPI(title='Personalized Video Generator', version='1.0.0')
 settings.output_dir.mkdir(parents=True, exist_ok=True)
 (settings.output_dir / "text-videos").mkdir(parents=True, exist_ok=True)
 (settings.output_dir / "avatar-videos").mkdir(parents=True, exist_ok=True)
+HYBRID_PUBLIC_DIR = Path("/tmp/hybrid-public")
+HYBRID_PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
+PORTRAIT_REMOTION_TEMPLATE_KEYS = {"payment_link_guidance", "overdue_template", "loan_offer_interactive"}
+LOCAL_REMOTION_WORKER_TEMPLATE_KEYS = {"payment_link_guidance", "loan_offer_interactive", "loan_reminder"}
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -129,6 +143,7 @@ async def startup_db_client():
 
 
 app.mount('/artifacts', StaticFiles(directory=settings.output_dir), name='artifacts')
+app.mount('/generated', StaticFiles(directory=HYBRID_PUBLIC_DIR), name='generated')
 service = VideoService()
 client = HeyGenClient()
 styling_service = MediaStylingService(client=client)
@@ -220,6 +235,20 @@ def _response_styled_video_result(result: StyledVideoResult) -> StyledVideoResul
     if presigned_video_url == result.final_video_url:
         return result
     return result.model_copy(update={'final_video_url': presigned_video_url})
+
+
+def _collection_status_percent(value: str | None) -> int:
+    if value is None or not value.strip():
+        return 75
+
+    match = re.search(r'\d+(?:\.\d+)?', value)
+    if not match:
+        raise ValueError('collection_status must contain a number between 0 and 100')
+
+    parsed = round(float(match.group(0)))
+    if not 0 <= parsed <= 100:
+        raise ValueError('collection_status must be between 0 and 100')
+    return parsed
 
 
 async def _persist_video_job_result(current_user: str, result: VideoJobResult) -> None:
@@ -437,6 +466,16 @@ def _form_bool(value: object, default: bool = False) -> bool:
     return str(value).strip().lower() in {'1', 'true', 'yes', 'on'}
 
 
+LOAN_REMINDER_IMAGE_KEYS = {
+    'logo',
+    'npaWarning',
+    'creditImpact',
+    'lastChance',
+    'ctaScene',
+    'financialBurden',
+}
+
+
 async def _parse_remotion_payload(request: Request) -> RemotionVideoRequest:
     content_type = request.headers.get('content-type', '').lower()
 
@@ -453,12 +492,37 @@ async def _parse_remotion_payload(request: Request) -> RemotionVideoRequest:
     logo_file = form.get('logo_file')
     logo_bytes: bytes | None = None
     logo_filename: str | None = None
+    loan_reminder_image_paths: dict[str, str] = {}
+    loan_reminder_image_filenames: dict[str, str] = {}
+    loan_reminder_image_bytes: dict[str, bytes] = {}
 
     if isinstance(logo_file, UploadFile) or (
         logo_file is not None and hasattr(logo_file, 'read') and hasattr(logo_file, 'filename')
     ):
         logo_filename = logo_file.filename
         logo_bytes = await logo_file.read()
+
+    raw_image_paths = _form_text(form.get('loan_reminder_image_paths'))
+    if raw_image_paths:
+        try:
+            parsed_paths = json.loads(raw_image_paths)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=422, detail='Invalid loan_reminder_image_paths JSON.') from exc
+        if not isinstance(parsed_paths, dict):
+            raise HTTPException(status_code=422, detail='loan_reminder_image_paths must be an object.')
+        loan_reminder_image_paths = {
+            str(key): str(value).strip()
+            for key, value in parsed_paths.items()
+            if key in LOAN_REMINDER_IMAGE_KEYS and str(value).strip()
+        }
+
+    for key in LOAN_REMINDER_IMAGE_KEYS:
+        image_file = form.get(f'loan_reminder_image_{key}')
+        if isinstance(image_file, UploadFile) or (
+            image_file is not None and hasattr(image_file, 'read') and hasattr(image_file, 'filename')
+        ):
+            loan_reminder_image_filenames[key] = image_file.filename
+            loan_reminder_image_bytes[key] = await image_file.read()
 
     logo_opacity = _form_int(form.get('logo_opacity'))
 
@@ -485,6 +549,9 @@ async def _parse_remotion_payload(request: Request) -> RemotionVideoRequest:
         'logo_opacity': 80 if logo_opacity is None else logo_opacity,
         'logo_filename': logo_filename,
         'logo_bytes': logo_bytes,
+        'loan_reminder_image_paths': loan_reminder_image_paths or None,
+        'loan_reminder_image_filenames': loan_reminder_image_filenames or None,
+        'loan_reminder_image_bytes': loan_reminder_image_bytes or None,
         'voice_gender': _form_text(form.get('voice_gender')) or 'female',
         'max_loan_amount': _form_text(form.get('max_loan_amount')),
         'max_tenure': _form_text(form.get('max_tenure')),
@@ -514,6 +581,8 @@ async def _parse_remotion_payload(request: Request) -> RemotionVideoRequest:
             if 'input' in err and isinstance(err['input'], bytes):
                 err['input'] = "<raw_bytes_hidden>"
             if 'logo_bytes' in str(err.get('loc', '')):
+                err['input'] = "<raw_bytes_hidden>"
+            if 'loan_reminder_image_bytes' in str(err.get('loc', '')):
                 err['input'] = "<raw_bytes_hidden>"
         raise HTTPException(status_code=422, detail=safe_errors) from exc
 
@@ -1566,6 +1635,96 @@ async def generate_direct(request: DirectVideoRequest, wait: bool = True, curren
     return _response_video_job_result(result)
 
 
+@app.post('/generate/hybrid-remotion-avatar-pip', response_model=HybridRemotionAvatarPipResponse)
+async def generate_hybrid_remotion_avatar_pip(
+    request: HybridRemotionAvatarPipRequest,
+    current_user: str = Depends(get_current_user),
+):
+    if not request.avatar_id.strip():
+        raise HTTPException(status_code=400, detail="avatar_id is required")
+    if not request.voice_id.strip():
+        raise HTTPException(status_code=400, detail="voice_id is required")
+
+    try:
+        collection_status = _collection_status_percent(request.collection_status)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    video_id = uuid4().hex
+
+    try:
+        raw_avatar = await asyncio.to_thread(
+            generate_raw_avatar_for_hybrid,
+            customer_name=request.customer_name,
+            account_number=request.account_number,
+            days_overdue=request.days_overdue,
+            amount_due=request.amount_due,
+            avatar_id=request.avatar_id,
+            voice_id=request.voice_id,
+            agent_name=request.agent_name,
+            language=request.language,
+        )
+
+        render_result = await asyncio.to_thread(
+            render_hybrid_avatar_pip_video,
+            video_id=video_id,
+            avatar_mp4_path=raw_avatar["avatar_local_path"],
+            customer_name=request.customer_name,
+            account_number=request.account_number,
+            days_overdue=request.days_overdue,
+            collection_status=collection_status,
+            amount_due=request.amount_due,
+            agent_name=request.agent_name,
+            agent_role=request.agent_role,
+            aspect_mode=request.aspect_mode,
+            viewport_width=request.viewport_width,
+            viewport_height=request.viewport_height,
+        )
+    except HybridAvatarGenerationError as exc:
+        raise HTTPException(status_code=502, detail=str(exc) or GENERIC_GENERATION_ERROR) from exc
+    except HybridRenderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc) or GENERIC_GENERATION_ERROR) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    final_source_path = Path(render_result["output_path"])
+    if not final_source_path.exists():
+        raise HTTPException(status_code=500, detail="Hybrid render completed without a final MP4.")
+
+    public_filename = f"{video_id}.mp4"
+    public_path = HYBRID_PUBLIC_DIR / public_filename
+    shutil.copyfile(final_source_path, public_path)
+    final_video_url = f"/generated/{public_filename}"
+
+    response = HybridRemotionAvatarPipResponse(
+        success=True,
+        raw_avatar_video_id=raw_avatar.get("heygen_video_id"),
+        raw_avatar_path=raw_avatar.get("avatar_local_path"),
+        final_video_path=str(public_path),
+        final_video_url=final_video_url,
+        width=int(render_result["width"]),
+        height=int(render_result["height"]),
+        duration_seconds=render_result.get("duration_seconds"),
+    )
+
+    video_record = VideoRecord(
+        user_id=current_user,
+        status="completed",
+        title=f"Hybrid Avatar PIP - {request.customer_name}",
+        video_url=final_video_url,
+        request_mode="hybrid_remotion_avatar_pip",
+        job_data={
+            "request_payload": _to_mongo_safe(request),
+            "raw_avatar": _to_mongo_safe(raw_avatar),
+            "render_result": _to_mongo_safe(render_result),
+            "response": _to_mongo_safe(response),
+        },
+    )
+    await videos_collection.insert_one(_to_mongo_safe(video_record))
+
+    return response
+
+
 @app.get('/videos/{video_id}/status')
 async def get_video_status(
     video_id: str,
@@ -1709,7 +1868,7 @@ async def generate_template(request: TemplateVideoRequest, wait: bool = True, cu
 async def generate_remotion(request: Request, current_user: str = Depends(get_current_user)):
 
     payload = await _parse_remotion_payload(request)
-    if payload.template_key in ('payment_link_guidance', 'loan_offer_interactive'):
+    if payload.template_key in PORTRAIT_REMOTION_TEMPLATE_KEYS:
         payload.video_width = 1080
         payload.video_height = 1920
     logger.info(f"Remotion video payload ended:")
@@ -1717,6 +1876,11 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
     payload_dict = payload.model_dump(exclude_none=True)
     if 'logo_bytes' in payload_dict and payload_dict['logo_bytes']:
         payload_dict['logo_bytes'] = str(len(payload_dict['logo_bytes']))
+    if 'loan_reminder_image_bytes' in payload_dict and payload_dict['loan_reminder_image_bytes']:
+        payload_dict['loan_reminder_image_bytes'] = {
+            key: len(value) if isinstance(value, (bytes, bytearray)) else str(value)
+            for key, value in payload_dict['loan_reminder_image_bytes'].items()
+        }
     
     payload_str = json.dumps(payload_dict, sort_keys=True, ensure_ascii=False)
     payload_hash = hashlib.sha256(payload_str.encode('utf-8')).hexdigest()
@@ -1786,7 +1950,7 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         interactive_url=_interactive_loan_offer_url(video_id) if payload.template_key == 'loan_offer_interactive' else None,
     )
     
-    if payload.template_key in ('payment_link_guidance', 'loan_offer_interactive'):
+    if payload.template_key in LOCAL_REMOTION_WORKER_TEMPLATE_KEYS:
         # This template depends on newly bundled local screenshot assets. Keep it
         # on the current runtime so an older shared SQS worker cannot claim it and
         # render the account-notice fallback.

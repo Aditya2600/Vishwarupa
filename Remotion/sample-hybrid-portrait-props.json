@@ -1,0 +1,13 @@
+{
+  "customerName": "Rajesh Kumar Singh",
+  "accountNumber": "DC-2024-089456",
+  "daysOverdue": 35,
+  "collectionStatus": 75,
+  "amountDue": "₹45,200",
+  "agentName": "Priya Singh",
+  "agentRole": "Collections Agent",
+  "avatarVideoPath": "avatar/sample-avatar.mp4",
+  "durationInFrames": 900,
+  "aspectMode": "portrait_9_16",
+  "resolvedAspectMode": "portrait_9_16"
+}

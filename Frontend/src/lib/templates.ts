@@ -10,8 +10,50 @@ interface GenderedTemplate {
 }
 
 type TemplateValue = string | GenderedTemplate;
-export type RemotionTemplateKey = "account_notice" | "payment_guidance" | "payment_link_guidance" | "overdue_template" | "loan_offer_interactive";
+export type RemotionTemplateKey =
+  | "account_notice"
+  | "payment_guidance"
+  | "payment_link_guidance"
+  | "overdue_template"
+  | "loan_offer_interactive"
+  | "loan_reminder";
+export type CreateMode = "avatar" | "remotion" | "hybrid_remotion_avatar_pip";
+export type LoanReminderAssetKey =
+  | "logo"
+  | "npaWarning"
+  | "creditImpact"
+  | "lastChance"
+  | "ctaScene"
+  | "financialBurden";
 
+export type LoanReminderAssetPaths = Record<LoanReminderAssetKey, string>;
+
+export const LOAN_REMINDER_ASSET_SLOTS: Array<{
+  key: LoanReminderAssetKey;
+  label: string;
+  defaultPath: string;
+}> = [
+  { key: "logo", label: "Logo", defaultPath: "assets/tvs_credit_logo.png" },
+  { key: "npaWarning", label: "NPA Warning", defaultPath: "man_phone_transparent.png" },
+  { key: "creditImpact", label: "Credit Impact", defaultPath: "credit_score_transparent.png" },
+  { key: "lastChance", label: "Last Chance", defaultPath: "last_chance_transparent.png" },
+  { key: "ctaScene", label: "CTA Scene", defaultPath: "phone_paynow_transparent.png" },
+  { key: "financialBurden", label: "Financial Burden", defaultPath: "piggy_bank_arrow_transparent.png" },
+];
+
+export const DEFAULT_LOAN_REMINDER_ASSET_PATHS: LoanReminderAssetPaths = Object.fromEntries(
+  LOAN_REMINDER_ASSET_SLOTS.map((slot) => [slot.key, slot.defaultPath]),
+) as LoanReminderAssetPaths;
+
+const LOAN_REMINDER_TRANSCRIPT = `Yeh ek important reminder hai {{ client_name }} ki taraf se.
+Dear {{ customer_name }}, aapke {{ product_type }} account number {{ lan }} par {{ tos }} ka overdue amount pending hai.
+Kripya dhyaan dein, agar payment aur delay hoti hai, toh aapka account critically overdue category mein ja sakta hai, ya applicable policy ke according NPA report ho sakta hai.
+Iska negative impact aapke credit score par pad sakta hai, aur future loan approval, credit card eligibility, aur financial services access affect ho sakte hain.
+Lender policy ke according recovery action initiate ho sakta hai, legal notice issue ho sakta hai, aur additional charges bhi badh sakte hain.
+Further financial burden avoid karne ke liye, kripya apna overdue amount jald se jald clear karein.
+Aap Pay Now option se turant payment kar sakte hain. Agar aapko assistance chahiye, toh Request a Call Back option select karein.
+Additional charges avoid karein, aur apni financial profile protect karne ke liye aaj hi dues clear karein.
+Dhanyavaad.`;
 function getGenderedText(value: TemplateValue, gender: Gender): string {
   if (typeof value === "string") return value;
   return value[gender];
@@ -254,6 +296,26 @@ export const REMOTION_TEMPLATE_OPTIONS: Array<{ key: RemotionTemplateKey; name: 
     name: "Interactive Loan Offer",
     description: "Brand-editable loan offer with Avail Now, amount/tenure selection, EMI summary, and confirm CTA.",
   },
+  {
+    key: "loan_reminder",
+    name: "Loan Reminder",
+    description: "Portrait loan reminder with scene-wise captions and configurable brand imagery.",
+  },
+];
+
+export const TEMPLATE_LIBRARY_QUICK_STARTS: Array<{
+  mode: CreateMode;
+  name: string;
+  description: string;
+  template?: RemotionTemplateKey;
+  iconKey: "hybrid_avatar_pip" | RemotionTemplateKey | "avatar";
+}> = [
+  {
+    mode: "hybrid_remotion_avatar_pip",
+    name: "Hybrid Avatar PIP",
+    description: "HeyGen raw avatar + Remotion collection layout (portrait/landscape auto supported).",
+    iconKey: "hybrid_avatar_pip",
+  },
 ];
 
 export const UNIVERSAL_TEMPLATES: Record<string, TemplateValue> = {
@@ -351,6 +413,9 @@ export function getDefaultRemotionTranscript(
   if (mode === "personalized" && templateKey === "loan_offer_interactive") {
     const val = LOAN_OFFER_INTERACTIVE_TEMPLATES[language] ?? LOAN_OFFER_INTERACTIVE_TEMPLATES.English;
     return getGenderedText(val, resolvedGender);
+  }
+  if (mode === "personalized" && templateKey === "loan_reminder") {
+    return LOAN_REMINDER_TRANSCRIPT;
   }
   if (mode === "universal") {
     const val = UNIVERSAL_TEMPLATES[language] ?? UNIVERSAL_TEMPLATES.English;

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1200" viewBox="0 0 900 1200" fill="none">
+  <defs><filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="16" stdDeviation="22" flood-color="#06253c" flood-opacity="0.18"/></filter><linearGradient id="shirt" x1="500" y1="440" x2="780" y2="1120" gradientUnits="userSpaceOnUse"><stop stop-color="#eef3f7"/><stop offset="1" stop-color="#b8c2cd"/></linearGradient></defs>
+  <g filter="url(#shadow)">
+    <path d="M470 475h245c76 152 101 370 107 665H435c-7-277 5-504 35-665z" fill="url(#shirt)"/>
+    <path d="M575 442l39 82 42-82v-88h-81v88z" fill="#e3a07c"/>
+    <path d="M580 518l52 78 50-86-28-70-41 84-42-86-32 66 41 14z" fill="#f8fbff"/>
+    <path d="M595 535h68l42 605h-168l58-605z" fill="#db252e"/>
+    <path d="M607 603l46 32-30 28-41-35 25-25zM642 751l45 31-31 29-40-34 26-26z" fill="#b91c24" opacity=".45"/>
+    <rect x="62" y="515" width="520" height="346" rx="12" fill="white" stroke="#e1e5ea" stroke-width="5"/>
+    <text x="322" y="655" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="98" font-weight="900" fill="#0ca35b">LAST</text>
+    <text x="322" y="765" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="98" font-weight="900" fill="#0ca35b">CHANCE</text>
+    <path d="M81 798c-40 28-48 78-14 100 42 27 83-5 108-41l-94-59z" fill="#d88c6b"/>
+    <path d="M550 830c36 44 87 45 107 14 18-29-3-65-50-86l-57 72z" fill="#d88c6b"/>
+    <path d="M555 320c-38-48-39-116-7-164 32-47 89-68 146-45 54 22 83 75 76 136-8 68-50 118-111 130-41 8-78-8-104-57z" fill="#e7a07a"/>
+    <path d="M533 183c18-63 66-98 137-94 67 4 111 50 116 112-44-19-93-18-136 2-45 21-80 16-117-20z" fill="#1d2a33"/>
+    <circle cx="596" cy="255" r="11" fill="#111827"/><circle cx="701" cy="255" r="11" fill="#111827"/>
+    <path d="M623 319c33 25 73 22 101-7" stroke="#5b2b24" stroke-width="10" stroke-linecap="round"/>
+    <path d="M642 252l-20 46 29 6" stroke="#b9745a" stroke-width="7" stroke-linecap="round"/>
+    <path d="M545 175c-23 27-38 68-27 113 7-31 17-58 33-81l-6-32z" fill="#17202a"/>
+  </g>
+</svg>

@@ -126,7 +126,14 @@ class DirectVideoRequest(LeadRecord):
 
 class RemotionVideoRequest(DirectVideoRequest):
     video_variety: Literal['personalized', 'universal'] | None = 'personalized'
-    template_key: Literal['account_notice', 'payment_guidance', 'payment_link_guidance', 'overdue_template', 'loan_offer_interactive'] | None = 'account_notice'
+    template_key: Literal[
+        'account_notice',
+        'payment_guidance',
+        'payment_link_guidance',
+        'overdue_template',
+        'loan_offer_interactive',
+        'loan_reminder',
+    ] | None = 'account_notice'
     title_prefix: str = 'Loan Recall'
     subtitle_color: str = 'White'
     subtitle_position: str = 'Bottom'
@@ -134,6 +141,9 @@ class RemotionVideoRequest(DirectVideoRequest):
     logo_opacity: int = 80
     logo_filename: str | None = None
     logo_bytes: bytes | None = None
+    loan_reminder_image_paths: dict[str, str] | None = None
+    loan_reminder_image_filenames: dict[str, str] | None = None
+    loan_reminder_image_bytes: dict[str, bytes] | None = None
     primary_color: str | None = "#003366"
     secondary_color: str | None = "#FF9900"
     max_loan_amount: str | float | int | None = None
@@ -180,6 +190,72 @@ class RemotionVideoRequest(DirectVideoRequest):
             return None
         cleaned = value.strip()
         return cleaned or None
+
+
+class HybridRemotionAvatarPipRequest(BaseModel):
+    customer_name: str
+    account_number: str
+    days_overdue: int
+    collection_status: str | None = None
+    amount_due: str
+    avatar_id: str
+    voice_id: str
+    agent_name: str = "Priya"
+    agent_role: str = "Collections Assistant"
+    language: str = "hi"
+    aspect_mode: Literal['landscape_16_9', 'portrait_9_16', 'auto'] = "portrait_9_16"
+    viewport_width: int | None = None
+    viewport_height: int | None = None
+
+    @field_validator(
+        'customer_name',
+        'account_number',
+        'avatar_id',
+        'voice_id',
+        'agent_name',
+        'agent_role',
+        'language',
+        'amount_due',
+    )
+    @classmethod
+    def validate_required_text(cls, value: str) -> str:
+        cleaned = str(value).strip()
+        if not cleaned:
+            raise ValueError('value must not be empty')
+        return cleaned
+
+    @field_validator('collection_status')
+    @classmethod
+    def normalize_collection_status(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = str(value).strip()
+        return cleaned or None
+
+    @field_validator('days_overdue')
+    @classmethod
+    def validate_non_negative_int(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError('value must be non-negative')
+        return value
+
+    @field_validator('viewport_width', 'viewport_height')
+    @classmethod
+    def validate_viewport_dimension(cls, value: int | None) -> int | None:
+        if value is not None and value <= 0:
+            raise ValueError('viewport dimensions must be positive')
+        return value
+
+
+class HybridRemotionAvatarPipResponse(BaseModel):
+    success: bool
+    raw_avatar_video_id: str | None
+    raw_avatar_path: str | None
+    final_video_path: str
+    final_video_url: str
+    width: int
+    height: int
+    duration_seconds: float | None = None
 
 
 class TemplateVideoRequest(LeadRecord):

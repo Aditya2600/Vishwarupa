@@ -7,7 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WizardState } from "@/store/wizardStore";
 import { VoiceOption } from "@/lib/api";
-import { REMOTION_TEMPLATE_OPTIONS, getDefaultRemotionTranscript, getDefaultAvatarScript, type RemotionTemplateKey } from "@/lib/templates";
+import {
+  DEFAULT_LOAN_REMINDER_ASSET_PATHS,
+  REMOTION_TEMPLATE_OPTIONS,
+  getDefaultRemotionTranscript,
+  getDefaultAvatarScript,
+  type RemotionTemplateKey,
+} from "@/lib/templates";
 
 const RESET_GENERATION_STATE = {
   generatedVideo: null,
@@ -21,6 +27,8 @@ const RESET_GENERATION_STATE = {
 type WizardFieldKey =
   | "customerName"
   | "lan"
+  | "daysOverdue"
+  | "collectionStatus"
   | "clientName"
   | "tos"
   | "loanAmount"
@@ -87,7 +95,9 @@ const FIELD_DEFINITIONS: FieldDefinition[] = [
 const DEMO_FIELD_VALUES: Record<WizardFieldKey, string> = {
   customerName: "Ramesh Kumar",
   lan: "LAN12345",
-  clientName: "CredResolve",
+  daysOverdue: "35",
+  collectionStatus: "75",
+  clientName: "ABC Finance",
   tos: "38450",
   loanAmount: "120000",
   contactDetails: "1800-555-999",
@@ -100,11 +110,28 @@ interface StepTranscriptProps {
   voices?: VoiceOption[];
 }
 
-function isRequiredInCurrentMode(field: FieldDefinition, isRemotion: boolean): boolean {
-  // Make lead personalization mandatory only for Text to Video (Remotion)
-  // Optional for Avatar Video to allow generic generation
-  if (!isRemotion) return false;
-  return field.required ?? false;
+function isRequiredInCurrentMode(field: FieldDefinition, state: WizardState): boolean {
+  // Keep "required" indicators aligned with wizardStore.canProceed().
+  if (state.videoType === "remotion" && state.videoVariety === "universal") return false;
+
+  if (state.videoType === "avatar") {
+    return field.key === "customerName" || field.key === "lan" || field.key === "clientName";
+  }
+
+  if (state.videoType === "hybrid_remotion_avatar_pip") {
+    return field.key === "customerName" || field.key === "lan" || field.key === "daysOverdue" || field.key === "tos";
+  }
+
+  // Remotion (personalized)
+  return (
+    field.key === "customerName" ||
+    field.key === "lan" ||
+    field.key === "clientName" ||
+    field.key === "tos" ||
+    field.key === "loanAmount" ||
+    field.key === "contactDetails" ||
+    field.key === "productType"
+  );
 }
 
 function getFieldValue(state: WizardState, key: WizardFieldKey): string {
@@ -113,6 +140,10 @@ function getFieldValue(state: WizardState, key: WizardFieldKey): string {
       return state.customerName;
     case "lan":
       return state.lan;
+    case "daysOverdue":
+      return state.daysOverdue;
+    case "collectionStatus":
+      return state.collectionStatus;
     case "clientName":
       return state.clientName;
     case "tos":
@@ -137,6 +168,12 @@ function updateField(
       return;
     case "lan":
       update({ lan: value, ...RESET_GENERATION_STATE });
+      return;
+    case "daysOverdue":
+      update({ daysOverdue: value, ...RESET_GENERATION_STATE });
+      return;
+    case "collectionStatus":
+      update({ collectionStatus: value, ...RESET_GENERATION_STATE });
       return;
     case "clientName":
       update({ clientName: value, ...RESET_GENERATION_STATE });
@@ -164,6 +201,7 @@ export function StepTranscript({ state, update, voices = [] }: StepTranscriptPro
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const isRemotion = state.videoType === "remotion";
+  const isHybrid = state.videoType === "hybrid_remotion_avatar_pip";
 
   const handleVoicePreview = async (overrideText?: string) => {
     if (isPreviewing) return;
@@ -382,22 +420,25 @@ const handleDemoTab =
   };
 
 const handleRemotionTemplateSelect = (templateKey: RemotionTemplateKey) => {
-  const isPaymentTemplate =
+  const isPersonalizedTemplate =
     templateKey === "payment_guidance" ||
     templateKey === "payment_link_guidance" ||
     templateKey === "overdue_template" ||
-    templateKey === "loan_offer_interactive";
-  const nextVariety = isPaymentTemplate ? "personalized" : state.videoVariety;
+    templateKey === "loan_offer_interactive" ||
+    templateKey === "loan_reminder";
+  const nextVariety = isPersonalizedTemplate ? "personalized" : state.videoVariety;
   const nextTitlePrefix =
     templateKey === "payment_guidance"
       ? "Payment Guidance"
       : templateKey === "payment_link_guidance"
         ? "Payment Link Guidance"
-        : templateKey === "overdue_template"
-          ? "Credit Card Overdue Notice"
-          : templateKey === "loan_offer_interactive"
-            ? "Loan Offer"
-            : state.titlePrefix;
+        : templateKey === "loan_reminder"
+          ? "Loan Reminder"
+          : templateKey === "overdue_template"
+            ? "Credit Card Overdue Notice"
+            : templateKey === "loan_offer_interactive"
+              ? "Loan Offer"
+              : state.titlePrefix;
   update({
     remotionTemplateKey: templateKey,
     videoVariety: nextVariety,
@@ -410,6 +451,13 @@ const handleRemotionTemplateSelect = (templateKey: RemotionTemplateKey) => {
     remotionTranscriptCustomized: false,
     titlePrefix: nextTitlePrefix,
     productType: "loan",
+    ...(templateKey === "loan_reminder"
+      ? {
+        aspectRatio: "9:16",
+        loanReminderImagePaths: DEFAULT_LOAN_REMINDER_ASSET_PATHS,
+        loanReminderImageFileNames: {},
+      }
+      : {}),
     ...RESET_GENERATION_STATE,
   });
   toast.success(`${REMOTION_TEMPLATE_OPTIONS.find((option) => option.key === templateKey)?.name ?? "Template"} selected.`);
@@ -419,7 +467,7 @@ const handleRemotionTemplateSelect = (templateKey: RemotionTemplateKey) => {
 const getDisplayValue = (fieldKey: WizardFieldKey) => {
   const val = getFieldValue(state, fieldKey);
   // For Avatar mode (NOT remotion), show default if empty
-  if (!isRemotion && !val.trim()) {
+  if (state.videoType === "avatar" && !val.trim()) {
     return DEMO_FIELD_VALUES[fieldKey];
   }
   return val;
@@ -450,6 +498,44 @@ return (
       </div>
     ) : null}
 
+    {isHybrid ? (
+      <div className="mb-6">
+        <label className="text-sm font-medium text-muted-foreground mb-3 block">Hybrid Output Shape</label>
+        <div className="flex flex-wrap gap-2">
+          {[
+            { value: "portrait_9_16", label: "Portrait 9:16" },
+            { value: "landscape_16_9", label: "Landscape 16:9" },
+            { value: "auto", label: "Auto" },
+          ].map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() =>
+                update({
+                  aspectMode: option.value as WizardState["aspectMode"],
+                  aspectRatio:
+                    option.value === "landscape_16_9"
+                      ? "16:9"
+                      : option.value === "portrait_9_16"
+                        ? "9:16"
+                        : state.aspectRatio,
+                  ...RESET_GENERATION_STATE,
+                })
+              }
+              className={`rounded-lg border px-4 py-2 text-sm font-medium transition-all ${
+                state.aspectMode === option.value
+                  ? "border-primary bg-primary/10 text-foreground"
+                  : "border-border bg-secondary text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    ) : null}
+
+    {!isHybrid ? (
     <div className="mb-6 flex justify-center">
       <Tabs
         value={state.videoVariety}
@@ -515,20 +601,21 @@ return (
         </TabsList>
       </Tabs>
     </div>
+    ) : null}
 
-    {state.videoVariety === "personalized" ? (
+    {isHybrid || state.videoVariety === "personalized" ? (
       <div className="mb-6">
         <div className="surface-card p-5 space-y-5">
           <p className="text-sm font-semibold text-foreground">Lead Personalization</p>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {FIELD_DEFINITIONS.map((field) => (
-              <Field key={field.key} label={field.label} required={isRemotion && field.required}>
+              <Field key={field.key} label={field.label} required={isRequiredInCurrentMode(field, state)}>
                 <Input
                   value={getDisplayValue(field.key)}
                   onChange={(event) => updateField(update, field.key, event.target.value)}
                   onKeyDown={handleDemoTab(field.key)}
                   placeholder={field.placeholder}
-                  className={getErrorClass(getFieldValue(state, field.key), isRemotion && field.required)}
+                  className={getErrorClass(getFieldValue(state, field.key), isRequiredInCurrentMode(field, state))}
                 />
               </Field>
             ))}
@@ -621,7 +708,7 @@ return (
       className={`${getErrorClass(transcript, true)} min-h-[300px] resize-none rounded-xl text-sm leading-relaxed`}
     />
 
-    {state.videoVariety === "personalized" && (
+    {(isHybrid || state.videoVariety === "personalized") && (
       <div className="mt-4 rounded-xl border border-secondary bg-secondary/30 p-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <p className="text-sm font-semibold text-foreground">Supported Placeholders</p>

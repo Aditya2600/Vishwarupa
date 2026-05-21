@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1600" viewBox="0 0 900 1600" fill="none">
+  <defs><filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#05273e" flood-opacity="0.2"/></filter><linearGradient id="green" x1="170" y1="525" x2="730" y2="675" gradientUnits="userSpaceOnUse"><stop stop-color="#12bf67"/><stop offset="1" stop-color="#068741"/></linearGradient><linearGradient id="blue" x1="170" y1="780" x2="730" y2="930" gradientUnits="userSpaceOnUse"><stop stop-color="#1776bd"/><stop offset="1" stop-color="#034f90"/></linearGradient></defs>
+  <g filter="url(#shadow)">
+    <rect x="68" y="34" width="764" height="1532" rx="110" fill="#121212"/>
+    <rect x="104" y="72" width="692" height="1454" rx="84" fill="#fff"/>
+    <rect x="356" y="92" width="188" height="52" rx="26" fill="#050505"/>
+    <text x="450" y="315" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="76" font-weight="900" font-style="italic" fill="#2a6195">Settle your dues</text>
+    <text x="450" y="405" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="76" font-weight="900" font-style="italic" fill="#2a6195">instantly</text>
+    <rect x="164" y="525" width="572" height="150" rx="28" fill="url(#green)"/>
+    <path d="M188 653h525" stroke="#056b34" stroke-width="12" stroke-linecap="round" opacity=".5"/>
+    <text x="450" y="623" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="58" font-weight="900" fill="white">Pay Now</text>
+    <rect x="164" y="780" width="572" height="150" rx="28" fill="url(#blue)"/>
+    <path d="M188 908h525" stroke="#023c74" stroke-width="12" stroke-linecap="round" opacity=".55"/>
+    <text x="450" y="877" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="50" font-weight="900" fill="white">Request a Call Back</text>
+    <path d="M286 1524c8-150 28-295 94-399h150c74 107 102 249 116 399H286z" fill="#536858"/>
+    <path d="M382 1124c38 52 101 59 146 0v-78H382v78z" fill="#e2a17c"/>
+    <path d="M353 1000c-14-72 32-134 105-140 77-6 134 44 136 119 3 83-52 144-126 149-59 4-103-43-115-128z" fill="#e8a47d"/>
+    <path d="M352 946c22-74 89-109 160-85 47 16 83 55 84 108-47-15-89-13-126 2-48 19-88 9-118-25z" fill="#30251e"/>
+    <circle cx="414" cy="1010" r="10" fill="#111"/><circle cx="522" cy="1010" r="10" fill="#111"/>
+    <path d="M427 1073c31 29 76 28 107-2" stroke="#63322a" stroke-width="10" stroke-linecap="round"/>
+    <path d="M236 1345c-74-116-58-212-12-230 49-19 83 42 104 141l-92 89z" fill="#e7a47e"/>
+    <path d="M236 1143l48-119" stroke="#e7a47e" stroke-width="42" stroke-linecap="round"/>
+    <circle cx="290" cy="1001" r="28" fill="#e7a47e"/>
+    <path d="M292 1001l3-162" stroke="#e7a47e" stroke-width="34" stroke-linecap="round"/>
+    <path d="M292 851l20 83" stroke="#d58b67" stroke-width="10" stroke-linecap="round"/>
+  </g>
+</svg>

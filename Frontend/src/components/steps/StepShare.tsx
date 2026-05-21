@@ -33,7 +33,12 @@ function buildDownloadFilename({
   videoType: WizardState["videoType"];
 }): string {
   const preferredName = sanitizeFilenamePart(title ?? "") || sanitizeFilenamePart(customerName);
-  const fallbackName = videoType === "remotion" ? "text-to-video" : "avatar-video";
+  const fallbackName =
+    videoType === "remotion"
+      ? "text-to-video"
+      : videoType === "hybrid_remotion_avatar_pip"
+        ? "hybrid-avatar-pip"
+        : "avatar-video";
   return `${preferredName || fallbackName}.mp4`;
 }
 
@@ -80,7 +85,13 @@ export function StepShare({ state, update }: StepShareProps) {
   const avatarName =
     state.videoType === "remotion"
       ? "Text to Video"
-      : state.avatarName || state.avatarId || "None";
+      : state.avatarName || state.avatarId || (state.videoType === "hybrid_remotion_avatar_pip" ? "Hybrid Avatar" : "None");
+  const styleLabel =
+    state.videoType === "remotion"
+      ? "Text to Video"
+      : state.videoType === "hybrid_remotion_avatar_pip"
+        ? "Hybrid Avatar PIP"
+        : "Avatar";
   const statusText =
     state.generationStatus === "completed"
       ? generatedVideo?.status ?? "completed"
@@ -158,7 +169,7 @@ export function StepShare({ state, update }: StepShareProps) {
           <CheckCircle2 className="h-6 w-6 text-success shrink-0" />
           <div>
             <p className="text-sm font-semibold text-foreground">
-              {state.videoType === "remotion" ? "Your text video is ready." : "Your video is ready."}
+              {state.videoType === "remotion" ? "Your text video is ready." : state.videoType === "hybrid_remotion_avatar_pip" ? "Your hybrid avatar video is ready." : "Your video is ready."}
             </p>
             <p className="text-xs text-muted-foreground">
               {state.videoType === "remotion"
@@ -172,7 +183,7 @@ export function StepShare({ state, update }: StepShareProps) {
           <LoaderCircle className="h-6 w-6 text-primary shrink-0 animate-spin" />
           <div>
             <p className="text-sm font-semibold text-foreground">
-              {state.videoType === "remotion" ? "Rendering text video" : "Generating video"}
+              {state.videoType === "remotion" ? "Rendering text video" : state.videoType === "hybrid_remotion_avatar_pip" ? "Generating hybrid avatar video" : "Generating video"}
             </p>
             <p className="text-xs text-muted-foreground">
               {state.videoType === "remotion"
@@ -272,12 +283,12 @@ export function StepShare({ state, update }: StepShareProps) {
           <h3 className="text-sm font-semibold text-foreground mb-4">Video Metadata</h3>
           <Meta
             label="Video Name"
-            value={generatedVideo?.title ?? `${state.customerName.trim() || (state.videoType === "remotion" ? "Text to Video" : "Avatar Video")} - Draft`}
+            value={generatedVideo?.title ?? `${state.customerName.trim() || styleLabel} - Draft`}
           />
           <Meta label="Created At" value={new Date().toLocaleDateString()} />
-          <Meta label="Style" value={state.videoType === "remotion" ? "Text to Video" : "Avatar"} />
+          <Meta label="Style" value={styleLabel} />
           <Meta label="Language" value={state.language} />
-          {state.videoType === "avatar" ? <Meta label="Avatar" value={avatarName} /> : null}
+          {state.videoType !== "remotion" ? <Meta label="Avatar" value={avatarName} /> : null}
           <Meta label="Status" value={statusText} />
           <Meta label="Video ID" value={generatedVideo?._id ?? generatedVideo?.video_id ?? "Pending"} />
           {state.videoType === "remotion" ? <Meta label="Logo" value={state.logoFileName || "None"} /> : null}

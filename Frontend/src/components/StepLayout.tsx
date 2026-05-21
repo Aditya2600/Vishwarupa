@@ -1,12 +1,12 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { ReactNode } from "react";
-import { STEPS } from "@/store/wizardStore";
+import { STEPS, type VideoType } from "@/store/wizardStore";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft } from "lucide-react";
 
 interface StepLayoutProps {
   step: number;
-  videoType: "avatar" | "remotion";
+  videoType: VideoType;
   title: string;
   subtitle: string;
   children: ReactNode;
@@ -43,7 +43,7 @@ export function StepLayout({
 }: StepLayoutProps) {
   const visibleSteps = STEPS.map((stepItem, index) => ({ ...stepItem, originalIndex: index }))
     .filter((stepItem) => !(videoType === "remotion" && stepItem.key === "avatar"))
-    .filter((stepItem) => !(videoType === "avatar" && stepItem.key === "subtitle"));
+    .filter((stepItem) => !(videoType !== "remotion" && stepItem.key === "subtitle"));
   const visibleStepIndex = visibleSteps.findIndex((stepItem) => stepItem.originalIndex === step);
   const currentVisibleStep = visibleSteps[Math.max(0, visibleStepIndex)] ?? visibleSteps[0];
 

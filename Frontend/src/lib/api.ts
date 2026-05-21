@@ -1,3 +1,5 @@
+import type { LoanReminderAssetKey, LoanReminderAssetPaths, RemotionTemplateKey } from "@/lib/templates";
+
 export interface AvatarOption {
   id: string;
   name: string;
@@ -46,7 +48,37 @@ export interface DirectVideoPayload {
   video_width?: number;
   video_height?: number;
   voice_gender?: "male" | "female";
-  template_key?: "account_notice" | "payment_guidance" | "payment_link_guidance" | "overdue_template" | "loan_offer_interactive";
+  template_key?: RemotionTemplateKey;
+}
+
+export type HybridAspectMode = "landscape_16_9" | "portrait_9_16" | "auto";
+
+export interface HybridRemotionAvatarPipPayload {
+  customer_name: string;
+  account_number: string;
+  days_overdue: number;
+  collection_status?: string | null;
+  amount_due: string;
+  avatar_id: string;
+  voice_id: string;
+  agent_name?: string;
+  agent_role?: string;
+  language?: string;
+  aspect_mode?: HybridAspectMode;
+  viewport_width?: number | null;
+  viewport_height?: number | null;
+}
+
+export interface HybridRemotionAvatarPipResponse {
+  success: boolean;
+  raw_avatar_video_id: string | null;
+  raw_avatar_path: string | null;
+  final_video_path: string;
+  final_video_url: string;
+  width: number;
+  height: number;
+  duration_seconds?: number | null;
+  template_key?: RemotionTemplateKey;
   max_loan_amount?: string;
   max_tenure?: string;
   max_emi?: string;
@@ -81,7 +113,7 @@ export interface AvatarJobStatus {
 }
 
 export interface VideoJobResult {
-  request_mode: "direct" | "template" | "remotion";
+  request_mode: "direct" | "template" | "remotion" | "hybrid_remotion_avatar_pip";
   video_id?: string;
   _id?: string;
   status: string;
@@ -127,6 +159,8 @@ export interface RemotionVideoPayload extends DirectVideoPayload {
   logoPosition: string;
   logoOpacity: number;
   logoFile?: File | null;
+  loanReminderImagePaths?: LoanReminderAssetPaths;
+  loanReminderImageFiles?: Partial<Record<LoanReminderAssetKey, File | null>>;
   voice_gender?: "male" | "female";
   video_variety?: "personalized" | "universal";
 }
@@ -148,7 +182,13 @@ export interface AppConfig {
   default_language: string;
 }
 
-export const API_BASE_URL = "/api";
+function resolveApiBaseUrl(): string {
+  const configured = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
+  if (configured) return configured.replace(/\/+$/, "");
+  return "/api";
+}
+
+export const API_BASE_URL = resolveApiBaseUrl();
 const GENERATION_FAILED_MESSAGE = "We couldn't generate the video right now. Please try again.";
 const GENERATION_TIMEOUT_MESSAGE = "The video is taking longer than expected. Please try again in a moment.";
 const SERVER_UNREACHABLE_MESSAGE = "Could not reach the server. Check that the backend is running and try again.";
@@ -1215,6 +1255,16 @@ export async function generateRemotionVideo(payload: RemotionVideoPayload): Prom
   if (payload.logoFile) {
     formData.set("logo_file", payload.logoFile);
   }
+  if (payload.loanReminderImagePaths) {
+    formData.set("loan_reminder_image_paths", JSON.stringify(payload.loanReminderImagePaths));
+  }
+  if (payload.loanReminderImageFiles) {
+    Object.entries(payload.loanReminderImageFiles).forEach(([key, file]) => {
+      if (file) {
+        formData.set(`loan_reminder_image_${key}`, file);
+      }
+    });
+  }
   [
     "max_loan_amount",
     "max_tenure",
@@ -1243,6 +1293,15 @@ export async function generateRemotionVideo(payload: RemotionVideoPayload): Prom
   return requestJson<VideoJobResult>("/generate/remotion", {
     method: "POST",
     body: formData,
+  });
+}
+
+export async function generateHybridRemotionAvatarPip(
+  payload: HybridRemotionAvatarPipPayload,
+): Promise<HybridRemotionAvatarPipResponse> {
+  return requestJson<HybridRemotionAvatarPipResponse>("/generate/hybrid-remotion-avatar-pip", {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }
 

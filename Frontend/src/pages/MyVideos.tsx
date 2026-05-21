@@ -110,7 +110,12 @@ function buildLocalDraftItem(): VideoListItem | null {
       : draft.generationStatus === "failed"
       ? "failed"
       : "draft";
-  const flowLabel = draft.videoType === "remotion" ? "Text video" : "Avatar video";
+  const flowLabel =
+    draft.videoType === "remotion"
+      ? "Text video"
+      : draft.videoType === "hybrid_remotion_avatar_pip"
+        ? "Hybrid avatar PIP"
+        : "Avatar video";
 
   return {
     _id: draft.generatedVideo?._id ?? draft.generatedVideo?.video_id ?? `local-draft-${draft.videoType}`,

@@ -22,10 +22,13 @@ interface StepPreviewProps {
 export function StepPreview({ state, update }: StepPreviewProps) {
   const activeTranscript = state.videoType === "remotion" ? state.remotionTranscript : state.transcript;
   const isRemotion = state.videoType === "remotion";
+  const isHybrid = state.videoType === "hybrid_remotion_avatar_pip";
   const statusLabel = getGenerationStatusLabel(state.generationStatus, isRemotion);
   const avatarName =
     isRemotion
       ? "Text to Video"
+      : isHybrid
+        ? state.avatarName || state.avatarId || "Hybrid Avatar"
       : state.avatarName || state.avatarId || "None";
   const wordCount = activeTranscript.trim() ? activeTranscript.trim().split(/\s+/).length : 0;
   const duration = `~${Math.max(1, Math.round(wordCount / 130))} min`;
@@ -125,7 +128,7 @@ export function StepPreview({ state, update }: StepPreviewProps) {
               poster={generatedVideo?.thumbnail_url ?? undefined}
               preload="metadata"
               playsInline
-              className={`w-full h-full ${state.videoType === "remotion" ? "object-contain bg-black" : "object-cover"}`}
+              className={`w-full h-full ${state.videoType === "avatar" ? "object-cover" : "object-contain bg-black"}`}
             />
           ) : generatedVideo?.thumbnail_url ? (
             <img
@@ -179,10 +182,10 @@ export function StepPreview({ state, update }: StepPreviewProps) {
       <div className="w-64 shrink-0">
         <div className="surface-card p-5 space-y-4">
           <h3 className="text-sm font-semibold text-foreground">Video Summary</h3>
-          <SummaryRow label="Style" value={state.videoType === "remotion" ? "Text to Video" : "Avatar"} />
+          <SummaryRow label="Style" value={isRemotion ? "Text to Video" : isHybrid ? "Hybrid Avatar PIP" : "Avatar"} />
           <SummaryRow label="Language" value={state.language} />
-          {state.videoType === "avatar" ? <SummaryRow label="Avatar" value={avatarName} /> : null}
-          {state.videoType === "avatar" && state.voiceName ? <SummaryRow label="Voice" value={state.voiceName} /> : null}
+          {state.videoType !== "remotion" ? <SummaryRow label="Avatar" value={avatarName} /> : null}
+          {state.videoType !== "remotion" && state.voiceName ? <SummaryRow label="Voice" value={state.voiceName} /> : null}
           <SummaryRow label="Duration" value={duration} />
           {state.videoType === "remotion" ? (
             <SummaryRow

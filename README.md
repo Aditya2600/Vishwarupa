@@ -1,15 +1,17 @@
 # Personalized Video Generator
 
-FastAPI backend plus a Vite/React frontend for creating personalized videos through two flows:
+FastAPI backend plus a Vite/React frontend for creating personalized videos through three flows:
 
 - Avatar video generation through HeyGen
 - Text-to-video rendering through the local `Remotion/` project
+- Hybrid Avatar PIP video generation merging HeyGen talking avatars into local Remotion-rendered dashboards
 
 The app also includes email/password auth, autosaved drafts, a "My Videos" library, direct video download/share actions, subtitle/logo post-processing for avatar renders, and a Talking PDF flow for document summaries.
 
 ## Highlights
 
-- Two generation modes: HeyGen avatar videos and local Remotion text-to-video renders.
+- Three generation modes: HeyGen avatar videos, local Remotion text-to-video renders, and Hybrid Avatar PIP videos.
+- Picture-in-Picture (PIP) layouts overlaying realistic talking avatars on top of dynamic collections dashboard frames (landscape and portrait).
 - Subtitle controls for color and placement, plus logo position and opacity for styled outputs.
 - Share step actions for copy link, WhatsApp sharing, and direct video download.
 - Docker images for both backend and frontend, plus a root `docker-compose.yml` for local containerized runs.
@@ -35,6 +37,15 @@ Flow:
 5. Summary and next-actions audio are generated with Edge TTS and stored in S3.
 6. The public share page at `/s/<pdfId>` loads the borrower-facing PDF view.
 7. WhatsApp sends the same public share link to the borrower.
+
+## Hybrid Avatar PIP
+
+Hybrid Avatar PIP is the merged dual-stage video generation flow that integrates realistic HeyGen synthetic talking human avatars directly into a local Remotion-rendered debt collections dashboard.
+
+- **Stage 1 (HeyGen Sync Synthesis):** Compiles a personalized collections script based on customer details and selected locale (Hindi or English), then synchronously submits the synthesis to HeyGen's direct generation endpoint. The raw MP4 video is downloaded to local staging.
+- **Stage 2 (Asset Transfer):** Staged MP4 avatar file is automatically copied to the Remotion project assets directory (`Remotion/public/avatar/`).
+- **Stage 3 (Layout Resolution):** Resolves the target aspect mode. Landscape uses the `HybridCollectionNoticeLandscape` composition (1920x1080) with a dual-column card layout. Portrait uses the `HybridCollectionNoticePortrait` composition (1080x1920) optimized for vertical mobile screens.
+- **Stage 4 (Remotion Compilation):** Triggers the Remotion CLI to render a headless Chromium session compile, drawing the collections metrics overlay and framing the talking avatar inside a Picture-in-Picture floating window in the bottom-right corner.
 
 ## Architecture & Queueing
 Deploying the heavy Text-To-Video `Remotion` pipeline and HeyGen integrations requires a robust asynchronous pipeline to scale securely avoiding `504 Gateway Timeouts`:
@@ -121,6 +132,108 @@ Remotion dependencies:
 ```bash
 cd Remotion
 npm install
+```
+
+### Loan Reminder Remotion Video
+
+The `LoanReminderVideo` composition renders a 9:16 personalized loan reminder
+video at 1080x1920, 30 FPS, and 64 seconds. Customer-specific values are passed
+through Remotion props and default to `Remotion/src/data/sampleCustomer.ts`.
+
+Preview:
+
+```bash
+cd Remotion
+npm run preview
+```
+
+Render with the sample customer:
+
+```bash
+cd Remotion
+npm run render
+```
+
+Render with dynamic props:
+
+```bash
+cd Remotion
+npx remotion render src/Root.tsx LoanReminderVideo out/loan-reminder.mp4 --props='{"customerName":"Anita Sharma","loanType":"Personal Loan","loanNumber":"9988776655","overdueAmount":"₹72,500","lenderName":"Brand Credit","ctaPrimary":"Pay Now","ctaSecondary":"Request a Call Back"}'
+```
+
+The MP4 buttons are visual only. For clickable actions in the web app, render
+real HTML buttons over the video with `LoanVideoPlayer`:
+
+```tsx
+import {LoanVideoPlayer} from './components/LoanVideoPlayer';
+
+export function LoanReminderPreview() {
+  return (
+    <LoanVideoPlayer
+      videoSrc="/videos/loan-reminder.mp4"
+      paymentUrl="https://payments.example.com/pay/123445555555"
+      callbackPhone="+919999999999"
+      showCtaAt={46}
+    />
+  );
+}
+```
+
+### Loan Reminder Voiceover Script
+
+The scene-wise voiceover script lives in
+`Remotion/src/data/loanReminderVoiceoverScript.ts`. It exports
+`sceneVoiceoverScript` and `replaceScriptPlaceholders(script, customerData)`.
+The helper replaces `{customerName}`, `{loanType}`, `{loanNumber}`,
+`{overdueAmount}`, and `{lenderName}` from the customer props used by the
+`LoanReminderVideo` composition.
+
+Each scene renders its matching script text as a readable bottom caption synced
+to the Remotion timeline:
+
+- Intro: `0-4s`
+- LoanDetails: `4-13s`
+- NpaWarning: `13-22s`
+- CreditImpact: `22-30s`
+- LegalWarning: `30-39s`
+- LastChance: `39-46s`
+- CtaScene: `46-55s`
+- FinancialBurden: `55-61s`
+- Outro: `61-64s`
+
+To add generated TTS audio, place the MP3 at:
+
+```text
+Remotion/public/audio/loan-reminder-voiceover.mp3
+```
+
+The composition checks for that default file automatically. You can also pass a
+different public audio path through `voiceoverAudioSrc`. If the audio file is
+missing, the video still renders with scene captions and no audio track.
+
+Render with default sample props:
+
+```bash
+cd Remotion
+npx remotion render src/Root.tsx LoanReminderVideo out/loan-reminder.mp4
+```
+
+Render with custom customer props and voiceover audio:
+
+```bash
+cd Remotion
+npx remotion render src/Root.tsx LoanReminderVideo out/loan-reminder.mp4 --props='{
+  "customerName": "Rahul Verma",
+  "loanType": "Personal Loan",
+  "loanNumber": "123445555555",
+  "overdueAmount": "₹50,000",
+  "lenderName": "TVS Credit",
+  "ctaPrimary": "Pay Now",
+  "ctaSecondary": "Request a Call Back",
+  "paymentUrl": "https://pay.example.com/customer123",
+  "callbackPhone": "+911234567890",
+  "voiceoverAudioSrc": "audio/loan-reminder-voiceover.mp3"
+}'
 ```
 
 Open `http://127.0.0.1:8080`.
@@ -263,6 +376,7 @@ The CD workflow uses the built-in `GITHUB_TOKEN` to push packages to GHCR from A
 - `POST /generate/direct`
 - `POST /generate/template`
 - `POST /generate/remotion`
+- `POST /generate/hybrid-remotion-avatar-pip`
 - `GET /videos/{video_id}/status`
 - `POST /videos/{video_id}/stylize`
 - `GET /my-videos`

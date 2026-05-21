@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Check, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { REMOTION_SUPPORTED_LANGUAGES } from "@/lib/templates";
+import type { VideoType } from "@/store/wizardStore";
 
 const LANGUAGES = [
   { name: "Hindi", native: "हिन्दी" },
@@ -19,8 +20,8 @@ const LANGUAGES = [
 interface StepLanguageProps {
   selected: string;
   onSelect: (lang: string) => void;
-  videoType: "avatar" | "remotion";
-  onVideoTypeChange: (type: "avatar" | "remotion") => void;
+  videoType: VideoType;
+  onVideoTypeChange: (type: VideoType) => void;
   gender: "male" | "female";
   onGenderChange: (gender: "male" | "female") => void;
 }
@@ -73,6 +74,15 @@ export function StepLanguage({
                   }`}
               >
                 Text to Video
+              </button>
+              <button
+                onClick={() => onVideoTypeChange("hybrid_remotion_avatar_pip")}
+                className={`px-6 py-2 rounded-lg text-sm font-semibold transition-all ${videoType === "hybrid_remotion_avatar_pip"
+                    ? "bg-primary text-primary-foreground shadow-lg"
+                    : "text-muted-foreground hover:text-foreground"
+                  }`}
+              >
+                Hybrid Avatar PIP
               </button>
             </div>
           </div>

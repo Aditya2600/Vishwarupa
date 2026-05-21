@@ -4,6 +4,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { WizardState } from "@/store/wizardStore";
 import { Button } from "@/components/ui/button";
+import { DEFAULT_LOAN_REMINDER_ASSET_PATHS, LOAN_REMINDER_ASSET_SLOTS, type LoanReminderAssetKey } from "@/lib/templates";
 
 const RESET_GENERATION_STATE = {
   generatedVideo: null,
@@ -30,6 +31,7 @@ interface StepSubtitleProps {
   state: WizardState;
   update: (partial: Partial<WizardState>) => void;
   onLogoSelected: (file: File | null) => void;
+  onLoanReminderImageSelected?: (key: LoanReminderAssetKey, file: File | null) => void;
 }
 
 function getPreviewPosition(position: string): string {
@@ -56,7 +58,7 @@ function getLogoPreviewPosition(position: string): string {
   }
 }
 
-export function StepSubtitle({ state, update, onLogoSelected }: StepSubtitleProps) {
+export function StepSubtitle({ state, update, onLogoSelected, onLoanReminderImageSelected }: StepSubtitleProps) {
   const fileInputId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const showAvatarLogoAlert = false; // Intentionally disabled per user request
@@ -78,6 +80,36 @@ export function StepSubtitle({ state, update, onLogoSelected }: StepSubtitleProp
     }
     update({
       logoFileName: "",
+      ...RESET_GENERATION_STATE,
+    });
+  };
+
+  const handleLoanReminderImageChange = (
+    key: LoanReminderAssetKey,
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0] ?? null;
+    onLoanReminderImageSelected?.(key, file);
+    update({
+      loanReminderImageFileNames: {
+        ...state.loanReminderImageFileNames,
+        [key]: file?.name ?? undefined,
+      },
+      ...RESET_GENERATION_STATE,
+    });
+    event.target.value = "";
+  };
+
+  const resetLoanReminderImage = (key: LoanReminderAssetKey) => {
+    onLoanReminderImageSelected?.(key, null);
+    const nextFileNames = {...state.loanReminderImageFileNames};
+    delete nextFileNames[key];
+    update({
+      loanReminderImagePaths: {
+        ...state.loanReminderImagePaths,
+        [key]: DEFAULT_LOAN_REMINDER_ASSET_PATHS[key],
+      },
+      loanReminderImageFileNames: nextFileNames,
       ...RESET_GENERATION_STATE,
     });
   };
@@ -243,6 +275,61 @@ export function StepSubtitle({ state, update, onLogoSelected }: StepSubtitleProp
             step={1}
           />
         </div>
+
+        {state.remotionTemplateKey === "loan_reminder" ? (
+          <div className="rounded-xl border border-border bg-card p-4">
+            <div className="mb-4">
+              <p className="text-sm font-semibold text-foreground">Loan Reminder Images</p>
+              <p className="text-xs text-muted-foreground">
+                Use the built-in assets or upload one override per scene.
+              </p>
+            </div>
+            <div className="space-y-3">
+              {LOAN_REMINDER_ASSET_SLOTS.map((slot) => {
+                const fileName = state.loanReminderImageFileNames[slot.key];
+                const path = state.loanReminderImagePaths[slot.key] ?? slot.defaultPath;
+                const inputId = `${fileInputId}-${slot.key}`;
+
+                return (
+                  <div key={slot.key} className="rounded-lg border border-border/70 bg-secondary/40 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground">{slot.label}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {fileName ? `Upload: ${fileName}` : path}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <label
+                          htmlFor={inputId}
+                          className="cursor-pointer rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface-hover"
+                        >
+                          Upload
+                        </label>
+                        <input
+                          id={inputId}
+                          type="file"
+                          accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+                          className="sr-only"
+                          onChange={(event) => handleLoanReminderImageChange(slot.key, event)}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => resetLoanReminderImage(slot.key)}
+                          aria-label={`Reset ${slot.label}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

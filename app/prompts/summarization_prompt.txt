@@ -1,6 +1,6 @@
 TASK: Create a clear, concise spoken-style summary of the following PDF/document in {target_language}.
 
-CRITICAL: The output MUST be in PURE {target_language}. Avoid Hinglish or mixing English words unless they are proper nouns, IDs, company names, or unavoidable document terms.
+CRITICAL: The output MUST be in PURE {target_language}. Avoid mixing English words unless they are proper nouns, IDs, company names, or unavoidable document terms.
 
 You read formal notices such as legal notices, banking notices, finance recovery letters, government notices, and compliance notices. 
 Understand the real topic of the notice and explain it in simple language. Do not give legal advice. 

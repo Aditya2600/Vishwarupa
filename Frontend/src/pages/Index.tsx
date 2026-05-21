@@ -22,8 +22,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  DEFAULT_LOAN_REMINDER_ASSET_PATHS,
   getDefaultAvatarScript,
   getDefaultRemotionTranscript,
+  type LoanReminderAssetKey,
   resolveNarratorGender,
 } from "@/lib/templates";
 import {
@@ -36,7 +38,9 @@ import {
   fetchAvatars,
   fetchVoices,
   fetchVideoStatus,
+  generateHybridRemotionAvatarPip,
   generateRemotionVideo,
+  type HybridRemotionAvatarPipResponse,
   isVoiceCompatibleWithLanguage,
   saveDraft,
   stylizeVideo,
@@ -46,13 +50,15 @@ import {
   getCustomAvatars,
 } from "@/lib/api";
 import { STEPS, useWizardStore } from "@/store/wizardStore";
+import type { VideoType } from "@/store/wizardStore";
 
-const getStepMeta = (step: number, videoType: "avatar" | "remotion") => {
+const getStepMeta = (step: number, videoType: VideoType) => {
+  const isRemotion = videoType === "remotion";
   const meta = [
     {
       title: "Select Language",
       subtitle: "Choose your desired language.",
-      next: videoType === "remotion" ? "Next: Transcript →" : "Next: Avatar →",
+      next: isRemotion ? "Next: Transcript →" : "Next: Avatar →",
     },
     {
       title: "Choose Your Avatar",
@@ -62,12 +68,12 @@ const getStepMeta = (step: number, videoType: "avatar" | "remotion") => {
     {
       title: "Add Transcript",
       subtitle: "Customize your script and lead details.",
-      next: videoType === "avatar" ? "Generate Video ✨" : "Next: Subtitle & Logo →",
+      next: isRemotion ? "Next: Subtitle & Logo →" : "Generate Video ✨",
     },
     {
-      title: videoType === "avatar" ? "Preview Video" : "Subtitles & Branding",
-      subtitle: videoType === "avatar" ? "Review your finished output." : "Configure captions and logo placement.",
-      next: videoType === "avatar" ? "Next: Share →" : "Next: Preview →",
+      title: isRemotion ? "Subtitles & Branding" : "Preview Video",
+      subtitle: isRemotion ? "Configure captions and logo placement." : "Review your finished output.",
+      next: isRemotion ? "Next: Preview →" : "Next: Share →",
     },
     {
       title: "Preview Video",
@@ -161,10 +167,27 @@ function mapAvatarJobToVideoResult(job: {
   };
 }
 
+function mapHybridResponseToVideoResult(result: HybridRemotionAvatarPipResponse, customerName: string): VideoJobResult {
+  const videoId = result.raw_avatar_video_id ?? result.final_video_path.split("/").pop()?.replace(/\.mp4$/i, "") ?? "";
+  return {
+    request_mode: "hybrid_remotion_avatar_pip",
+    _id: videoId,
+    video_id: videoId,
+    status: result.success ? "completed" : "failed",
+    video_url: result.final_video_url,
+    thumbnail_url: null,
+    title: `Hybrid Avatar PIP - ${customerName || "Customer"}`,
+    raw_response: { ...result },
+    saved_to: result.final_video_path,
+    video_path: result.final_video_path,
+  };
+}
+
 const Index = () => {
   const { state, update, nextStep, prevStep, goToStep, reset, canProceed } = useWizardStore();
   const navigate = useNavigate();
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [loanReminderImageFiles, setLoanReminderImageFiles] = useState<Partial<Record<LoanReminderAssetKey, File | null>>>({});
   const [showLogoWarning, setShowLogoWarning] = useState(false);
   const continueWithoutLogoRef = useRef(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -174,28 +197,30 @@ const Index = () => {
   const statusPollingWarningShownRef = useRef(false);
   const step = state.currentStep;
   const meta = getStepMeta(step, state.videoType);
+  const isAvatarLikeFlow = state.videoType !== "remotion";
+  const isHybridFlow = state.videoType === "hybrid_remotion_avatar_pip";
   const activeTranscript = state.videoType === "remotion" ? state.remotionTranscript : state.transcript;
   const isProcessing = state.generationStatus === "submitting" || state.generationStatus === "styling";
-  const shouldGenerateOnCurrentStep = state.videoType === "avatar" ? step === 2 : step === 3;
+  const shouldGenerateOnCurrentStep = isAvatarLikeFlow ? step === 2 : step === 3;
   const requestedMode = searchParams.get("mode");
   const requestedFreshDraft = searchParams.get("fresh") === "1";
 
   const avatarsQuery = useQuery({
     queryKey: ["avatars"],
     queryFn: fetchAvatars,
-    enabled: state.videoType === "avatar",
+    enabled: isAvatarLikeFlow,
   });
 
   const customAvatarsQuery = useQuery({
     queryKey: ["custom-avatars"],
     queryFn: () => requestJson<any[]>("/custom-avatars"),
-    enabled: state.videoType === "avatar",
+    enabled: isAvatarLikeFlow,
   });
 
   const voicesQuery = useQuery({
     queryKey: ["voices"],
     queryFn: fetchVoices,
-    enabled: state.videoType === "avatar",
+    enabled: isAvatarLikeFlow,
   });
 
   const avatars = avatarsQuery.data ?? [];
@@ -286,6 +311,39 @@ const Index = () => {
     },
   });
 
+  const generateHybridMutation = useMutation({
+    mutationFn: generateHybridRemotionAvatarPip,
+    onMutate: () => {
+      stylingRequestedRef.current = false;
+      statusPollingWarningShownRef.current = false;
+      update({
+        avatarJobId: "",
+        generatedVideo: null,
+        generationStatus: "submitting",
+        generationError: "",
+        styledVideoUrl: "",
+        styledVideoPath: "",
+        subtitleSource: "disabled",
+      });
+    },
+    onSuccess: (result) => {
+      update({
+        generatedVideo: mapHybridResponseToVideoResult(result, state.customerName.trim()),
+        generationStatus: "completed",
+        generationError: "",
+      });
+      toast.success("Hybrid Avatar PIP generated successfully.");
+      goToStep(5);
+    },
+    onError: (error) => {
+      update({
+        generationStatus: "failed",
+        generationError: error instanceof Error ? error.message : "Unexpected error while generating the hybrid video.",
+      });
+      toast.error(error instanceof Error ? error.message : "Unexpected error while generating the hybrid video.");
+    },
+  });
+
   const stylizeVideoMutation = useMutation({
     mutationFn: (videoId: string) =>
       stylizeVideo(videoId, {
@@ -357,8 +415,13 @@ const Index = () => {
 
       // 2. Apply the specific pipeline they asked for
       const requestedTemplate = searchParams.get("template");
+      const nextMode: VideoType =
+        requestedMode === "remotion" || requestedMode === "hybrid_remotion_avatar_pip"
+          ? requestedMode
+          : "avatar";
       update({
-        videoType: requestedMode === "remotion" ? "remotion" : "avatar",
+        videoType: nextMode,
+        ...(nextMode === "hybrid_remotion_avatar_pip" ? { videoVariety: "personalized" as const, aspectRatio: "9:16", aspectMode: "portrait_9_16" as const } : {}),
         ...(requestedMode === "remotion" && requestedTemplate ? { remotionTemplateKey: requestedTemplate as any } : {}),
       });
 
@@ -402,7 +465,7 @@ const Index = () => {
 
   useEffect(() => {
     if (
-      state.videoType !== "avatar" ||
+      !isAvatarLikeFlow ||
       !selectedVoice ||
       !selectedAvatar?.gender ||
       selectedVoice.gender === selectedAvatar.gender
@@ -425,12 +488,13 @@ const Index = () => {
     selectedVoice,
     state.avatarTranscriptCustomized,
     state.language,
+    isAvatarLikeFlow,
     state.videoType,
     update,
   ]);
 
   useEffect(() => {
-    if (state.videoType !== "avatar" || !selectedVoice || isVoiceCompatibleWithLanguage(selectedVoice, state.language)) {
+    if (!isAvatarLikeFlow || !selectedVoice || isVoiceCompatibleWithLanguage(selectedVoice, state.language)) {
       return;
     }
 
@@ -449,6 +513,7 @@ const Index = () => {
     state.avatarGender,
     state.avatarTranscriptCustomized,
     state.language,
+    isAvatarLikeFlow,
     state.videoType,
     update,
   ]);
@@ -572,25 +637,27 @@ const Index = () => {
   }, [avatarJobStatusQuery.error, state.generationStatus, state.videoType, update]);
 
   useEffect(() => {
-    if (state.videoType === "avatar" && step === 3) {
+    if (isAvatarLikeFlow && step === 3) {
       goToStep(2);
       return;
     }
     if (state.videoType === "remotion" && step === 1) {
       goToStep(2);
     }
-  }, [goToStep, state.videoType, step]);
+  }, [goToStep, isAvatarLikeFlow, state.videoType, step]);
 
   useEffect(() => {
-    if (requestedMode !== "avatar" && requestedMode !== "remotion") {
+    if (requestedMode !== "avatar" && requestedMode !== "remotion" && requestedMode !== "hybrid_remotion_avatar_pip") {
       return;
     }
 
     stylingRequestedRef.current = false;
     generateVideoMutation.reset();
     generateRemotionMutation.reset();
+    generateHybridMutation.reset();
     stylizeVideoMutation.reset();
     setLogoFile(null);
+    setLoanReminderImageFiles({});
     continueWithoutLogoRef.current = false;
 
     if (requestedFreshDraft) {
@@ -624,10 +691,18 @@ const Index = () => {
       currentStep: 0,
       language,
       outputLanguage: language,
-      videoType: requestedMode,
+      videoType: requestedMode as VideoType,
+      ...(requestedMode === "hybrid_remotion_avatar_pip" ? { videoVariety: "personalized" as const, aspectRatio: "9:16", aspectMode: "portrait_9_16" as const } : {}),
       ...preservedAvatar,
       ...preservedVoice,
       ...(requestedMode === "remotion" ? { remotionTemplateKey: templateKey as any } : {}),
+      ...(requestedMode === "remotion" && templateKey === "loan_reminder"
+        ? {
+          aspectRatio: "9:16",
+          loanReminderImagePaths: DEFAULT_LOAN_REMINDER_ASSET_PATHS,
+          loanReminderImageFileNames: {},
+        }
+        : {}),
       transcript: requestedFreshDraft
         ? getDefaultAvatarScript(language, "female")
         : state.avatarTranscriptCustomized
@@ -657,8 +732,10 @@ const Index = () => {
     stylingRequestedRef.current = false;
     generateVideoMutation.reset();
     generateRemotionMutation.reset();
+    generateHybridMutation.reset();
     stylizeVideoMutation.reset();
     setLogoFile(null);
+    setLoanReminderImageFiles({});
     continueWithoutLogoRef.current = false;
     reset();
     toast.success("New video draft started!");
@@ -668,6 +745,7 @@ const Index = () => {
     stylingRequestedRef.current = false;
     generateVideoMutation.reset();
     generateRemotionMutation.reset();
+    generateHybridMutation.reset();
     stylizeVideoMutation.reset();
     continueWithoutLogoRef.current = false;
     update({
@@ -706,9 +784,10 @@ const Index = () => {
     }
   };
 
-  const handleVideoTypeChange = (videoType: "avatar" | "remotion") => {
+  const handleVideoTypeChange = (videoType: VideoType) => {
     update({
       videoType,
+      ...(videoType === "hybrid_remotion_avatar_pip" ? { videoVariety: "personalized" as const, aspectRatio: "9:16", aspectMode: "portrait_9_16" as const } : {}),
       ...(!state.avatarTranscriptCustomized
         ? {
           transcript: buildAvatarDefaultTranscript(state.language, state.avatarGender, state.voiceGender),
@@ -797,14 +876,20 @@ const Index = () => {
   };
 
   const handleGenerate = () => {
-    if (state.videoType === "avatar" && !state.avatarId.trim()) {
+    if (isAvatarLikeFlow && !state.avatarId.trim()) {
       toast.error("Select an avatar before generating the video.");
       goToStep(1);
       return;
     }
 
+    if (isHybridFlow && !state.voiceId.trim()) {
+      toast.error("Select a voice before generating the hybrid video.");
+      goToStep(1);
+      return;
+    }
+
     if (
-      state.videoType === "avatar" &&
+      isAvatarLikeFlow &&
       selectedAvatar?.gender &&
       state.voiceGender &&
       selectedAvatar.gender !== state.voiceGender
@@ -814,7 +899,7 @@ const Index = () => {
       return;
     }
 
-    const isUniversal = state.videoVariety === "universal";
+    const isUniversal = state.videoType === "remotion" && state.videoVariety === "universal";
     const hasTranscript = activeTranscript.trim().length > 0;
 
     if (isUniversal) {
@@ -827,12 +912,15 @@ const Index = () => {
       if (
         !state.customerName.trim() ||
         !state.lan.trim() ||
-        !state.clientName.trim() ||
+        (!isHybridFlow && !state.clientName.trim()) ||
         (state.videoType === "remotion" &&
           (!state.tos.trim() ||
             !state.loanAmount.trim() ||
             !state.contactDetails.trim() ||
             !state.productType.trim())) ||
+        (isHybridFlow &&
+          (!state.tos.trim() ||
+            !state.daysOverdue.trim())) ||
         !hasTranscript
       ) {
         toast.error("Complete the lead details and transcript before generating the video.");
@@ -841,8 +929,40 @@ const Index = () => {
       }
     }
 
-    if (state.videoType === "remotion" && !logoFile && !continueWithoutLogoRef.current) {
+    if (
+      state.videoType === "remotion" &&
+      state.remotionTemplateKey !== "loan_reminder" &&
+      !logoFile &&
+      !continueWithoutLogoRef.current
+    ) {
       setShowLogoWarning(true);
+      return;
+    }
+
+    if (isHybridFlow) {
+      const daysOverdue = Number.parseInt(state.daysOverdue.trim(), 10);
+      if (!Number.isFinite(daysOverdue) || daysOverdue < 0) {
+        toast.error("Enter a valid non-negative number for days overdue.");
+        goToStep(2);
+        return;
+      }
+
+      generateHybridMutation.mutate({
+        customer_name: state.customerName.trim(),
+        account_number: state.lan.trim(),
+        days_overdue: daysOverdue,
+        collection_status: state.collectionStatus.trim() || null,
+        amount_due: state.tos.trim(),
+        avatar_id: state.avatarId.trim(),
+        voice_id: state.voiceId.trim(),
+        agent_name: "Priya",
+        agent_role: "Collections Assistant",
+        language: state.language,
+        aspect_mode: state.aspectMode,
+        viewport_width: window.innerWidth,
+        viewport_height: window.innerHeight,
+      });
+      goToStep(4);
       return;
     }
 
@@ -889,8 +1009,17 @@ const Index = () => {
         subtitlePosition: state.subtitlePosition,
         logoPosition: state.logoPosition,
         logoOpacity: state.logoOpacity,
-        logoFile,
-        template_key: state.remotionTemplateKey,
+      logoFile,
+      template_key: state.remotionTemplateKey,
+      ...(state.remotionTemplateKey === "loan_reminder"
+        ? {
+          loanReminderImagePaths: {
+            ...DEFAULT_LOAN_REMINDER_ASSET_PATHS,
+            ...state.loanReminderImagePaths,
+          },
+          loanReminderImageFiles,
+        }
+        : {}),
       });
     } else {
       generateVideoMutation.mutate(payload);
@@ -917,7 +1046,7 @@ const Index = () => {
       goToStep(2);
       return;
     }
-    if (state.videoType === "avatar" && targetStep === 3) {
+    if (isAvatarLikeFlow && targetStep === 3) {
       goToStep(2);
       return;
     }
@@ -1007,7 +1136,16 @@ const Index = () => {
         return <StepTranscript state={state} update={update} voices={voices} />;
       case 3:
         if (state.videoType === "remotion") {
-          return <StepSubtitle state={state} update={update} onLogoSelected={setLogoFile} />;
+          return (
+            <StepSubtitle
+              state={state}
+              update={update}
+              onLogoSelected={setLogoFile}
+              onLoanReminderImageSelected={(key, file) => {
+                setLoanReminderImageFiles((prev) => ({...prev, [key]: file}));
+              }}
+            />
+          );
         }
         return <StepPreview state={state} update={update} />;
       case 4:
@@ -1038,6 +1176,7 @@ const Index = () => {
           primaryActionBusy={
             generateVideoMutation.isPending ||
             generateRemotionMutation.isPending ||
+            generateHybridMutation.isPending ||
             stylizeVideoMutation.isPending ||
             isProcessing
           }

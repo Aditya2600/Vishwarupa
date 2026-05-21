@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="760" viewBox="0 0 720 760" fill="none">
+  
+<path d="M80 170 C80 105 130 60 198 60 H608 C663 60 705 105 705 160 V650 C705 706 660 748 604 748 H94 C42 748 0 706 0 654 V300 C0 225 54 170 80 170Z" fill="#C9EAD7"/>
+<circle cx="570" cy="560" r="75" stroke="#A8D9BE" stroke-width="4" opacity="0.75"/>
+<circle cx="610" cy="560" r="105" stroke="#A8D9BE" stroke-width="3" opacity="0.4"/>
+<g transform="translate(210 210)">
+  <circle cx="150" cy="110" r="70" fill="#F4B38B"/>
+  <path d="M85 95 C105 20 210 30 230 100 C185 70 130 78 85 95Z" fill="#263238"/>
+  <rect x="78" y="78" width="58" height="32" rx="15" stroke="#0B1E2D" stroke-width="8"/>
+  <rect x="164" y="78" width="58" height="32" rx="15" stroke="#0B1E2D" stroke-width="8"/>
+  <line x1="136" y1="94" x2="164" y2="94" stroke="#0B1E2D" stroke-width="7"/>
+  <path d="M130 142 C150 156 176 156 196 142" stroke="#654321" stroke-width="6" stroke-linecap="round"/>
+  <path d="M63 240 C90 185 210 185 238 240 L296 500 H0 Z" fill="#F7FAFC"/>
+  <path d="M75 245 L35 500 H0 L45 270 C52 255 61 248 75 245Z" fill="#D9E7EF"/>
+  <path d="M220 245 L296 500 H245 L202 250Z" fill="#D9E7EF"/>
+  <path d="M120 235 L163 500 L206 235" stroke="#063F5F" stroke-width="18" stroke-linecap="round"/>
+  <rect x="170" y="315" width="120" height="210" rx="18" fill="#102A44" transform="rotate(9 170 315)"/>
+  <rect x="184" y="338" width="92" height="146" rx="12" fill="#E6F5EE" transform="rotate(9 184 338)"/>
+</g>
+
+</svg>

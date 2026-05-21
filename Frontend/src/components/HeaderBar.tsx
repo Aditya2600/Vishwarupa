@@ -1,4 +1,4 @@
-import { ChevronDown, Clapperboard, LayoutTemplate, Sparkles, Video, LogOut, User, Users, ShieldCheck } from "lucide-react";
+import { ChevronDown, Clapperboard, LayoutTemplate, PictureInPicture2, Sparkles, Video, LogOut, User, Users, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-type CreateMode = "avatar" | "remotion";
+type CreateMode = "avatar" | "remotion" | "hybrid_remotion_avatar_pip";
 
 interface HeaderBarProps {
   onCreateVideo?: (mode?: CreateMode) => void;
@@ -118,6 +118,19 @@ export function HeaderBar({ onCreateVideo, primaryLabel = "Create Video" }: Head
                 </p>
                 <p className="text-xs text-muted-foreground group-hover:text-white group-data-[highlighted]:text-white">
                   Create cinematic videos from scripts using our Text to Video engine.
+                </p>
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => launchCreate("hybrid_remotion_avatar_pip")} className="group items-start gap-3 py-3">
+              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-white/15 group-hover:text-white group-data-[highlighted]:bg-white/15 group-data-[highlighted]:text-white">
+                <PictureInPicture2 className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="font-medium text-primary group-hover:text-white group-data-[highlighted]:text-white">
+                  Hybrid Avatar PIP
+                </p>
+                <p className="text-xs text-muted-foreground group-hover:text-white group-data-[highlighted]:text-white">
+                  Combine a HeyGen avatar clip with the Remotion collection layout.
                 </p>
               </div>
             </DropdownMenuItem>

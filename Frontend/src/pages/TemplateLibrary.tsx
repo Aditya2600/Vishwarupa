@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import { LayoutTemplate, Loader2, Video, Smartphone, FileText, Sparkles, AlertTriangle, HandCoins } from "lucide-react";
+import { AlertTriangle, FileText, HandCoins, LayoutTemplate, Loader2, PictureInPicture2, Smartphone, Sparkles, Video } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { HeaderBar } from "@/components/HeaderBar";
 import { Button } from "@/components/ui/button";
 import { fetchTemplates } from "@/lib/api";
-import { REMOTION_TEMPLATE_OPTIONS, type RemotionTemplateKey } from "@/lib/templates";
+import { REMOTION_TEMPLATE_OPTIONS, TEMPLATE_LIBRARY_QUICK_STARTS, type RemotionTemplateKey } from "@/lib/templates";
 
 export default function TemplateLibrary() {
   const navigate = useNavigate();
@@ -43,6 +43,18 @@ export default function TemplateLibrary() {
         return (
           <div className="p-3 rounded-xl bg-gradient-to-br from-green-500/20 to-sky-500/20 text-green-400 border border-green-500/10">
             <HandCoins className="h-6 w-6" />
+          </div>
+        );
+      case "loan_reminder":
+        return (
+          <div className="p-3 rounded-xl bg-gradient-to-br from-sky-500/20 to-emerald-500/20 text-sky-400 border border-sky-500/10">
+            <Video className="h-6 w-6" />
+          </div>
+        );
+      case "hybrid_avatar_pip":
+        return (
+          <div className="p-3 rounded-xl bg-gradient-to-br from-rose-500/20 to-orange-500/20 text-rose-400 border border-rose-500/10">
+            <PictureInPicture2 className="h-6 w-6" />
           </div>
         );
       default:
@@ -85,6 +97,36 @@ export default function TemplateLibrary() {
             </div>
 
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {TEMPLATE_LIBRARY_QUICK_STARTS.map((starter) => (
+                <article
+                  key={starter.mode}
+                  className="surface-card p-6 flex flex-col gap-5 border border-border/45 hover:border-primary/30 transition-all duration-300 hover:shadow-lg hover:shadow-primary/5 group"
+                >
+                  <div className="flex items-start gap-4">
+                    {getTemplateIcon(starter.iconKey)}
+                    <div className="space-y-1">
+                      <h3 className="font-display text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
+                        {starter.name}
+                      </h3>
+                    </div>
+                  </div>
+
+                  <p className="text-sm text-muted-foreground leading-relaxed min-h-[3rem]">
+                    {starter.description}
+                  </p>
+
+                  <div className="mt-auto pt-4 border-t border-border/40 flex items-center justify-between gap-3">
+                    <Button
+                      size="sm"
+                      onClick={() => navigate(`/create?mode=${starter.mode}&fresh=1`)}
+                      className="w-full bg-primary hover:bg-primary/90 text-white font-medium shadow-sm"
+                    >
+                      <Sparkles className="mr-2 h-3.5 w-3.5" />
+                      Create Video
+                    </Button>
+                  </div>
+                </article>
+              ))}
               {REMOTION_TEMPLATE_OPTIONS.map((template) => (
                 <article
                   key={template.key}

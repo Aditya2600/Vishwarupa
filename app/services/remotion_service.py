@@ -46,17 +46,45 @@ VOICE_MAP = {
 DEFAULT_SCRIPT_EN = "Hello {{ customer_name }}. I am calling from {{ client_name }} regarding your {{ product_type }} account. The total outstanding balance is {{ tos }}. Please contact us at {{ contact_details }} to discuss repayment options."
 DEFAULT_SCRIPT_HI = "नमस्ते {{ customer_name }}। मैं {{ client_name }} से आपके {{ product_type }} खाते के संबंध में बोल रही हूँ। आपकी कुल बकाया राशि {{ tos }} है। कृपया भुगतान विकल्पों पर चर्चा करने के लिए हमसे {{ contact_details }} पर संपर्क करें।"
 
-DEFAULT_LOAN_OFFER_EN = "Congratulations {{ customer_name }}. You have a pre-approved loan offer from {{ client_name }} up to {{ loan_amount }}. Please tap Avail Now to view details. Now, choose your preferred loan amount and tenure, and tap Confirm Loan Offer to submit. Thank you. Your offer is confirmed, and our team will contact you shortly to complete the next steps. For help, you can call us now."
-DEFAULT_LOAN_OFFER_HI = "बधाई हो {{ customer_name }}। {{ client_name }} की ओर से आपके लिए {{ loan_amount }} तक का प्री-अप्रूव्ड लोन ऑफर उपलब्ध है। विवरण देखने के लिए कृपया अवील नाओ पर टैप करें। अब, अपनी पसंद की लोन राशि और अवधि चुनें, और सबमिट करने के लिए कन्फर्म लोन ऑफर पर टैप करें। धन्यवाद। आपका ऑफर कन्फर्म हो गया है, और हमारी टीम अगले कदम पूरे करने के लिए जल्द ही आपसे संपर्क करेगी। सहायता के लिए आप अभी हमें कॉल कर सकते हैं।"
+LOAN_REMINDER_DEFAULT_ASSETS = {
+    "logo": "assets/tvs_credit_logo.png",
+    "npaWarning": "man_phone_transparent.png",
+    "creditImpact": "credit_score_transparent.png",
+    "lastChance": "last_chance_transparent.png",
+    "ctaScene": "phone_paynow_transparent.png",
+    "financialBurden": "piggy_bank_arrow_transparent.png",
+}
 
 
-def _prepare_tts_pronunciation(text: str) -> str:
+def _prepare_tts_pronunciation(text: str, lan: str = None) -> str:
     # Keep the brand spelling in scripts/subtitles, but guide TTS to say "PhonePay".
-    return re.sub(r'\bPhonePe\b', 'PhonePay', text, flags=re.IGNORECASE)
+    text = re.sub(r'\bPhonePe\b', 'PhonePay', text, flags=re.IGNORECASE)
+    
+    if lan:
+        lan_clean = str(lan).strip()
+        if lan_clean and lan_clean != "N/A":
+            # Match the exact loan number (case-sensitively) as a word token and space its characters
+            spaced_lan = " ".join(list(lan_clean))
+            escaped_lan = re.escape(lan_clean)
+            text = re.sub(rf'\b{escaped_lan}\b', spaced_lan, text)
+            
+    return text
 
 
-def _restore_display_spellings(text: str) -> str:
-    return re.sub(r'\bPhonePay\b', 'PhonePe', text, flags=re.IGNORECASE)
+def _restore_display_spellings(text: str, lan: str = None) -> str:
+    text = re.sub(r'\bPhonePay\b', 'PhonePe', text, flags=re.IGNORECASE)
+    
+    # Generic restore: collapse space-separated digits (2 or more) back into a single number
+    text = re.sub(r'\b\d(?:\s+\d)+\b', lambda m: m.group(0).replace(" ", ""), text)
+    
+    # Precise restore: if lan was spaced out, replace its spaced representation back to normal
+    if lan:
+        lan_clean = str(lan).strip()
+        if lan_clean and lan_clean != "N/A":
+            spaced_lan = " ".join(list(lan_clean))
+            text = text.replace(spaced_lan, lan_clean)
+            
+    return text
 
 class RemotionService:
     def __init__(self):
@@ -67,6 +95,54 @@ class RemotionService:
         # Support both . and , as millisecond separators since edge-tts uses commas (SRT style)
         self.vtt_pattern = re.compile(r'(\d{2}:\d{2}:\d{2}[.,]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[.,]\d{3})\s*(.+?)(?=\n\d{2}:\d{2}|$)', re.DOTALL)
         
+    def _safe_asset_filename(self, filename: str) -> str:
+        stem = Path(filename or "asset.png").name
+        return re.sub(r"[^A-Za-z0-9._-]+", "-", stem).strip("-") or "asset.png"
+
+    async def _persist_loan_reminder_assets(self, request: RemotionVideoRequest, video_id: str) -> dict[str, str]:
+        assets = {
+            **LOAN_REMINDER_DEFAULT_ASSETS,
+            **(request.loan_reminder_image_paths or {}),
+        }
+
+        upload_bytes = request.loan_reminder_image_bytes or {}
+        upload_names = request.loan_reminder_image_filenames or {}
+        if upload_bytes:
+            target_dir = self.assets_path / "generated" / "loan-reminder" / video_id
+            target_dir.mkdir(parents=True, exist_ok=True)
+            for key, content in upload_bytes.items():
+                if key not in LOAN_REMINDER_DEFAULT_ASSETS or not content:
+                    continue
+                safe_name = self._safe_asset_filename(upload_names.get(key) or f"{key}.png")
+                target_name = f"{key}-{safe_name}"
+                (target_dir / target_name).write_bytes(content)
+                assets[key] = f"assets/generated/loan-reminder/{video_id}/{target_name}"
+
+        if request.logo_filename and "logo" not in upload_bytes:
+            assets["logo"] = f"assets/{request.logo_filename}"
+
+        return assets
+
+    def build_loan_reminder_props(
+        self,
+        request: RemotionVideoRequest,
+        audio_path: str | None,
+        loan_reminder_assets: dict[str, str],
+    ) -> dict[str, Any]:
+        return {
+            "customerName": request.customer_name or "Customer",
+            "loanType": request.product_type or "Personal Loan",
+            "loanNumber": request.lan or "N/A",
+            "overdueAmount": str(request.tos or "0"),
+            "lenderName": request.client_name or "TVS Credit",
+            "ctaPrimary": "Pay Now",
+            "ctaSecondary": "Request a Call Back",
+            "paymentUrl": "https://pay.example.com/customer123",
+            "callbackPhone": request.contact_details or "+911234567890",
+            "voiceoverLanguage": "loan_reminder",
+            "voiceoverAudioSrc": audio_path.lstrip("/") if audio_path else None,
+            "loanReminderAssets": loan_reminder_assets,
+        }
 
 
     def _product_content(self, product_type: str, language: str) -> dict[str, str]:
@@ -137,7 +213,7 @@ class RemotionService:
                 contact_details=request.contact_details,
             )
 
-        tts_text = _prepare_tts_pronunciation(script_text)
+        tts_text = _prepare_tts_pronunciation(script_text, request.lan)
         if request.language == "Hindi":
             tts_text = normalize_hindi_numbers(tts_text)
             logger.info(f"TTS Output: {tts_text}")
@@ -180,7 +256,7 @@ class RemotionService:
                 raise Exception(f"TTS file {audio_file} was not created by edge-tts")
 
             if vtt_file.exists():
-                vtt_file.write_text(_restore_display_spellings(vtt_file.read_text(encoding='utf-8')), encoding='utf-8')
+                vtt_file.write_text(_restore_display_spellings(vtt_file.read_text(encoding='utf-8'), request.lan), encoding='utf-8')
 
         finally:
             if os.path.exists(temp_text_file):
@@ -543,15 +619,20 @@ class RemotionService:
     async def render_video(self, request: RemotionVideoRequest, video_id: str, scene_payload: dict[str, Any], render_payload: dict[str, Any]) -> str:
         logger.info("Render video started")
         leads_path = self.remotion_path / "leads.json"
-        leads = [render_payload] # Keep it simple for now
-        leads_path.write_text(json.dumps(leads, ensure_ascii=False, indent=2), encoding='utf-8')
+        is_loan_reminder = request.template_key == "loan_reminder"
+        if not is_loan_reminder:
+            leads = [render_payload] # Keep it simple for now
+            leads_path.write_text(json.dumps(leads, ensure_ascii=False, indent=2), encoding='utf-8')
         
         output_name = f"{video_id}.mp4"
         output_path = settings.output_dir / output_name
         output_path.parent.mkdir(exist_ok=True)
         
         props_path = self.remotion_path / f"props_{video_id}.json"
-        props_path.write_text(json.dumps({"leadId": video_id}, ensure_ascii=False), encoding='utf-8')
+        props_path.write_text(
+            json.dumps(render_payload if is_loan_reminder else {"leadId": video_id}, ensure_ascii=False),
+            encoding='utf-8',
+        )
         logger.info("Render video started command")
         
         def run_render():
@@ -559,7 +640,10 @@ class RemotionService:
             import uuid
             
             npx = "npx.cmd" if os.name == 'nt' else "npx"
-            c = f'{npx} --yes remotion render src/index.jsx main "{output_path}" --props="{str(props_path).replace(os.sep, "/")}" --overwrite'
+            if is_loan_reminder:
+                c = f'{npx} --yes remotion render src/Root.tsx LoanReminderVideo "{output_path}" --props="{str(props_path).replace(os.sep, "/")}" --overwrite'
+            else:
+                c = f'{npx} --yes remotion render src/index.jsx main "{output_path}" --props="{str(props_path).replace(os.sep, "/")}" --overwrite'
             if settings.remotion_browser_executable:
                 c += f' --browser-executable="{settings.remotion_browser_executable}"'
             
@@ -622,6 +706,19 @@ class RemotionService:
         is_universal = (request.video_variety or "personalized") == "universal"
 
         tts = await self.generate_tts(request, video_id=video_id)
+        if request.template_key == "loan_reminder":
+            loan_assets = await self._persist_loan_reminder_assets(request, tts["video_id"])
+            render_p = self.build_loan_reminder_props(request, tts["audio_path"], loan_assets)
+            video_url = await self.render_video(request, tts["video_id"], {}, render_p)
+            return {
+                "video_url": video_url,
+                "video_path": settings.output_dir / video_url.lstrip('/'),
+                "audio_path": self.remotion_path / "public" / tts['audio_path'].lstrip('/'),
+                "audio_url": tts['audio_path'],
+                "video_id": tts['video_id'],
+                "text": tts['text']
+            }
+
         # Universal mode: use generic scene cards so no empty customer data leaks
         # into the Remotion visual scenes.
         if is_universal:
