@@ -10,6 +10,7 @@ def test_cpaas_api_root_url_preserves_explicit_prefix() -> None:
     settings = Settings(
         _env_file=None,
         heygen_api_key='test-key',
+        frontend_url='https://frontend.example.com',
         cpaas_api_base_url=f'https://api-resolve-x.credresolve.com{DEFAULT_CPAAS_API_PREFIX}',
     )
 
@@ -20,6 +21,7 @@ def test_cpaas_api_root_url_adds_prefix_for_bare_host() -> None:
     settings = Settings(
         _env_file=None,
         heygen_api_key='test-key',
+        frontend_url='https://frontend.example.com',
         cpaas_api_base_url='https://api-resolve-x.credresolve.com',
     )
 

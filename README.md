@@ -317,16 +317,13 @@ To point the container at a different backend:
 
 ```bash
 docker run --rm \
+  --network app-network \
   -p 8080:80 \
-  -e BACKEND_ORIGIN=http://host.docker.internal:8000 \
+  -e BACKEND_ORIGIN=http://heygen-backend:8000 \
   personalized-video-frontend
 ```
 
-On Linux, add:
-
-```bash
---add-host=host.docker.internal:host-gateway
-```
+For local one-off Docker runs outside a shared Docker network, set `BACKEND_ORIGIN` to an address the container can resolve.
 
 ## CI/CD
 
