@@ -3,9 +3,10 @@ import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { FileText, Play, Loader2, Volume2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { buildApiUrl } from "@/lib/api";
 
 const fetchSharedPdf = async (id: string) => {
-  const res = await fetch(`/api/pdf/share/${id}`);
+  const res = await fetch(buildApiUrl(`/pdf/share/${id}`));
   if (!res.ok) throw new Error("Failed to load notice summary");
   return res.json();
 };

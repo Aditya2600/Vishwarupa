@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WizardState } from "@/store/wizardStore";
-import { VoiceOption } from "@/lib/api";
+import { buildApiUrl, VoiceOption } from "@/lib/api";
 import {
   DEFAULT_LOAN_REMINDER_ASSET_PATHS,
   REMOTION_TEMPLATE_OPTIONS,
@@ -232,7 +232,7 @@ export function StepTranscript({ state, update, voices = [] }: StepTranscriptPro
         formData.set("voice_id", state.voiceId);
       }
 
-      const response = await fetch("/api/preview/voice", {
+      const response = await fetch(buildApiUrl("/preview/voice"), {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${localStorage.getItem("token")}`,

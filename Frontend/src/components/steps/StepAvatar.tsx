@@ -7,7 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { compareVoicesForLanguage, isVoiceCompatibleWithLanguage, type AvatarOption, type VoiceOption } from "@/lib/api";
+import { buildApiUrl, compareVoicesForLanguage, isVoiceCompatibleWithLanguage, type AvatarOption, type VoiceOption } from "@/lib/api";
 
 interface StepAvatarProps {
   avatars: AvatarOption[];
@@ -211,7 +211,7 @@ export function StepAvatar({
 
       if (voice.previewUrl) {
         // Fast path: use the static HeyGen preview via proxy
-        audioSrc = `/api/proxy-audio?url=${encodeURIComponent(voice.previewUrl)}`;
+        audioSrc = buildApiUrl(`/proxy-audio?url=${encodeURIComponent(voice.previewUrl)}`);
       } else {
         // Fallback: generate TTS on-the-fly using the voice id
         const form = new FormData();
@@ -223,7 +223,7 @@ export function StepAvatar({
         );
         form.set("voice_id", voice.id);
 
-        const res = await fetch("/api/preview/voice", {
+        const res = await fetch(buildApiUrl("/preview/voice"), {
           method: "POST",
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
           body: form,

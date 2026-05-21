@@ -13,10 +13,11 @@ import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { buildApiUrl } from "@/lib/api";
 
 /* ─────────────── helpers ─────────────── */
 const authFetch = (url: string, token: string, opts?: RequestInit) =>
-  fetch(url, { ...opts, headers: { Authorization: `Bearer ${token}`, ...(opts?.headers ?? {}) } });
+  fetch(buildApiUrl(url), { ...opts, headers: { Authorization: `Bearer ${token}`, ...(opts?.headers ?? {}) } });
 
 const statusColor = (s: string) => {
   if (s === "completed") return "bg-emerald-50 text-emerald-700 border-emerald-200";
@@ -79,12 +80,12 @@ const UserRow = ({ u, token, onDeleteVideo }: { u: any; token: string; onDeleteV
 
   const videosQuery = useQuery({
     queryKey: ["admin-user-videos", u.id],
-    queryFn: () => authFetch(`/api/admin/users/${u.id}/videos`, token).then((r) => r.json()),
+    queryFn: () => authFetch(`/admin/users/${u.id}/videos`, token).then((r) => r.json()),
     enabled: open,
   });
 
   const disableMut = useMutation({
-    mutationFn: () => authFetch(`/api/admin/users/${u.id}/disable`, token, { method: "PATCH" }).then((r) => r.json()),
+    mutationFn: () => authFetch(`/admin/users/${u.id}/disable`, token, { method: "PATCH" }).then((r) => r.json()),
     onSuccess: (data) => toast.success(data.disabled ? "User disabled" : "User re-enabled"),
   });
 
@@ -197,30 +198,30 @@ const AdminDashboard = () => {
 
   const statsQuery = useQuery({
     queryKey: ["admin-stats"],
-    queryFn: () => authFetch("/api/admin/stats", token).then((r) => r.json()),
+    queryFn: () => authFetch("/admin/stats", token).then((r) => r.json()),
   });
 
   const campaignsQuery = useQuery({
     queryKey: ["admin-campaigns"],
-    queryFn: () => authFetch("/api/admin/campaign-analytics", token).then((r) => r.json()),
+    queryFn: () => authFetch("/admin/campaign-analytics", token).then((r) => r.json()),
     enabled: tab === "campaigns",
     refetchInterval: 5000,
   });
 
   const usersQuery = useQuery({
     queryKey: ["admin-users"],
-    queryFn: () => authFetch("/api/admin/users", token).then((r) => r.json()),
+    queryFn: () => authFetch("/admin/users", token).then((r) => r.json()),
     enabled: tab === "users",
   });
 
   const videosQuery = useQuery({
     queryKey: ["admin-all-videos", videoSearch, videoStatus],
-    queryFn: () => authFetch(`/api/admin/all-videos?search=${encodeURIComponent(videoSearch)}&status=${videoStatus}`, token).then((r) => r.json()),
+    queryFn: () => authFetch(`/admin/all-videos?search=${encodeURIComponent(videoSearch)}&status=${videoStatus}`, token).then((r) => r.json()),
     enabled: tab === "videos",
   });
 
   const deleteVideoMut = useMutation({
-    mutationFn: (id: string) => authFetch(`/api/admin/videos/${id}`, token, { method: "DELETE" }).then((r) => r.json()),
+    mutationFn: (id: string) => authFetch(`/admin/videos/${id}`, token, { method: "DELETE" }).then((r) => r.json()),
     onSuccess: () => {
       toast.success("Video deleted.");
       qc.invalidateQueries({ queryKey: ["admin-all-videos"] });

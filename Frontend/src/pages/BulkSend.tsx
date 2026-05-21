@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { HeaderBar } from "@/components/HeaderBar";
 import { useSearchParams } from "react-router-dom";
-import { fetchAvatars, fetchVoices, isVoiceCompatibleWithLanguage, compareVoicesForLanguage, type AvatarOption, type VoiceOption, fetchMyVideos, createCampaign, pushCampaignLeads, updateCampaignStatus, fetchVideo, generateDirectVideo, generateRemotionVideo } from "@/lib/api";
+import { buildApiUrl, fetchAvatars, fetchVoices, isVoiceCompatibleWithLanguage, compareVoicesForLanguage, type AvatarOption, type VoiceOption, fetchMyVideos, createCampaign, pushCampaignLeads, updateCampaignStatus, fetchVideo, generateDirectVideo, generateRemotionVideo } from "@/lib/api";
 import {
   Sparkles,
   MessageSquare,
@@ -41,7 +41,7 @@ import { cn } from "@/lib/utils";
 import { requestJson } from "@/lib/api";
 
 type Step = "config" | "assets" | "upload" | "mapping" | "preview" | "launch";
-const SAMPLE_BULK_CSV_URL = "/api/sample-csvs/bulk-campaign";
+const SAMPLE_BULK_CSV_URL = buildApiUrl("/sample-csvs/bulk-campaign");
 const CSV_PREVIEW_ROW_LIMIT = 8;
 const PRIORITY_PREVIEW_COLUMNS = [
   "name",
@@ -349,7 +349,7 @@ export default function BulkSend() {
   const whatsappTemplatesQuery = useQuery({
     queryKey: ["whatsapp-templates"],
     queryFn: async () => {
-      const res = await fetch("/api/meta/whatsapp-templates", {
+      const res = await fetch(buildApiUrl("/meta/whatsapp-templates"), {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
       });
       if (!res.ok) {
@@ -610,7 +610,7 @@ export default function BulkSend() {
     try {
       let audioSrc = "";
       if (voice.previewUrl) {
-        audioSrc = `/api/proxy-audio?url=${encodeURIComponent(voice.previewUrl)}`;
+        audioSrc = buildApiUrl(`/proxy-audio?url=${encodeURIComponent(voice.previewUrl)}`);
       } else {
         const form = new FormData();
         form.set("language", selectedLanguage);
@@ -621,7 +621,7 @@ export default function BulkSend() {
         );
         form.set("voice_id", voice.id);
 
-        const res = await fetch("/api/preview/voice", {
+        const res = await fetch(buildApiUrl("/preview/voice"), {
           method: "POST",
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
           body: form,

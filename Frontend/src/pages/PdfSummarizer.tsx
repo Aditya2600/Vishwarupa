@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
-import { createCampaign, pushCampaignLeads, updateCampaignStatus } from "@/lib/api";
+import { buildApiUrl, createCampaign, pushCampaignLeads, updateCampaignStatus } from "@/lib/api";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 
@@ -87,7 +87,7 @@ const PdfSummarizer = () => {
     voiceGender: string;
     text?: string | null;
   }) => {
-    const url = `/api/pdf/${targetId}/generate-audio?language=${encodeURIComponent(lang)}&gender=${encodeURIComponent(voiceGender)}&kind=${encodeURIComponent(kind)}`;
+    const url = buildApiUrl(`/pdf/${targetId}/generate-audio?language=${encodeURIComponent(lang)}&gender=${encodeURIComponent(voiceGender)}&kind=${encodeURIComponent(kind)}`);
     const hasText = typeof text === "string" && text.trim().length > 0;
     const headers = hasText
       ? { ...authHeader(), "Content-Type": "application/json" }
@@ -141,14 +141,14 @@ const PdfSummarizer = () => {
 
   // On mount: restore last session and fetch config
   useEffect(() => {
-    fetch("/api/meta/config")
+    fetch(buildApiUrl("/meta/config"))
       .then(r => r.json())
       .then(data => setConfig(data))
       .catch(e => console.error("Config fetch failed", e));
 
     const savedId = localStorage.getItem(PDF_ID_KEY);
     if (!savedId) return;
-    fetch(`/api/pdf/${savedId}/status`, { headers: authHeader() })
+    fetch(buildApiUrl(`/pdf/${savedId}/status`), { headers: authHeader() })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (data && data.filename) {
@@ -181,7 +181,7 @@ const PdfSummarizer = () => {
         if (item.status === 'completed' || item.status === 'failed') return item;
         
         try {
-          const res = await fetch(`/api/pdf/${item._id}/status`, { headers: authHeader() });
+          const res = await fetch(buildApiUrl(`/pdf/${item._id}/status`), { headers: authHeader() });
           if (res.ok) {
             const data = await res.json();
             return {
@@ -240,7 +240,7 @@ const PdfSummarizer = () => {
 
     try {
       const previewRows = parseBulkCsvPreview(await uploadedFile.text());
-      const response = await fetch("/api/pdf/upload", { method: "POST", headers: authHeader(), body: formData });
+      const response = await fetch(buildApiUrl("/pdf/upload"), { method: "POST", headers: authHeader(), body: formData });
       if (!response.ok) throw new Error("Upload failed");
       const data = await response.json();
       setPdfId(data.pdf_id);
@@ -282,7 +282,7 @@ const PdfSummarizer = () => {
     setNextActionsAudioUrl(null);
     setNextActions("");
     try {
-      const response = await fetch(`/api/pdf/${targetId}/summarize?language=${lang}&gender=${voiceGender}`, {
+      const response = await fetch(buildApiUrl(`/pdf/${targetId}/summarize?language=${lang}&gender=${voiceGender}`), {
         method: "POST", headers: authHeader(),
       });
       if (!response.ok) throw new Error("Summarization failed");
@@ -552,7 +552,7 @@ const PdfSummarizer = () => {
     setIsSavingBulkNextActions(true);
     try {
       const response = await fetch(
-        `/api/pdf/${bulkTextEditorItem._id}/generate-audio?language=${encodeURIComponent(bulkTextEditorItem.language || language)}&gender=${encodeURIComponent(gender)}&kind=next_actions`,
+        buildApiUrl(`/pdf/${bulkTextEditorItem._id}/generate-audio?language=${encodeURIComponent(bulkTextEditorItem.language || language)}&gender=${encodeURIComponent(gender)}&kind=next_actions`),
         {
           method: "POST",
           headers: { ...authHeader(), "Content-Type": "application/json" },
@@ -600,7 +600,7 @@ const PdfSummarizer = () => {
   const handleWhatsAppLog = async () => {
     if (!pdfId) return;
     try {
-      const response = await fetch(`/api/pdf/${pdfId}/whatsapp-log`, { method: "POST", headers: authHeader() });
+      const response = await fetch(buildApiUrl(`/pdf/${pdfId}/whatsapp-log`), { method: "POST", headers: authHeader() });
       if (!response.ok) throw new Error("Logging failed");
       toast({ title: "WhatsApp Logged", description: "The summary has been recorded in your WhatsApp logs.", duration: 2000 });
     } catch {
@@ -965,7 +965,7 @@ const PdfSummarizer = () => {
                         
                         try {
                           const previewRows = parseBulkCsvPreview(await file.text());
-                          const res = await fetch("/api/pdf/bulk-csv", { method: "POST", headers: authHeader(), body: formData });
+                          const res = await fetch(buildApiUrl("/pdf/bulk-csv"), { method: "POST", headers: authHeader(), body: formData });
                           const data = await res.json();
                           const initialItems = (data.ids || []).map((id: string, idx: number) => {
                             const preview = previewRows[idx] ?? {};
