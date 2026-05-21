@@ -113,6 +113,7 @@ export default function InteractiveLoanOffer() {
   const [hasDismissedSelector, setHasDismissedSelector] = useState(false);
   const [hasEnded, setHasEnded] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [videoDuration, setVideoDuration] = useState<number | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["interactive-loan-offer", id],
@@ -145,7 +146,7 @@ export default function InteractiveLoanOffer() {
   }, []);
 
   const introTransitionTime = useMemo(() => {
-    return (
+    const detected =
       findSubtitleStart(sanitizedSubtitles, "now, choose") ??
       findSubtitleStart(sanitizedSubtitles, "choose your") ??
       findSubtitleStart(sanitizedSubtitles, "select your") ??
@@ -153,12 +154,19 @@ export default function InteractiveLoanOffer() {
       findSubtitleStart(sanitizedSubtitles, "अपनी पसंद की") ??
       findSubtitleStart(sanitizedSubtitles, "पसंद की") ??
       findSubtitleStart(sanitizedSubtitles, "अवधि") ??
-      10.8
-    );
-  }, [sanitizedSubtitles]);
+      10.8;
+
+    if (!videoDuration || !Number.isFinite(videoDuration)) return detected;
+
+    const finalHoldSeconds = Math.min(6, Math.max(4, videoDuration * 0.34));
+    const selectorHoldSeconds = Math.min(5, Math.max(3, videoDuration * 0.24));
+    const latestIntroTransition = Math.max(4, videoDuration - finalHoldSeconds - selectorHoldSeconds);
+
+    return Math.min(detected, latestIntroTransition);
+  }, [sanitizedSubtitles, videoDuration]);
 
   const selectorTransitionTime = useMemo(() => {
-    return (
+    const detected =
       findSubtitleStart(sanitizedSubtitles, "thank you") ??
       findSubtitleStart(sanitizedSubtitles, "your offer") ??
       findSubtitleStart(sanitizedSubtitles, "our team") ??
@@ -172,12 +180,19 @@ export default function InteractiveLoanOffer() {
       findSubtitleStart(sanitizedSubtitles, "call us") ??
       findSubtitleStart(sanitizedSubtitles, "contact") ??
       findSubtitleStart(sanitizedSubtitles, "support") ??
-      22.0
-    );
-  }, [sanitizedSubtitles]);
+      22.0;
+
+    if (!videoDuration || !Number.isFinite(videoDuration)) return detected;
+
+    const finalHoldSeconds = Math.min(5, Math.max(3, videoDuration * 0.24));
+    const latestSelectorPause = Math.max(introTransitionTime + 1.2, videoDuration - finalHoldSeconds);
+    const earliestSelectorPause = Math.min(videoDuration - 1.2, introTransitionTime + 1.2);
+
+    return Math.min(Math.max(detected, earliestSelectorPause), latestSelectorPause);
+  }, [introTransitionTime, sanitizedSubtitles, videoDuration]);
 
   const introEndSeconds = useMemo(() => {
-    return Math.max(0, introTransitionTime - 0.1);
+    return Math.max(0, introTransitionTime - 0.35);
   }, [introTransitionTime]);
 
   const selectorEndSeconds = useMemo(() => {
@@ -207,15 +222,16 @@ export default function InteractiveLoanOffer() {
 
     const onTimeUpdate = () => {
       const time = video.currentTime;
-      const isPastIntro = time >= introTransitionTime && !confirmed;
+      const isPastIntro = hasDismissedAvail && time >= introTransitionTime && !confirmed;
       setShowSelectorsOverlay(isPastIntro);
 
       if (time >= introEndSeconds && !showAvail && !hasDismissedAvail && !confirmed) {
         setShowAvail(true);
+        setShowSelectorsOverlay(false);
         video.pause();
         video.currentTime = introEndSeconds;
       }
-      if (time >= selectorEndSeconds && !showSelector && !hasDismissedSelector && !confirmed) {
+      if (hasDismissedAvail && time >= selectorEndSeconds && !showSelector && !hasDismissedSelector && !confirmed) {
         setShowSelector(true);
         video.pause();
         video.currentTime = selectorEndSeconds;
@@ -237,6 +253,8 @@ export default function InteractiveLoanOffer() {
 
   const brandColor = safeText(data?.primary_color, "#053666");
   const accentColor = safeText(data?.secondary_color, "#0f7734");
+  const ctaColor = "#702082";
+  const ctaDarkColor = "#4a105c";
   const phoneNumber = safeText(data?.loan_offer?.cta_phone_number, safeText(data?.contact_details, "1800-555-999"));
 
   const playFromStart = async () => {
@@ -270,6 +288,7 @@ export default function InteractiveLoanOffer() {
     if (!video || !id) return;
     setShowAvail(false);
     setHasDismissedAvail(true);
+    setShowSelectorsOverlay(false);
     await video.play();
     reportEvent(id, "avail_now", selectedRow ?? undefined);
   };
@@ -328,6 +347,14 @@ export default function InteractiveLoanOffer() {
           position: absolute;
           z-index: 20;
           cursor: pointer;
+          transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), filter 0.3s ease;
+        }
+        .button-pulse:hover {
+          transform: translate(-50%, -50%) scale(1.04) !important;
+          filter: brightness(1.08);
+        }
+        .button-pulse:active {
+          transform: translate(-50%, -50%) scale(0.98) !important;
         }
         .button-pulse .button__wrapper {
           position: relative;
@@ -401,16 +428,25 @@ export default function InteractiveLoanOffer() {
             transform: scaleY(1) scaleX(1);
           }
         }
-        .loan-container::after,
-        .tenure-container::after {
-          content: "▼";
-          font-size: 14px;
-          position: absolute;
-          right: 15px;
-          top: 50%;
-          transform: translateY(-50%);
-          pointer-events: none;
-          color: #7b6c86;
+        .premium-btn-inner {
+          border: 1px solid rgba(255, 255, 255, 0.2) !important;
+          box-shadow: inset 0 1px 1.5px rgba(255, 255, 255, 0.25), 0 8px 24px rgba(0, 0, 0, 0.15) !important;
+          font-weight: 900 !important;
+          text-transform: uppercase !important;
+          letter-spacing: 0.06em !important;
+        }
+        .premium-select {
+          border: 1px solid rgba(112, 32, 130, 0.18) !important;
+          box-shadow: 0 4px 12px rgba(112, 32, 130, 0.05), inset 0 2px 4px rgba(0, 0, 0, 0.01) !important;
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        }
+        .premium-select:hover {
+          border-color: rgba(112, 32, 130, 0.35) !important;
+          box-shadow: 0 6px 16px rgba(112, 32, 130, 0.08) !important;
+        }
+        .premium-select:focus {
+          border-color: var(--brand, #053666) !important;
+          box-shadow: 0 0 0 3px rgba(112, 32, 130, 0.15) !important;
         }
       `}</style>
 
@@ -425,6 +461,12 @@ export default function InteractiveLoanOffer() {
           playsInline
           preload="metadata"
           controls={false}
+          onLoadedMetadata={(event) => {
+            const duration = event.currentTarget.duration;
+            if (Number.isFinite(duration) && duration > 0) {
+              setVideoDuration(duration);
+            }
+          }}
           onEnded={() => {
             setConfirmed(true);
             setHasEnded(true);
@@ -446,7 +488,7 @@ export default function InteractiveLoanOffer() {
         ) : null}
 
         {/* Floating Top Controls */}
-        {hasStarted && !hasEnded ? (
+        {hasStarted && !hasEnded && !confirmed ? (
           <div className="absolute right-4 top-4 z-10 flex gap-2">
             <Button
               type="button"
@@ -478,7 +520,7 @@ export default function InteractiveLoanOffer() {
               display: "flex",
               alignItems: "flex-end",
               justifyContent: "center",
-              paddingBottom: "10%",
+              paddingBottom: "6%",
               pointerEvents: "none",
               zIndex: 2,
             }}
@@ -543,18 +585,18 @@ export default function InteractiveLoanOffer() {
               transform: "translate(-50%, -50%)",
               width: `${videoWidth * 0.65}px`,
               height: `${videoWidth * 0.14}px`,
-              "--pulse-bg": accentColor,
+              "--pulse-bg": ctaColor,
             } as CSSProperties}
             onClick={() => void handleAvailNow()}
           >
             <div className="button__wrapper">
-              <div className="pulsing" style={{ border: `1px solid ${accentColor}` }}></div>
+              <div className="pulsing" style={{ border: `1px solid ${ctaColor}` }}></div>
               <button
                 type="button"
-                className="absolute inset-0 z-10 flex items-center justify-center font-bold text-white rounded-full transition-all border-0 shadow-lg"
+                className="absolute inset-0 z-10 flex items-center justify-center rounded-full transition-all border-0 premium-btn-inner text-white"
                 style={{
-                  background: `linear-gradient(135deg, ${accentColor}, ${brandColor})`,
-                  fontSize: `${videoWidth * 0.045}px`,
+                  background: `linear-gradient(135deg, ${ctaColor}, ${ctaDarkColor})`,
+                  fontSize: `${videoWidth * 0.042}px`,
                 }}
               >
                 Avail Now
@@ -586,14 +628,14 @@ export default function InteractiveLoanOffer() {
                   setSelectedAmount(nextAmount);
                   setSelectedTenure(nextRow.tenure);
                 }}
-                className="w-full h-full bg-white font-semibold text-slate-800 rounded-full pl-5 pr-10 outline-none shadow-md cursor-pointer border border-slate-200 transition-all hover:border-slate-300 focus:ring-2 focus:ring-black/5"
+                className="w-full h-full bg-white font-bold text-slate-800 rounded-full pl-5 pr-10 outline-none cursor-pointer premium-select"
                 style={{
-                  fontSize: `${videoWidth * 0.042}px`,
+                  fontSize: `${videoWidth * 0.04}px`,
                   appearance: "none",
                   WebkitAppearance: "none",
-                  backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`,
+                  backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='${encodeURIComponent(brandColor)}' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`,
                   backgroundRepeat: "no-repeat",
-                  backgroundPosition: "right 1rem center",
+                  backgroundPosition: "right 1.2rem center",
                   backgroundSize: "1em",
                 }}
               >
@@ -620,14 +662,14 @@ export default function InteractiveLoanOffer() {
               <select
                 value={selectedTenure}
                 onChange={(event) => setSelectedTenure(event.target.value)}
-                className="w-full h-full bg-white font-semibold text-slate-800 rounded-full pl-5 pr-10 outline-none shadow-md cursor-pointer border border-slate-200 transition-all hover:border-slate-300 focus:ring-2 focus:ring-black/5"
+                className="w-full h-full bg-white font-bold text-slate-800 rounded-full pl-5 pr-10 outline-none cursor-pointer premium-select"
                 style={{
-                  fontSize: `${videoWidth * 0.042}px`,
+                  fontSize: `${videoWidth * 0.04}px`,
                   appearance: "none",
                   WebkitAppearance: "none",
-                  backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`,
+                  backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='${encodeURIComponent(brandColor)}' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`,
                   backgroundRepeat: "no-repeat",
-                  backgroundPosition: "right 1rem center",
+                  backgroundPosition: "right 1.2rem center",
                   backgroundSize: "1em",
                 }}
               >
@@ -652,13 +694,14 @@ export default function InteractiveLoanOffer() {
                 justifyContent: "flex-end",
                 pointerEvents: "none",
                 zIndex: 2,
+                paddingRight: "8%",
               }}
             >
               <div
                 style={{
                   fontSize: `${videoWidth * 0.038}px`,
                   color: brandColor,
-                  fontWeight: "800",
+                  fontWeight: "900",
                   letterSpacing: "0.01em",
                   fontFamily: "figtreeregular, Inter, sans-serif",
                 }}
@@ -680,13 +723,14 @@ export default function InteractiveLoanOffer() {
                 justifyContent: "flex-end",
                 pointerEvents: "none",
                 zIndex: 2,
+                paddingRight: "8%",
               }}
             >
               <div
                 style={{
                   fontSize: `${videoWidth * 0.038}px`,
                   color: brandColor,
-                  fontWeight: "800",
+                  fontWeight: "900",
                   letterSpacing: "0.01em",
                   fontFamily: "figtreeregular, Inter, sans-serif",
                 }}
@@ -708,13 +752,14 @@ export default function InteractiveLoanOffer() {
                 justifyContent: "flex-end",
                 pointerEvents: "none",
                 zIndex: 2,
+                paddingRight: "8%",
               }}
             >
               <div
                 style={{
                   fontSize: `${videoWidth * 0.038}px`,
                   color: brandColor,
-                  fontWeight: "800",
+                  fontWeight: "900",
                   letterSpacing: "0.01em",
                   fontFamily: "figtreeregular, Inter, sans-serif",
                 }}
@@ -735,18 +780,18 @@ export default function InteractiveLoanOffer() {
               transform: "translate(-50%, -50%)",
               width: `${videoWidth * 0.65}px`,
               height: `${videoWidth * 0.14}px`,
-              "--pulse-bg": brandColor,
+              "--pulse-bg": ctaColor,
             } as CSSProperties}
             onClick={() => void handleConfirm()}
           >
             <div className="button__wrapper">
-              <div className="pulsing" style={{ border: `1px solid ${brandColor}` }}></div>
+              <div className="pulsing" style={{ border: `1px solid ${ctaColor}` }}></div>
               <button
                 type="button"
-                className="absolute inset-0 z-10 flex items-center justify-center font-bold text-white rounded-full transition-all border-0 shadow-lg px-2"
+                className="absolute inset-0 z-10 flex items-center justify-center rounded-full transition-all border-0 premium-btn-inner text-white px-2"
                 style={{
-                  background: `linear-gradient(135deg, ${brandColor}, ${accentColor})`,
-                  fontSize: `${videoWidth * 0.04}px`,
+                  background: `linear-gradient(135deg, ${ctaColor}, ${ctaDarkColor})`,
+                  fontSize: `${videoWidth * 0.038}px`,
                 }}
               >
                 Confirm Loan Offer
@@ -755,14 +800,78 @@ export default function InteractiveLoanOffer() {
           </div>
         ) : null}
 
+        {/* Persistent Confirmation Overlay */}
+        {confirmed && selectedRow ? (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-950/18 px-6 backdrop-blur-[2px] animate-in fade-in zoom-in-95 duration-300">
+            <div className="relative w-full overflow-hidden rounded-[2rem] border border-white/70 bg-white/95 p-6 text-center shadow-2xl">
+              <div
+                className="absolute -right-16 -top-16 h-40 w-40 rounded-full opacity-15"
+                style={{ background: `radial-gradient(circle, ${ctaColor}, transparent 70%)` }}
+              />
+              <div
+                className="absolute -bottom-20 -left-16 h-44 w-44 rounded-full opacity-10"
+                style={{ background: `radial-gradient(circle, ${brandColor}, transparent 70%)` }}
+              />
+              <div className="relative mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-600 text-white shadow-lg shadow-emerald-700/20">
+                <Phone className="h-6 w-6 fill-current" />
+              </div>
+              <h2 className="relative mt-4 text-2xl font-black tracking-tight" style={{ color: brandColor }}>
+                Offer confirmed
+              </h2>
+              <p className="relative mt-2 text-sm font-semibold leading-snug text-slate-600">
+                Our team will help you complete the next step.
+              </p>
+              <div className="relative mt-5 rounded-2xl border border-slate-200 bg-slate-50/90 p-4 text-left">
+                <div className="flex items-center justify-between gap-4 border-b border-slate-200 pb-3">
+                  <span className="text-xs font-bold uppercase tracking-wide text-slate-500">Amount</span>
+                  <span className="text-base font-black" style={{ color: brandColor }}>
+                    {formatAmount(selectedRow.amount)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-4 border-b border-slate-200 py-3">
+                  <span className="text-xs font-bold uppercase tracking-wide text-slate-500">Tenure</span>
+                  <span className="text-base font-black" style={{ color: brandColor }}>
+                    {selectedRow.tenure} Months
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-4 pt-3">
+                  <span className="text-xs font-bold uppercase tracking-wide text-slate-500">EMI</span>
+                  <span className="text-base font-black" style={{ color: brandColor }}>
+                    {formatAmount(selectedRow.emi)}
+                  </span>
+                </div>
+              </div>
+              <Button
+                type="button"
+                onClick={handleCall}
+                className="relative mt-5 h-14 w-full rounded-full text-base font-black text-white shadow-xl border-0"
+                style={{ background: `linear-gradient(135deg, ${ctaColor}, ${ctaDarkColor})` }}
+              >
+                <Phone className="mr-2 h-5 w-5 fill-current" />
+                Call {phoneNumber}
+              </Button>
+              {hasEnded ? (
+                <Button
+                  type="button"
+                  onClick={() => void playFromStart()}
+                  className="relative mt-3 h-12 w-full rounded-full border-0 bg-slate-100 text-sm font-bold text-slate-900 shadow-sm hover:bg-white"
+                >
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Replay offer
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
         {/* End Overlay buttons */}
-        {hasEnded ? (
+        {hasEnded && !selectedRow ? (
           <div className="absolute inset-x-5 bottom-10 flex flex-col gap-3 animate-in fade-in zoom-in duration-300 z-20">
             <Button
               type="button"
               onClick={handleCall}
               className="h-14 w-full rounded-full text-base font-bold text-white shadow-2xl ring-4 ring-white/20 border-0"
-              style={{ backgroundColor: accentColor }}
+              style={{ backgroundColor: ctaColor }}
             >
               <Phone className="mr-2 h-5 w-5 fill-current" />
               Call {phoneNumber}

@@ -2489,9 +2489,8 @@ export const TemplateVideo = ({leadId}) => {
 
   if (lead.template_key === 'loan_offer_interactive') {
     const toFrames = (secs) => secs != null ? Math.round(secs * fps) : null;
-    const stepBoundaries = [
-      toFrames(
-        findSubtitleStart(track.subtitles, 'now, choose') ||
+    const introBoundary = toFrames(
+      findSubtitleStart(track.subtitles, 'now, choose') ||
         findSubtitleStart(track.subtitles, 'choose your') ||
         findSubtitleStart(track.subtitles, 'select your') ||
         findSubtitleStart(track.subtitles, 'preferred') ||
@@ -2499,9 +2498,9 @@ export const TemplateVideo = ({leadId}) => {
         findSubtitleStart(track.subtitles, 'पसंद की') ||
         findSubtitleStart(track.subtitles, 'अवधि') ||
         10.8
-      ),
-      toFrames(
-        findSubtitleStart(track.subtitles, 'thank you') ||
+    );
+    const detectedSelectorBoundary = toFrames(
+      findSubtitleStart(track.subtitles, 'thank you') ||
         findSubtitleStart(track.subtitles, 'your offer') ||
         findSubtitleStart(track.subtitles, 'our team') ||
         findSubtitleStart(track.subtitles, 'assist') ||
@@ -2515,6 +2514,18 @@ export const TemplateVideo = ({leadId}) => {
         findSubtitleStart(track.subtitles, 'contact') ||
         findSubtitleStart(track.subtitles, 'support') ||
         22.0
+    );
+    const finalHoldFrames = Math.round(Math.min(6, Math.max(4, (durationInFrames / fps) * 0.18)) * fps);
+    const earliestSelectorBoundary = (introBoundary ?? 0) + Math.round(fps * 2);
+    const latestSelectorBoundary = Math.max(
+      earliestSelectorBoundary,
+      durationInFrames - finalHoldFrames
+    );
+    const stepBoundaries = [
+      introBoundary,
+      Math.min(
+        latestSelectorBoundary,
+        Math.max(detectedSelectorBoundary ?? 0, earliestSelectorBoundary)
       ),
     ];
 
