@@ -1987,7 +1987,15 @@ const findSubtitleStart = (subtitles, phrase) => {
   if (!Array.isArray(subtitles) || !phrase) return null;
   const needle = phrase.toLowerCase();
   const hit = subtitles.find((s) => typeof s?.text === 'string' && s.text.toLowerCase().includes(needle));
-  return hit && typeof hit.start === 'number' ? hit.start : null;
+  if (!hit || typeof hit.start !== 'number' || typeof hit.end !== 'number') return null;
+
+  const text = hit.text.toLowerCase();
+  const index = text.indexOf(needle);
+  if (index <= 0) return hit.start;
+
+  const proportion = index / text.length;
+  const duration = hit.end - hit.start;
+  return hit.start + proportion * duration;
 };
 
 const PaymentGuidanceVideo = ({lead, frame, fps, durationInFrames}) => {
@@ -2482,8 +2490,32 @@ export const TemplateVideo = ({leadId}) => {
   if (lead.template_key === 'loan_offer_interactive') {
     const toFrames = (secs) => secs != null ? Math.round(secs * fps) : null;
     const stepBoundaries = [
-      toFrames(findSubtitleStart(track.subtitles, 'select your') || findSubtitleStart(track.subtitles, 'preferred') || findSubtitleStart(track.subtitles, 'पसंद की') || findSubtitleStart(track.subtitles, 'अवधि') || 10.8),
-      toFrames(findSubtitleStart(track.subtitles, 'our team') || findSubtitleStart(track.subtitles, 'assist') || findSubtitleStart(track.subtitles, 'हमारी टीम') || findSubtitleStart(track.subtitles, 'मदद') || 22.0),
+      toFrames(
+        findSubtitleStart(track.subtitles, 'now, choose') ||
+        findSubtitleStart(track.subtitles, 'choose your') ||
+        findSubtitleStart(track.subtitles, 'select your') ||
+        findSubtitleStart(track.subtitles, 'preferred') ||
+        findSubtitleStart(track.subtitles, 'अपनी पसंद की') ||
+        findSubtitleStart(track.subtitles, 'पसंद की') ||
+        findSubtitleStart(track.subtitles, 'अवधि') ||
+        10.8
+      ),
+      toFrames(
+        findSubtitleStart(track.subtitles, 'thank you') ||
+        findSubtitleStart(track.subtitles, 'your offer') ||
+        findSubtitleStart(track.subtitles, 'our team') ||
+        findSubtitleStart(track.subtitles, 'assist') ||
+        findSubtitleStart(track.subtitles, 'धन्यवाद') ||
+        findSubtitleStart(track.subtitles, 'हमारी टीम') ||
+        findSubtitleStart(track.subtitles, 'मदद') ||
+        findSubtitleStart(track.subtitles, 'सहायता') ||
+        findSubtitleStart(track.subtitles, 'कॉल करें') ||
+        findSubtitleStart(track.subtitles, 'संपर्क') ||
+        findSubtitleStart(track.subtitles, 'call us') ||
+        findSubtitleStart(track.subtitles, 'contact') ||
+        findSubtitleStart(track.subtitles, 'support') ||
+        22.0
+      ),
     ];
 
     return (

@@ -46,8 +46,8 @@ VOICE_MAP = {
 DEFAULT_SCRIPT_EN = "Hello {{ customer_name }}. I am calling from {{ client_name }} regarding your {{ product_type }} account. The total outstanding balance is {{ tos }}. Please contact us at {{ contact_details }} to discuss repayment options."
 DEFAULT_SCRIPT_HI = "नमस्ते {{ customer_name }}। मैं {{ client_name }} से आपके {{ product_type }} खाते के संबंध में बोल रही हूँ। आपकी कुल बकाया राशि {{ tos }} है। कृपया भुगतान विकल्पों पर चर्चा करने के लिए हमसे {{ contact_details }} पर संपर्क करें।"
 
-DEFAULT_LOAN_OFFER_EN = "Congratulations {{ customer_name }}. {{ client_name }} has a pre-approved loan offer for you up to {{ loan_amount }}. Please select your preferred amount and tenure to proceed. Our team will assist you in completing the next steps."
-DEFAULT_LOAN_OFFER_HI = "बधाई हो {{ customer_name }}। {{ client_name }} के पास आपके लिए {{ loan_amount }} तक का प्री-अप्रूव्ड लोन ऑफर है। कृपया अपनी पसंद की राशि और अवधि चुनें। हमारी टीम अगले कदम पूरे करने में आपकी मदद करेगी।"
+DEFAULT_LOAN_OFFER_EN = "Congratulations {{ customer_name }}. You have a pre-approved loan offer from {{ client_name }} up to {{ loan_amount }}. Please tap Avail Now to view details. Now, choose your preferred loan amount and tenure, and tap Confirm Loan Offer to submit. Thank you. Your offer is confirmed, and our team will contact you shortly to complete the next steps. For help, you can call us now."
+DEFAULT_LOAN_OFFER_HI = "बधाई हो {{ customer_name }}। {{ client_name }} की ओर से आपके लिए {{ loan_amount }} तक का प्री-अप्रूव्ड लोन ऑफर उपलब्ध है। विवरण देखने के लिए कृपया अवील नाओ पर टैप करें। अब, अपनी पसंद की लोन राशि और अवधि चुनें, और सबमिट करने के लिए कन्फर्म लोन ऑफर पर टैप करें। धन्यवाद। आपका ऑफर कन्फर्म हो गया है, और हमारी टीम अगले कदम पूरे करने के लिए जल्द ही आपसे संपर्क करेगी। सहायता के लिए आप अभी हमें कॉल कर सकते हैं।"
 
 
 def _prepare_tts_pronunciation(text: str) -> str:

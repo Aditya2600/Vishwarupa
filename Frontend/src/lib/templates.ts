@@ -215,15 +215,16 @@ export const OVERDUE_TEMPLATES: Record<string, TemplateValue> = {
 };
 
 export const LOAN_OFFER_INTERACTIVE_TEMPLATES: Record<string, TemplateValue> = {
-  English: `Congratulations {{ customer_name }}.
-You have a personalized loan offer from {{ client_name }}.
-You can avail a loan amount up to {{ loan_amount }} with flexible tenure options.
-Tap Avail Now, choose your preferred loan amount and tenure, then confirm your loan offer.
-For assistance, call {{ contact_details }}.
-Thank you.`,
+  English: `Congratulations {{ customer_name }}. You have a pre-approved loan offer from {{ client_name }} up to {{ loan_amount }}. Please tap Avail Now to view details.
+Now, choose your preferred loan amount and tenure, and tap Confirm Loan Offer to submit.
+Thank you. Your offer is confirmed, and our team will contact you shortly to complete the next steps. For help, you can call us now.`,
   Hindi: {
-    male: `नमस्ते {{ customer_name }}। {{ client_name }} की ओर से आपके लिए एक व्यक्तिगत लोन ऑफर उपलब्ध है। आप {{ loan_amount }} तक की राशि और सुविधाजनक अवधि चुन सकते हैं। Avail Now पर टैप करें, अपनी पसंद की लोन राशि और अवधि चुनें, फिर Confirm Loan Offer पर टैप करें। सहायता के लिए {{ contact_details }} पर कॉल करें। धन्यवाद।`,
-    female: `नमस्ते {{ customer_name }}। {{ client_name }} की ओर से आपके लिए एक व्यक्तिगत लोन ऑफर उपलब्ध है। आप {{ loan_amount }} तक की राशि और सुविधाजनक अवधि चुन सकती हैं। Avail Now पर टैप करें, अपनी पसंद की लोन राशि और अवधि चुनें, फिर Confirm Loan Offer पर टैप करें। सहायता के लिए {{ contact_details }} पर कॉल करें। धन्यवाद।`,
+    male: `बधाई हो {{ customer_name }}। {{ client_name }} की ओर से आपके लिए {{ loan_amount }} तक का प्री-अप्रूव्ड लोन ऑफर उपलब्ध है। विवरण देखने के लिए कृपया अवील नाओ पर टैप करें।
+अब, अपनी पसंद की लोन राशि और अवधि चुनें, और सबमिट करने के लिए कन्फर्म लोन ऑफर पर टैप करें।
+धन्यवाद। आपका ऑफर कन्फर्म हो गया है, और हमारी टीम अगले कदम पूरे करने के लिए जल्द ही आपसे संपर्क करेगी। सहायता के लिए आप अभी हमें कॉल कर सकते हैं।`,
+    female: `बधाई हो {{ customer_name }}। {{ client_name }} की ओर से आपके लिए {{ loan_amount }} तक का प्री-अप्रूव्ड लोन ऑफर उपलब्ध है। विवरण देखने के लिए कृपया अवील नाओ पर टैप करें।
+अब, अपनी पसंद की लोन राशि और अवधि चुनें, और सबमिट करने के लिए कन्फर्म लोन ऑफर पर टैप करें।
+धन्यवाद। आपका ऑफर कन्फर्म हो गया है, और हमारी टीम अगले कदम पूरे करने के लिए जल्द ही आपसे संपर्क करेगी। सहायता के लिए आप अभी हमें कॉल कर सकते हैं।`,
   },
 };
 

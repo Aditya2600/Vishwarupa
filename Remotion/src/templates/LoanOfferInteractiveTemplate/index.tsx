@@ -1,5 +1,5 @@
 import React from 'react';
-import {AbsoluteFill, interpolate, useCurrentFrame} from 'remotion';
+import {AbsoluteFill, useCurrentFrame} from 'remotion';
 import type {LoanOfferData, LoanOfferInteractiveTemplateProps} from './types';
 
 const FONT_FAMILY = 'Inter, Poppins, Avenir Next, SF Pro Display, Arial, sans-serif';
@@ -71,8 +71,7 @@ const getSelectedRow = (offer: LoanOfferData) => {
 const Shell = ({children}: {children: React.ReactNode}) => (
   <AbsoluteFill
     style={{
-      background:
-        'linear-gradient(180deg, #ffffff 0%, #f9f4fb 46%, #f3e7f6 100%)',
+      background: 'linear-gradient(180deg, #ffffff 0%, #f9f4fb 46%, #f3e7f6 100%)',
       color: '#1a062f',
       fontFamily: FONT_FAMILY,
       overflow: 'hidden',
@@ -88,175 +87,152 @@ const Shell = ({children}: {children: React.ReactNode}) => (
   </AbsoluteFill>
 );
 
-const PhoneFrame = ({children}: {children: React.ReactNode}) => (
-  <div
-    style={{
-      position: 'absolute',
-      inset: '84px 68px',
-      borderRadius: 58,
-      border: '16px solid #102033',
-      backgroundColor: '#f8fbff',
-      overflow: 'hidden',
-      boxShadow: '0 46px 110px rgba(6, 27, 47, 0.25)',
-    }}
-  >
-    <div
-      style={{
-        height: 58,
-        padding: '0 38px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        color: '#102033',
-        fontSize: 22,
-        fontWeight: 900,
-      }}
-    >
-      <span>9:41</span>
-      <span>5G 100%</span>
-    </div>
-    {children}
-  </div>
-);
-
-const PulseButton = ({
-  label,
-  sublabel,
-  bottom = 92,
-}: {
-  label: string;
-  sublabel?: string;
-  bottom?: number;
-}) => {
-  const frame = useCurrentFrame();
-  const pulse = interpolate(frame % 75, [0, 55, 75], [1, 1.18, 1], {
-    extrapolateLeft: 'clamp',
-    extrapolateRight: 'clamp',
-  });
-
-  return (
-    <div
-      style={{
-        position: 'absolute',
-        left: '50%',
-        bottom,
-        transform: 'translateX(-50%)',
-        width: 680,
-        height: 142,
-      }}
-    >
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          borderRadius: 999,
-          backgroundColor: '#4a105c',
-          opacity: 0.18,
-          transform: `scale(${pulse})`,
-        }}
-      />
-      <div
-        style={{
-          position: 'absolute',
-          inset: 10,
-          borderRadius: 999,
-          background: 'linear-gradient(180deg, #9b2fb2, #702082)',
-          color: '#ffffff',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: '0 22px 42px rgba(112, 32, 130, 0.34)',
-        }}
-      >
-        <div style={{fontSize: 38, fontWeight: 950, lineHeight: 1}}>{label}</div>
-        {sublabel ? (
-          <div style={{marginTop: 8, fontSize: 20, fontWeight: 800, opacity: 0.88}}>
-            {sublabel}
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-};
-
 const Intro = ({
-  customerName,
   clientName,
-  offer,
 }: {
   customerName: string;
   clientName: string;
   offer: LoanOfferData;
 }) => (
   <Shell>
-    <PhoneFrame>
-      <div style={{padding: '54px 42px 0'}}>
-        <div style={{fontSize: 30, fontWeight: 900, color: '#702082'}}>
-          {clientName}
-        </div>
-        <div
-          style={{
-            marginTop: 54,
-            color: '#1a062f',
-            fontSize: 60,
-            fontWeight: 950,
-            lineHeight: 1.05,
-            textAlign: 'center',
-            overflowWrap: 'anywhere',
-          }}
-        >
+    <div style={{padding: '120px 80px 0', height: '100%', position: 'relative'}}>
+      {/* Brand Header */}
+      <div style={{fontSize: 48, fontWeight: 900, color: '#702082', textAlign: 'center'}}>
+        {clientName}
+      </div>
+
+      {/* Congratulations Card Frame (Blank area for Applicant Name overlay) */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '15%',
+          left: '5%',
+          width: '90%',
+          height: '28%',
+          borderRadius: 44,
+          background: '#ffffff',
+          boxShadow: '0 20px 60px rgba(74, 16, 92, 0.05)',
+          padding: '60px 40px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+        }}
+      >
+        <div style={{fontSize: 52, fontWeight: 950, color: '#702082'}}>
           Congratulations
-          <br />
-          {customerName}
-        </div>
-        <div
-          style={{
-            margin: '70px auto 0',
-            width: 700,
-            borderRadius: 34,
-            background: 'linear-gradient(135deg, #4a105c, #702082)',
-            color: '#ffffff',
-            padding: '38px 34px',
-            textAlign: 'center',
-            boxShadow: '0 30px 72px rgba(74, 16, 92, 0.28)',
-          }}
-        >
-          <div style={{fontSize: 26, fontWeight: 850, opacity: 0.86}}>Pre-approved loan up to</div>
-          <div style={{marginTop: 8, fontSize: 76, fontWeight: 950}}>
-            {formatIndian(offer.max_loan_amount)}
-          </div>
         </div>
       </div>
-    </PhoneFrame>
+
+      {/* Pre-approved Loan Card Frame (Blank area for amount overlay) */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '48%',
+          left: '10%',
+          width: '80%',
+          height: '24%',
+          borderRadius: 44,
+          background: 'linear-gradient(135deg, #4a105c, #702082)',
+          padding: '50px 40px',
+          textAlign: 'center',
+          boxShadow: '0 30px 72px rgba(74, 16, 92, 0.28)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+        }}
+      >
+        <div style={{fontSize: 32, fontWeight: 850, color: '#ffffff', opacity: 0.86}}>
+          Pre-approved loan up to
+        </div>
+      </div>
+    </div>
   </Shell>
 );
 
 const Selector = ({
   customerName,
+  offer,
 }: {
   customerName: string;
+  offer: LoanOfferData;
 }) => {
   return (
     <Shell>
-      <PhoneFrame>
-        <div style={{padding: '42px 42px 0'}}>
-          <div style={{fontSize: 28, fontWeight: 900, color: '#702082'}}>
-            Choose your loan offer
-          </div>
-          <div
-            style={{
-              marginTop: 18,
-              fontSize: 42,
-              fontWeight: 950,
-              lineHeight: 1.08,
-              overflowWrap: 'anywhere',
-            }}
-          >
-            {customerName}, select amount and tenure
-          </div>
+      <div style={{padding: '120px 80px 0', height: '100%', position: 'relative'}}>
+        {/* Title & Subtitle */}
+        <div style={{fontSize: 44, fontWeight: 900, color: '#702082'}}>
+          Choose your loan offer
         </div>
-      </PhoneFrame>
+        <div
+          style={{
+            marginTop: 18,
+            fontSize: 28,
+            fontWeight: 800,
+            color: '#7b6c86',
+            overflowWrap: 'anywhere',
+          }}
+        >
+          {customerName}, select amount and tenure
+        </div>
+
+        {/* Amount Pill Frame (Blank white pill) */}
+        <div style={{position: 'absolute', top: '23%', left: '25.7%', fontSize: 26, fontWeight: 800, color: '#7b6c86'}}>
+          Select Amount
+        </div>
+        <div
+          style={{
+            position: 'absolute',
+            top: '28.62%',
+            left: '25.7%',
+            width: '58.6%',
+            height: '5.2%',
+            background: '#ffffff',
+            borderRadius: 999,
+            border: '2px solid #ebdcf0',
+          }}
+        />
+
+        {/* Tenure Pill Frame (Blank white pill) */}
+        <div style={{position: 'absolute', top: '43.8%', left: '25.7%', fontSize: 26, fontWeight: 800, color: '#7b6c86'}}>
+          Select Tenure
+        </div>
+        <div
+          style={{
+            position: 'absolute',
+            top: '49.4%',
+            left: '25.7%',
+            width: '58.6%',
+            height: '5.2%',
+            background: '#ffffff',
+            borderRadius: 999,
+            border: '2px solid #ebdcf0',
+          }}
+        />
+
+        {/* Summary Card background and static labels */}
+        <div
+          style={{
+            position: 'absolute',
+            top: '61%',
+            left: '10%',
+            width: '80%',
+            height: '24%',
+            background: '#f6ebfb',
+            borderRadius: 44,
+            boxShadow: '0 16px 36px rgba(112, 32, 130, 0.06)',
+          }}
+        />
+
+        <div style={{position: 'absolute', top: '65.908%', left: '15%', height: '5.5%', display: 'flex', alignItems: 'center', fontSize: 26, fontWeight: 800, color: '#7b6c86'}}>
+          Amount
+        </div>
+        <div style={{position: 'absolute', top: '71.647%', left: '15%', height: '5.5%', display: 'flex', alignItems: 'center', fontSize: 26, fontWeight: 800, color: '#7b6c86'}}>
+          Tenure
+        </div>
+        <div style={{position: 'absolute', top: '78.082%', left: '15%', height: '5.5%', display: 'flex', alignItems: 'center', fontSize: 26, fontWeight: 800, color: '#7b6c86'}}>
+          EMI
+        </div>
+      </div>
     </Shell>
   );
 };
@@ -273,61 +249,64 @@ const Confirmed = ({
 
   return (
     <Shell>
-      <PhoneFrame>
+      <div
+        style={{
+          height: '100%',
+          padding: '120px 80px',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+        }}
+      >
         <div
           style={{
-            height: '100%',
-            padding: '94px 48px',
+            borderRadius: 50,
+            backgroundColor: '#ffffff',
+            boxShadow: '0 28px 78px rgba(6, 27, 47, 0.16)',
+            padding: '80px 50px',
+            textAlign: 'center',
             display: 'flex',
             flexDirection: 'column',
-            justifyContent: 'center',
+            alignItems: 'center',
           }}
         >
+          <div style={{fontSize: 48, fontWeight: 900, color: '#702082'}}>
+            Offer confirmed
+          </div>
+          <div style={{marginTop: 30, fontSize: 36, fontWeight: 950, lineHeight: 1.2, color: '#1a062f'}}>
+            Our team will help you complete the next step
+          </div>
           <div
             style={{
-              borderRadius: 44,
-              backgroundColor: '#ffffff',
-              boxShadow: '0 28px 78px rgba(6, 27, 47, 0.16)',
-              padding: '54px 42px',
-              textAlign: 'center',
+              marginTop: 60,
+              width: '100%',
+              borderRadius: 28,
+              backgroundColor: '#f6ebfb',
+              padding: '30px 24px',
+              fontSize: 34,
+              fontWeight: 900,
+              color: '#1a062f',
             }}
           >
-            <div style={{fontSize: 30, fontWeight: 900, color: '#702082'}}>
-              Offer confirmed
-            </div>
-            <div style={{marginTop: 18, fontSize: 60, fontWeight: 950, lineHeight: 1.04}}>
-              Our team will help you complete the next step
-            </div>
-            <div
-              style={{
-                marginTop: 42,
-                borderRadius: 28,
-                backgroundColor: '#f6ebfb',
-                padding: '28px 24px',
-                fontSize: 30,
-                fontWeight: 900,
-                color: '#1a062f',
-              }}
-            >
-              {formatIndian(selected.amount)} · {safeText(selected.tenure, '60')} Months
-            </div>
-            <div
-              style={{
-                marginTop: 30,
-                borderRadius: 999,
-                background: 'linear-gradient(135deg, #4a105c, #702082)',
-                color: '#ffffff',
-                padding: '26px 28px',
-                fontSize: 36,
-                fontWeight: 950,
-                overflowWrap: 'anywhere',
-              }}
-            >
-              {phone}
-            </div>
+            {formatIndian(selected.amount)} · {safeText(selected.tenure, '60')} Months
+          </div>
+          <div
+            style={{
+              marginTop: 40,
+              width: '100%',
+              borderRadius: 999,
+              background: 'linear-gradient(135deg, #4a105c, #702082)',
+              color: '#ffffff',
+              padding: '26px 28px',
+              fontSize: 38,
+              fontWeight: 950,
+              overflowWrap: 'anywhere',
+            }}
+          >
+            {phone}
           </div>
         </div>
-      </PhoneFrame>
+      </div>
     </Shell>
   );
 };
@@ -367,9 +346,8 @@ export const LoanOfferInteractiveTemplate = ({
   }
 
   if (frame < selectorEnd) {
-    return <Selector customerName={safeText(customerName, 'Customer')} />;
+    return <Selector customerName={safeText(customerName, 'Customer')} offer={offer} />;
   }
 
   return <Confirmed offer={offer} contactDetails={safeText(contactDetails, '1800-555-999')} />;
 };
-

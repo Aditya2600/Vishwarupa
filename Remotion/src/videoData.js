@@ -8,7 +8,7 @@ export const WIDTH = 1280;
 export const HEIGHT = 720;
 export const PAYMENT_LINK_GUIDANCE_DURATION = 960;
 export const OVERDUE_TEMPLATE_DURATION = 1050;
-export const LOAN_OFFER_INTERACTIVE_DURATION = 900;
+export const LOAN_OFFER_INTERACTIVE_DURATION = 450;
 const MIN_VIDEO_WIDTH = 540;
 const MIN_VIDEO_HEIGHT = 540;
 const MAX_VIDEO_WIDTH = 2160;
@@ -341,9 +341,17 @@ export const getTrackMeta = (leadId) => {
   const lead = getLeadById(leadId);
   const track = metadata[leadId] || {};
   
-  const subtitles = Array.isArray(lead?.subtitles) && lead.subtitles.length > 0 
+  const rawSubtitles = Array.isArray(lead?.subtitles) && lead.subtitles.length > 0 
     ? lead.subtitles 
     : (Array.isArray(track.subtitles) ? track.subtitles : []);
+
+  const subtitles = rawSubtitles.map((sub) => {
+    if (!sub || typeof sub !== 'object') return sub;
+    return {
+      ...sub,
+      text: typeof sub.text === 'string' ? sub.text.replace(/\s+\d+\s*$/, '') : '',
+    };
+  });
 
   const duration = typeof track.duration === 'number' && Number.isFinite(track.duration)
     ? track.duration
