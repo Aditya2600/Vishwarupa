@@ -35,6 +35,7 @@ export interface DirectVideoPayload {
   client_name: string;
   tos?: string;
   loan_amount?: string;
+  payment_url?: string;
   contact_details?: string;
   product_type?: string;
   avatar_id?: string;
@@ -49,6 +50,7 @@ export interface DirectVideoPayload {
   video_height?: number;
   voice_gender?: "male" | "female";
   template_key?: RemotionTemplateKey;
+  days_overdue?: number;
 }
 
 export type HybridAspectMode = "landscape_16_9" | "portrait_9_16" | "auto";
@@ -139,6 +141,14 @@ export interface InteractiveLoanOffer {
   secondary_color: string;
   loan_offer: Record<string, string | number | null>;
   subtitles?: Array<{ text: string; start: number; end: number }>;
+}
+
+export interface InteractiveLoanReminder {
+  id: string;
+  title: string;
+  video_url: string;
+  payment_url: string;
+  contact_details: string;
 }
 
 export interface StyledVideoResult {
@@ -1189,6 +1199,10 @@ export async function fetchInteractiveLoanOffer(videoId: string): Promise<Intera
   return requestJson<InteractiveLoanOffer>(`/interactive/loan-offer/${videoId}`);
 }
 
+export async function fetchInteractiveLoanReminder(videoId: string): Promise<InteractiveLoanReminder> {
+  return requestJson<InteractiveLoanReminder>(`/interactive/loan-reminder/${videoId}`);
+}
+
 export async function recordInteractiveLoanOfferEvent(
   videoId: string,
   payload: {
@@ -1230,6 +1244,12 @@ export async function generateRemotionVideo(payload: RemotionVideoPayload): Prom
   }
   if (payload.loan_amount?.trim()) {
     formData.set("loan_amount", payload.loan_amount.trim());
+  }
+  if (payload.payment_url?.trim()) {
+    formData.set("payment_url", payload.payment_url.trim());
+  }
+  if (typeof payload.days_overdue === "number") {
+    formData.set("days_overdue", String(payload.days_overdue));
   }
   if (payload.contact_details?.trim()) {
     formData.set("contact_details", payload.contact_details.trim());

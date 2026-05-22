@@ -2,7 +2,7 @@
 
 The Interactive Loan Offer experience is a React SPA route:
 
-- `/i/loan-offer/:id` → `Frontend/src/pages/InteractiveLoanOffer.tsx`
+- `/loan-offer/:id` → `Frontend/src/pages/InteractiveLoanOffer.tsx`
 
 If you want the *end result* to live on S3 (typically behind CloudFront), you
 deploy the **built frontend** (`Frontend/dist/`) to S3.
@@ -56,11 +56,11 @@ Optional:
 - `--dry-run` to see keys without uploading
 - `--public-read` if your bucket still allows object ACLs (many don't)
 
-## 3) SPA deep-link routing (required for `/i/loan-offer/:id`)
+## 3) SPA deep-link routing (required for `/loan-offer/:id`)
 
 When a user opens a deep link like:
 
-`/i/loan-offer/6a0ee7b9066b5b948edc9954`
+`/loan-offer/6a0ee7b9066b5b948edc9954`
 
 S3 will look for a literal object at that key and otherwise return 403/404.
 

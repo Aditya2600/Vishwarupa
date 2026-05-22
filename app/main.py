@@ -91,8 +91,8 @@ settings.output_dir.mkdir(parents=True, exist_ok=True)
 (settings.output_dir / "avatar-videos").mkdir(parents=True, exist_ok=True)
 HYBRID_PUBLIC_DIR = Path("/tmp/hybrid-public")
 HYBRID_PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
-PORTRAIT_REMOTION_TEMPLATE_KEYS = {"payment_link_guidance", "overdue_template", "loan_offer_interactive"}
-LOCAL_REMOTION_WORKER_TEMPLATE_KEYS = {"payment_link_guidance", "loan_offer_interactive", "loan_reminder"}
+PORTRAIT_REMOTION_TEMPLATE_KEYS = {"payment_link_guidance", "overdue_template", "loan_offer_interactive", "collection_reminder"}
+LOCAL_REMOTION_WORKER_TEMPLATE_KEYS = {"payment_link_guidance", "loan_offer_interactive", "loan_reminder", "collection_reminder"}
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -172,7 +172,19 @@ def _frontend_public_url(path: str) -> str:
 
 
 def _interactive_loan_offer_url(video_id: str) -> str:
-    return _frontend_public_url(f"/i/loan-offer/{video_id}")
+    return _frontend_public_url(f"/loan-offer/{video_id}")
+
+
+def _interactive_loan_reminder_url(video_id: str) -> str:
+    return _frontend_public_url(f"/loan-reminder/{video_id}")
+
+
+def _interactive_remotion_url(video_id: str, template_key: object) -> str | None:
+    if template_key == "loan_offer_interactive":
+        return _interactive_loan_offer_url(video_id)
+    if template_key == "loan_reminder":
+        return _interactive_loan_reminder_url(video_id)
+    return None
 
 
 @app.get("/sample-csvs/bulk-campaign")
@@ -225,9 +237,13 @@ def _to_mongo_safe(value: object) -> object:
 
 def _response_video_job_result(result: VideoJobResult) -> VideoJobResult:
     presigned_video_url = s3_service.presign_s3_url(result.video_url)
-    if presigned_video_url == result.video_url:
+    presigned_interactive_url = s3_service.presign_s3_url(result.interactive_url)
+    if presigned_video_url == result.video_url and presigned_interactive_url == result.interactive_url:
         return result
-    return result.model_copy(update={'video_url': presigned_video_url})
+    return result.model_copy(update={
+        'video_url': presigned_video_url,
+        'interactive_url': presigned_interactive_url,
+    })
 
 
 def _response_styled_video_result(result: StyledVideoResult) -> StyledVideoResult:
@@ -425,7 +441,8 @@ def _serialize_my_video(video: dict[str, Any]) -> dict[str, Any]:
     job_data = video.get("job_data") if isinstance(video.get("job_data"), dict) else {}
     request_payload = job_data.get("request_payload") if isinstance(job_data.get("request_payload"), dict) else {}
     template_key = str(request_payload.get("template_key") or "")
-    interactive_url = _interactive_loan_offer_url(video_id) if template_key == "loan_offer_interactive" else None
+    stored_interactive_url = str(video.get("interactive_url")) if video.get("interactive_url") else None
+    interactive_url = s3_service.presign_s3_url(stored_interactive_url) or _interactive_remotion_url(video_id, template_key)
 
     return {
         "_id": video_id,
@@ -534,6 +551,8 @@ async def _parse_remotion_payload(request: Request) -> RemotionVideoRequest:
         'client_name': _form_text(form.get('client_name')),
         'tos': _form_text(form.get('tos')),
         'loan_amount': _form_text(form.get('loan_amount')),
+        'payment_url': _form_text(form.get('payment_url')),
+        'days_overdue': _form_int(form.get('days_overdue')),
         'contact_details': _form_text(form.get('contact_details')),
         'product_type': _form_text(form.get('product_type')),
         'language': _form_text(form.get('language')),
@@ -1749,9 +1768,12 @@ async def get_video_status(
             "_id": str(doc["_id"]),
             "status": doc.get("status", "pending"),
             "video_url": s3_service.presign_s3_url(doc.get("video_url")),
-            "interactive_url": _interactive_loan_offer_url(str(doc["_id"]))
-            if doc.get("job_data", {}).get("request_payload", {}).get("template_key") == "loan_offer_interactive"
-            else None,
+            "interactive_url": (
+                s3_service.presign_s3_url(str(doc.get("interactive_url"))) if doc.get("interactive_url") else None
+            ) or _interactive_remotion_url(
+                str(doc["_id"]),
+                doc.get("job_data", {}).get("request_payload", {}).get("template_key"),
+            ),
         }
 
     result = service.get_video_status_result(video_id, request_mode=request_mode)
@@ -1896,8 +1918,15 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         # Reconstruct the VideoJobResult from the stored dataset directly
         job_data = cached_record['job_data'].copy()
         job_data.pop('payload_hash', None)
-        if payload.template_key == 'loan_offer_interactive':
-            job_data['interactive_url'] = _interactive_loan_offer_url(str(cached_record.get('_id') or job_data.get('video_id') or ''))
+        interactive_url = _interactive_remotion_url(
+            str(cached_record.get('_id') or job_data.get('video_id') or ''),
+            payload.template_key,
+        )
+        stored_interactive_url = cached_record.get('interactive_url')
+        if stored_interactive_url:
+            interactive_url = str(stored_interactive_url)
+        if interactive_url:
+            job_data['interactive_url'] = interactive_url
         return _response_video_job_result(VideoJobResult(**job_data))
 
     from bson import ObjectId
@@ -1914,7 +1943,7 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         title=f"{payload.title_prefix} - {payload.customer_name} - {payload.lan}",
         raw_response={},
         saved_to=None,
-        interactive_url=_interactive_loan_offer_url(video_id) if payload.template_key == 'loan_offer_interactive' else None,
+        interactive_url=_interactive_remotion_url(video_id, payload.template_key),
     )
 
     embeddable_job_data = {
@@ -1947,7 +1976,7 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         title=f"{payload.title_prefix} - {payload.customer_name} - {payload.lan}",
         raw_response={},
         saved_to=None,
-        interactive_url=_interactive_loan_offer_url(video_id) if payload.template_key == 'loan_offer_interactive' else None,
+        interactive_url=_interactive_remotion_url(video_id, payload.template_key),
     )
     
     if payload.template_key in LOCAL_REMOTION_WORKER_TEMPLATE_KEYS:
@@ -2113,8 +2142,10 @@ async def get_video_details(video_id: str, current_user: str = Depends(get_curre
 
     job_data = video.get("job_data") if isinstance(video.get("job_data"), dict) else {}
     request_payload = job_data.get("request_payload") if isinstance(job_data.get("request_payload"), dict) else {}
-    if request_payload.get("template_key") == "loan_offer_interactive":
-        video["interactive_url"] = _interactive_loan_offer_url(str(video["_id"]))
+    stored_interactive_url = str(video.get("interactive_url")) if video.get("interactive_url") else None
+    interactive_url = s3_service.presign_s3_url(stored_interactive_url) or _interactive_remotion_url(str(video["_id"]), request_payload.get("template_key"))
+    if interactive_url:
+        video["interactive_url"] = interactive_url
     
     video.pop("job_data", None)
     return video
@@ -2175,6 +2206,41 @@ async def get_interactive_loan_offer(video_id: str):
             "emi_calculation60": field("emi_calculation60", field("max_emi", "3398")),
         },
         "subtitles": video.get("subtitles") or [],
+    }
+
+
+@app.get('/interactive/loan-reminder/{video_id}')
+async def get_interactive_loan_reminder(video_id: str):
+    video = await videos_collection.find_one({"_id": _mongo_id(video_id)})
+    if not video:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Interactive video not found")
+
+    job_data = video.get("job_data") if isinstance(video.get("job_data"), dict) else {}
+    request_payload = job_data.get("request_payload") if isinstance(job_data.get("request_payload"), dict) else {}
+    if request_payload.get("template_key") not in {"loan_reminder", "collection_reminder"}:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Interactive loan reminder not found")
+
+    raw_url = video.get("video_url")
+    if isinstance(raw_url, str) and "/artifacts/" in raw_url:
+        video_url = "/api/artifacts/" + raw_url.split("/artifacts/", 1)[1]
+    elif isinstance(raw_url, str):
+        video_url = s3_service.presign_s3_url(raw_url)
+    else:
+        video_url = None
+
+    if not video_url:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Interactive video is still processing")
+
+    def field(name: str, fallback: object = "") -> object:
+        value = request_payload.get(name)
+        return fallback if value is None or str(value).strip() == "" else value
+
+    return {
+        "id": str(video.get("_id") or video_id),
+        "title": str(video.get("title") or "Loan Reminder"),
+        "video_url": video_url,
+        "payment_url": field("payment_url", ""),
+        "contact_details": field("contact_details", "1800-555-999"),
     }
 
 
@@ -2255,7 +2321,7 @@ async def preview_voice(
         dummy_lead = LeadRecord(
             customer_name="Ramesh Kumar",
             lan="LAN12345",
-            client_name="ABC Finance",
+            client_name="TVS Credit",
             tos="38450",
             loan_amount="120000",
             contact_details="1800-555-999",

@@ -158,11 +158,11 @@ Render with dynamic props:
 
 ```bash
 cd Remotion
-npx remotion render src/Root.tsx LoanReminderVideo out/loan-reminder.mp4 --props='{"customerName":"Anita Sharma","loanType":"Personal Loan","loanNumber":"9988776655","overdueAmount":"₹72,500","lenderName":"Brand Credit","ctaPrimary":"Pay Now","ctaSecondary":"Request a Call Back"}'
+npx remotion render src/Root.tsx LoanReminderVideo out/loan-reminder.mp4 --props='{"customerName":"Anita Sharma","loanType":"Personal Loan","loanNumber":"9988776655","overdueAmount":"₹72,500","lenderName":"Brand Credit"}'
 ```
 
-The MP4 buttons are visual only. For clickable actions in the web app, render
-real HTML buttons over the video with `LoanVideoPlayer`:
+The MP4 does not include clickable CTA actions. For clickable actions in the
+web app, render real HTML buttons over the video with `LoanVideoPlayer`:
 
 ```tsx
 import {LoanVideoPlayer} from './components/LoanVideoPlayer';
@@ -178,6 +178,9 @@ export function LoanReminderPreview() {
   );
 }
 ```
+
+The complete generated MP4 + S3 HTML player flow is documented in
+`docs/interactive-loan-reminder-flow.md`.
 
 ### Loan Reminder Voiceover Script
 
@@ -228,10 +231,6 @@ npx remotion render src/Root.tsx LoanReminderVideo out/loan-reminder.mp4 --props
   "loanNumber": "123445555555",
   "overdueAmount": "₹50,000",
   "lenderName": "TVS Credit",
-  "ctaPrimary": "Pay Now",
-  "ctaSecondary": "Request a Call Back",
-  "paymentUrl": "https://pay.example.com/customer123",
-  "callbackPhone": "+911234567890",
   "voiceoverAudioSrc": "audio/loan-reminder-voiceover.mp3"
 }'
 ```

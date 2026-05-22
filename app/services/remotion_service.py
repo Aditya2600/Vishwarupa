@@ -135,13 +135,37 @@ class RemotionService:
             "loanNumber": request.lan or "N/A",
             "overdueAmount": str(request.tos or "0"),
             "lenderName": request.client_name or "TVS Credit",
-            "ctaPrimary": "Pay Now",
-            "ctaSecondary": "Request a Call Back",
-            "paymentUrl": "https://pay.example.com/customer123",
-            "callbackPhone": request.contact_details or "+911234567890",
             "voiceoverLanguage": "loan_reminder",
             "voiceoverAudioSrc": audio_path.lstrip("/") if audio_path else None,
             "loanReminderAssets": loan_reminder_assets,
+        }
+
+    def build_collection_reminder_props(
+        self,
+        request: RemotionVideoRequest,
+        audio_path: str | None,
+    ) -> dict[str, Any]:
+        lan_digits = re.sub(r"\D+", "", str(request.lan or ""))
+        account_last4 = lan_digits[-4:] if lan_digits else str(request.lan or "1234")[-4:]
+
+        return {
+            "customerName": request.customer_name or "Customer",
+            "bankName": "TVS Credit",
+            "productType": request.product_type or "Loan",
+            "accountLast4": account_last4 or "1234",
+            "overdueAmount": str(request.tos or "₹0"),
+            "minimumDue": str(request.max_emi or request.tos or "₹0"),
+            "totalDue": str(request.loan_amount or request.tos or "₹0"),
+            "daysOverdue": request.days_overdue if request.days_overdue is not None else 12,
+            "npaDays": 90,
+            "bankerName": "Banker",
+            "bankerPhone": request.contact_details or "",
+            "payNowLabel": "Pay Now",
+            "callUsLabel": "Call Us",
+            "brandColor": request.primary_color or "#005baa",
+            "accentColor": request.secondary_color or "#0a9d58",
+            "logoPath": "assets/tvs_credit_logo.png",
+            "voiceoverAudioPath": audio_path.lstrip("/") if audio_path else None,
         }
 
 
@@ -619,8 +643,8 @@ class RemotionService:
     async def render_video(self, request: RemotionVideoRequest, video_id: str, scene_payload: dict[str, Any], render_payload: dict[str, Any]) -> str:
         logger.info("Render video started")
         leads_path = self.remotion_path / "leads.json"
-        is_loan_reminder = request.template_key == "loan_reminder"
-        if not is_loan_reminder:
+        is_root_props_template = request.template_key in {"loan_reminder", "collection_reminder"}
+        if not is_root_props_template:
             leads = [render_payload] # Keep it simple for now
             leads_path.write_text(json.dumps(leads, ensure_ascii=False, indent=2), encoding='utf-8')
         
@@ -630,7 +654,7 @@ class RemotionService:
         
         props_path = self.remotion_path / f"props_{video_id}.json"
         props_path.write_text(
-            json.dumps(render_payload if is_loan_reminder else {"leadId": video_id}, ensure_ascii=False),
+            json.dumps(render_payload if is_root_props_template else {"leadId": video_id}, ensure_ascii=False),
             encoding='utf-8',
         )
         logger.info("Render video started command")
@@ -640,8 +664,10 @@ class RemotionService:
             import uuid
             
             npx = "npx.cmd" if os.name == 'nt' else "npx"
-            if is_loan_reminder:
+            if request.template_key == "loan_reminder":
                 c = f'{npx} --yes remotion render src/Root.tsx LoanReminderVideo "{output_path}" --props="{str(props_path).replace(os.sep, "/")}" --overwrite'
+            elif request.template_key == "collection_reminder":
+                c = f'{npx} --yes remotion render src/Root.tsx CollectionReminderVideo "{output_path}" --props="{str(props_path).replace(os.sep, "/")}" --overwrite'
             else:
                 c = f'{npx} --yes remotion render src/index.jsx main "{output_path}" --props="{str(props_path).replace(os.sep, "/")}" --overwrite'
             if settings.remotion_browser_executable:
@@ -709,6 +735,18 @@ class RemotionService:
         if request.template_key == "loan_reminder":
             loan_assets = await self._persist_loan_reminder_assets(request, tts["video_id"])
             render_p = self.build_loan_reminder_props(request, tts["audio_path"], loan_assets)
+            video_url = await self.render_video(request, tts["video_id"], {}, render_p)
+            return {
+                "video_url": video_url,
+                "video_path": settings.output_dir / video_url.lstrip('/'),
+                "audio_path": self.remotion_path / "public" / tts['audio_path'].lstrip('/'),
+                "audio_url": tts['audio_path'],
+                "video_id": tts['video_id'],
+                "text": tts['text']
+            }
+
+        if request.template_key == "collection_reminder":
+            render_p = self.build_collection_reminder_props(request, tts["audio_path"])
             video_url = await self.render_video(request, tts["video_id"], {}, render_p)
             return {
                 "video_url": video_url,

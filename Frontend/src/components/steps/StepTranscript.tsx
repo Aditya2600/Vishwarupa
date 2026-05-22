@@ -32,6 +32,7 @@ type WizardFieldKey =
   | "clientName"
   | "tos"
   | "loanAmount"
+  | "paymentUrl"
   | "contactDetails"
   | "productType";
 
@@ -62,7 +63,7 @@ const FIELD_DEFINITIONS: FieldDefinition[] = [
     key: "clientName",
     label: "Client Name",
     tags: ["client_name", "client"],
-    placeholder: "ABC Finance",
+    placeholder: "TVS Credit",
     required: true,
   },
   {
@@ -77,6 +78,12 @@ const FIELD_DEFINITIONS: FieldDefinition[] = [
     label: "Loan Amount",
     tags: ["loan_amount", "loan_amt", "amt"],
     placeholder: "1,20,000",
+  },
+  {
+    key: "paymentUrl",
+    label: "Payment URL",
+    tags: ["payment_url", "paymentUrl", "pay_url"],
+    placeholder: "https://payments.example.com/pay/12345",
   },
   {
     key: "contactDetails",
@@ -97,9 +104,10 @@ const DEMO_FIELD_VALUES: Record<WizardFieldKey, string> = {
   lan: "LAN12345",
   daysOverdue: "35",
   collectionStatus: "75",
-  clientName: "ABC Finance",
+  clientName: "TVS Credit",
   tos: "38450",
   loanAmount: "120000",
+  paymentUrl: "https://payments.example.com/pay/12345",
   contactDetails: "1800-555-999",
   productType: "loan",
 };
@@ -129,6 +137,9 @@ function isRequiredInCurrentMode(field: FieldDefinition, state: WizardState): bo
     field.key === "clientName" ||
     field.key === "tos" ||
     field.key === "loanAmount" ||
+    (field.key === "paymentUrl" &&
+      (state.remotionTemplateKey === "loan_reminder" ||
+        state.remotionTemplateKey === "collection_reminder")) ||
     field.key === "contactDetails" ||
     field.key === "productType"
   );
@@ -150,6 +161,8 @@ function getFieldValue(state: WizardState, key: WizardFieldKey): string {
       return state.tos;
     case "loanAmount":
       return state.loanAmount;
+    case "paymentUrl":
+      return state.paymentUrl;
     case "contactDetails":
       return state.contactDetails;
     case "productType":
@@ -184,6 +197,9 @@ function updateField(
     case "loanAmount":
       update({ loanAmount: value, ...RESET_GENERATION_STATE });
       return;
+    case "paymentUrl":
+      update({ paymentUrl: value, ...RESET_GENERATION_STATE });
+      return;
     case "contactDetails":
       update({ contactDetails: value, ...RESET_GENERATION_STATE });
       return;
@@ -202,6 +218,16 @@ export function StepTranscript({ state, update, voices = [] }: StepTranscriptPro
 
   const isRemotion = state.videoType === "remotion";
   const isHybrid = state.videoType === "hybrid_remotion_avatar_pip";
+  const activeFieldDefinitions = FIELD_DEFINITIONS.filter((field) => {
+    if (field.key === "paymentUrl") {
+      return (
+        isRemotion &&
+        (state.remotionTemplateKey === "loan_reminder" ||
+          state.remotionTemplateKey === "collection_reminder")
+      );
+    }
+    return true;
+  });
 
   const handleVoicePreview = async (overrideText?: string) => {
     if (isPreviewing) return;
@@ -425,7 +451,8 @@ const handleRemotionTemplateSelect = (templateKey: RemotionTemplateKey) => {
     templateKey === "payment_link_guidance" ||
     templateKey === "overdue_template" ||
     templateKey === "loan_offer_interactive" ||
-    templateKey === "loan_reminder";
+    templateKey === "loan_reminder" ||
+    templateKey === "collection_reminder";
   const nextVariety = isPersonalizedTemplate ? "personalized" : state.videoVariety;
   const nextTitlePrefix =
     templateKey === "payment_guidance"
@@ -434,6 +461,8 @@ const handleRemotionTemplateSelect = (templateKey: RemotionTemplateKey) => {
         ? "Payment Link Guidance"
         : templateKey === "loan_reminder"
           ? "Loan Reminder"
+          : templateKey === "collection_reminder"
+            ? "Collection Reminder"
           : templateKey === "overdue_template"
             ? "Credit Card Overdue Notice"
             : templateKey === "loan_offer_interactive"
@@ -451,9 +480,13 @@ const handleRemotionTemplateSelect = (templateKey: RemotionTemplateKey) => {
     remotionTranscriptCustomized: false,
     titlePrefix: nextTitlePrefix,
     productType: "loan",
-    ...(templateKey === "loan_reminder"
+    ...(templateKey === "loan_reminder" || templateKey === "collection_reminder"
       ? {
         aspectRatio: "9:16",
+      }
+      : {}),
+    ...(templateKey === "loan_reminder"
+      ? {
         loanReminderImagePaths: DEFAULT_LOAN_REMINDER_ASSET_PATHS,
         loanReminderImageFileNames: {},
       }
@@ -608,7 +641,7 @@ return (
         <div className="surface-card p-5 space-y-5">
           <p className="text-sm font-semibold text-foreground">Lead Personalization</p>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {FIELD_DEFINITIONS.map((field) => (
+            {activeFieldDefinitions.map((field) => (
               <Field key={field.key} label={field.label} required={isRequiredInCurrentMode(field, state)}>
                 <Input
                   value={getDisplayValue(field.key)}
@@ -717,7 +750,7 @@ return (
           </p>
         </div>
         <div className="mt-3 flex flex-wrap gap-3">
-          {FIELD_DEFINITIONS.map((field) => (
+          {activeFieldDefinitions.map((field) => (
             <PlaceholderTag
               key={field.key}
               tag={field.tags[0]}

@@ -133,6 +133,7 @@ class RemotionVideoRequest(DirectVideoRequest):
         'overdue_template',
         'loan_offer_interactive',
         'loan_reminder',
+        'collection_reminder',
     ] | None = 'account_notice'
     title_prefix: str = 'Loan Recall'
     subtitle_color: str = 'White'
@@ -144,6 +145,8 @@ class RemotionVideoRequest(DirectVideoRequest):
     loan_reminder_image_paths: dict[str, str] | None = None
     loan_reminder_image_filenames: dict[str, str] | None = None
     loan_reminder_image_bytes: dict[str, bytes] | None = None
+    payment_url: str | None = None
+    days_overdue: int | None = None
     primary_color: str | None = "#003366"
     secondary_color: str | None = "#FF9900"
     max_loan_amount: str | float | int | None = None

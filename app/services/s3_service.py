@@ -76,7 +76,13 @@ class S3Service:
             s3_key = asset_url[len(f"https://{self.bucket}.s3.amazonaws.com/"):]
             
         # Format 3: Just the key itself
-        elif "/" not in asset_url or asset_url.startswith("notices/") or asset_url.startswith("videos/") or asset_url.startswith("pdf_audio/"):
+        elif (
+            "/" not in asset_url
+            or asset_url.startswith("notices/")
+            or asset_url.startswith("videos/")
+            or asset_url.startswith("pdf_audio/")
+            or asset_url.startswith("interactive/")
+        ):
             s3_key = asset_url
             
         if not s3_key:
