@@ -12,6 +12,7 @@ jobs:
       FRONTEND_IMAGE: prashanth1003/heygen-frontend:latest
       BACKEND_CONTAINER: heygen-backend
       FRONTEND_CONTAINER: heygen-frontend
+      CPAAS_API_BASE_URL: ${{ secrets.CPAAS_API_BASE_URL || 'https://api-resolve-x.credresolve.com' }}
 
     steps:
       - name: Checkout repo
@@ -44,11 +45,16 @@ jobs:
           key: ${{ secrets.GIT_ACT_SSH_KEY_CR_STAGE }}
           script: |
             ssh -o StrictHostKeyChecking=no -i ~/.ssh/credresolve-master-key.pem ubuntu@${{ secrets.GIT_ACT_STAGE_HOST }} "
+              set -e
+
+              test -n '${{ secrets.FRONTEND_URL }}' &&
+              test -n '${{ env.CPAAS_API_BASE_URL }}' &&
+
               echo '${{ secrets.DOCKER_PASS }}' | sudo docker login -u '${{ secrets.DOCKER_USER }}' --password-stdin &&
-              (sudo docker network create app-network || true) &&
               
               sudo docker pull ${{ env.BACKEND_IMAGE }} &&
               sudo docker pull ${{ env.FRONTEND_IMAGE }} &&
+              (sudo docker network create app-network || true) &&
 
               (sudo docker stop ${{ env.BACKEND_CONTAINER }} || true) &&
               (sudo docker rm ${{ env.BACKEND_CONTAINER }} || true) &&
@@ -64,6 +70,8 @@ jobs:
                 --env AWS_SECRET_ACCESS_KEY='${{ secrets.AWS_SECRET_ACCESS_KEY }}' \
                 --env AWS_REGION='${{ secrets.AWS_REGION }}' \
                 --env S3_BUCKET_NAME='${{ secrets.S3_BUCKET_NAME }}' \
+                --env FRONTEND_URL='${{ secrets.FRONTEND_URL }}' \
+                --env CPAAS_API_BASE_URL='${{ env.CPAAS_API_BASE_URL }}' \
                 --restart always \
                 ${{ env.BACKEND_IMAGE }} &&
 
@@ -71,7 +79,7 @@ jobs:
                 --name ${{ env.FRONTEND_CONTAINER }} \
                  --network app-network \
                  -p 3000:80 \
-                -e BACKEND_ORIGIN=http://${{ env.BACKEND_CONTAINER }}:8000 \
+                --env BACKEND_ORIGIN='http://${{ env.BACKEND_CONTAINER }}:8000' \
                 --restart always \
                 ${{ env.FRONTEND_IMAGE }}
             "

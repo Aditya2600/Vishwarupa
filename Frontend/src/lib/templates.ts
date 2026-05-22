@@ -17,6 +17,7 @@ export type RemotionTemplateKey =
   | "overdue_template"
   | "loan_offer_interactive"
   | "loan_reminder"
+  | "collection_reminder"
   | "scene_loan_offer";
 export type CreateMode = "avatar" | "remotion" | "hybrid_remotion_avatar_pip";
 export type LoanReminderAssetKey =
@@ -52,9 +53,21 @@ Kripya dhyaan dein, agar payment aur delay hoti hai, toh aapka account criticall
 Iska negative impact aapke credit score par pad sakta hai, aur future loan approval, credit card eligibility, aur financial services access affect ho sakte hain.
 Lender policy ke according recovery action initiate ho sakta hai, legal notice issue ho sakta hai, aur additional charges bhi badh sakte hain.
 Further financial burden avoid karne ke liye, kripya apna overdue amount jald se jald clear karein.
-Aap Pay Now option se turant payment kar sakte hain. Agar aapko assistance chahiye, toh Request a Call Back option select karein.
+Aap apne overdue amount ko secure repayment channel ke through clear kar sakte hain. Zarurat ho toh assistance ke liye support team se sampark karein.
 Additional charges avoid karein, aur apni financial profile protect karne ke liye aaj hi dues clear karein.
 Dhanyavaad.`;
+
+const COLLECTION_REMINDER_TRANSCRIPT = `Dear {{ customer_name }},
+Your {{ product_type }} ending with {{ lan }} has an overdue amount of {{ tos }}.
+If this continues beyond 90 days, your account will be classified as a Non-Performing Asset, NPA.
+Non-payment can lead to legal action to recover dues, restrictions on future loans or credit cards from any financial institution, and a lasting negative impact on your financial health.
+Take action now. Clear your outstanding balance and avoid these consequences.
+Timely repayment brings several benefits. Protect your credit score and ensure access to future loans.
+We understand that life can be challenging. If full repayment is difficult, here are some options for you. Pay the minimum amount due.
+Act now to protect your financial future.
+You can call your {{ client_name }} banker at {{ contact_details }} for assistance.
+Our team is here to guide you. Thank you for choosing {{ client_name }}.
+Contact us today, and let's work together for a solution.`;
 function getGenderedText(value: TemplateValue, gender: Gender): string {
   if (typeof value === "string") return value;
   return value[gender];
@@ -316,6 +329,11 @@ export const REMOTION_TEMPLATE_OPTIONS: Array<{ key: RemotionTemplateKey; name: 
     name: "Loan Reminder",
     description: "Portrait loan reminder with scene-wise captions and configurable brand imagery.",
   },
+  {
+    key: "collection_reminder",
+    name: "Collection Reminder",
+    description: "Modern TVS Credit themed repayment reminder using the new collection reminder scene flow.",
+  },
 ];
 
 export const TEMPLATE_LIBRARY_QUICK_STARTS: Array<{
@@ -328,7 +346,7 @@ export const TEMPLATE_LIBRARY_QUICK_STARTS: Array<{
   {
     mode: "hybrid_remotion_avatar_pip",
     name: "Hybrid Avatar PIP",
-    description: "Avatar clip with a custom collection layout (portrait/landscape auto supported).",
+    description: "Avatar presenter with a collection-style layout, automatically optimized for portrait or landscape videos.",
     iconKey: "hybrid_avatar_pip",
   },
 ];
@@ -437,6 +455,9 @@ export function getDefaultRemotionTranscript(
   }
   if (mode === "universal" && templateKey === "scene_loan_offer") {
     return SCENE_LOAN_OFFER_TRANSCRIPT;
+  }
+  if (mode === "personalized" && templateKey === "collection_reminder") {
+    return COLLECTION_REMINDER_TRANSCRIPT;
   }
   if (mode === "universal") {
     const val = UNIVERSAL_TEMPLATES[language] ?? UNIVERSAL_TEMPLATES.English;

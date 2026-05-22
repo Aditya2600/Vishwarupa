@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, AlertCircle } from "lucide-react";
+import { AlertCircle, Loader2 } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { LoanVideoPlayer } from "@/components/LoanVideoPlayer";
 import { fetchInteractiveLoanReminder, type InteractiveLoanReminder } from "@/lib/api";
@@ -18,7 +18,7 @@ export default function InteractiveLoanReminder() {
       <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
         <div className="flex items-center gap-3 text-sm font-semibold">
           <Loader2 className="h-5 w-5 animate-spin" />
-          Loading video…
+          Loading video...
         </div>
       </div>
     );
@@ -59,7 +59,7 @@ export default function InteractiveLoanReminder() {
           showCtaAt={46}
         />
         <p className="mt-5 text-center text-xs text-white/60">
-          The MP4 visuals are not clickable — use the on-screen buttons.
+          The MP4 visuals are not clickable. Use the on-screen buttons.
         </p>
       </div>
     </div>

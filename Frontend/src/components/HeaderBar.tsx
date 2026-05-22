@@ -1,4 +1,4 @@
-import { ChevronDown, Clapperboard, LayoutTemplate, PictureInPicture2, Sparkles, Video, LogOut, User, Users, ShieldCheck } from "lucide-react";
+import { ChevronDown, Clapperboard, LayoutTemplate, Sparkles, Video, LogOut, User, Users, ShieldCheck, PictureInPicture2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -11,8 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-type CreateMode = "avatar" | "remotion" | "hybrid_remotion_avatar_pip";
+import { CreateMode } from "@/lib/templates";
 
 interface HeaderBarProps {
   onCreateVideo?: (mode?: CreateMode) => void;

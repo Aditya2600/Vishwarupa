@@ -48,6 +48,7 @@ export interface WizardState {
   clientName: string;
   tos: string;
   loanAmount: string;
+  paymentUrl: string;
   contactDetails: string;
   templateName: string;
   backgroundColor: string;
@@ -103,6 +104,7 @@ const defaultState: WizardState = {
   clientName: "",
   tos: "",
   loanAmount: "",
+  paymentUrl: "",
   contactDetails: "1800-555-999",
   templateName: "universal_template.txt",
   backgroundColor: "#F4F4F4",
@@ -305,6 +307,11 @@ export function useWizardStore() {
               s.tos.trim().length > 0 &&
               s.loanAmount.trim().length > 0 &&
               s.contactDetails.trim().length > 0 &&
+              (
+                (s.remotionTemplateKey !== "loan_reminder" &&
+                  s.remotionTemplateKey !== "collection_reminder") ||
+                s.paymentUrl.trim().length > 0
+              ) &&
               s.productType.trim().length > 0
             ))
         );

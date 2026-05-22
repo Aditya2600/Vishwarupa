@@ -2,7 +2,6 @@ import React from 'react';
 import {AbsoluteFill} from 'remotion';
 import {AnimatedHeading} from '../components/AnimatedHeading';
 import {BrandBackground} from '../components/BrandBackground';
-import {CTAButton} from '../components/CTAButton';
 import {SceneImage} from '../components/SceneImage';
 import type {LoanReminderCustomer} from '../data/sampleCustomer';
 
@@ -83,40 +82,21 @@ export const CtaScene = ({customer}: {customer: LoanReminderCustomer}) => {
           </div>
         </div>
 
-        {/* Action Buttons at top: 940 */}
+        {/* Helper caption at top: 1040 */}
         <div
           style={{
             position: 'absolute',
-            top: 940,
+            top: 1040,
             left: 74,
             right: 74,
-            display: 'grid',
-            gap: 22,
-          }}
-        >
-          <CTAButton label={customer.ctaPrimary} delay={16} />
-          <CTAButton
-            label={customer.ctaSecondary}
-            variant="secondary"
-            delay={28}
-          />
-        </div>
-
-        {/* Helper caption at top: 1390 */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 1390,
-            left: 74,
-            right: 74,
-            color: '#607589',
-            fontSize: 26,
-            fontWeight: 750,
+            color: '#17374c',
+            fontSize: 34,
+            fontWeight: 850,
             textAlign: 'center',
             lineHeight: 1.3,
           }}
         >
-          Tap the button below this video to continue.
+          Use the secure options shown on this page to continue.
         </div>
       </AbsoluteFill>
     </BrandBackground>

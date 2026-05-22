@@ -2,7 +2,7 @@
 
 The Interactive Loan Offer is a personalized, interactive video experience delivered via a unique shareable web link. Unlike standard video templates, the viewer can interact with the playing video — selecting a loan amount and tenure, and calling the lender directly — all from within the video player interface.
 
-Accessed via the route: `GET /i/loan-offer/:video_id`
+Accessed via the route: `GET /loan-offer/:video_id`
 
 ---
 
@@ -14,7 +14,7 @@ Unlike standard video templates that return a single video link, the Interactive
    * *Example*: `https://vishvarupa-dev.s3.amazonaws.com/videos/6a0eb075b7ecb6342178e3a4.mp4`
    * *Purpose*: This file only contains the raw background animation and voice narration. It does NOT contain any overlays, dropdown sliders, pause behaviors, or interaction capabilities. If opened directly in a browser or VLC player, it behaves like a normal passive video.
 2. **`interactive_url` (Frontend link)**: The user-facing shareable link that routes to the React application's interactive page.
-   * *Example*: `https://vishvarupa.credresolve.com/i/loan-offer/6a0eb075b7ecb6342178e3a4`
+   * *Example*: `https://vishvarupa.credresolve.com/loan-offer/6a0eb075b7ecb6342178e3a4`
    * *Purpose*: This page loads the interactive framework (`InteractiveLoanOffer.tsx`), loads the raw background video from S3 via the API, parses the word-by-word subtitle timings, overlays the HTML selection cards/CTAs, tracks user events, and manages the interactive play/pause loops.
 
 ### Why do I see a 404 on the production domain for interactive videos, but other videos work normally?
@@ -23,7 +23,7 @@ Because the **database and SQS queues are shared between the local and productio
 1. The backend queues the video, generates it, uploads the raw `.mp4` to the S3 bucket, and marks the DB record status as `completed`.
 2. When querying the status, the backend builds the `interactive_url` using the target domain (e.g., `vishvarupa.credresolve.com`).
 3. Standard videos work fine on the production domain because they are accessed as direct S3 `.mp4` links (e.g., via the `video_url`).
-4. **However**, the interactive video requires the React routing system (`/i/loan-offer/:id`) to be present on the web server. If you have not yet built and deployed the updated React frontend code (which includes the new page route and styling for `InteractiveLoanOffer.tsx`) to the production web server, the web server's routing does not recognize the `/i/loan-offer/...` path and returns a `404 Not Found`.
+4. **However**, the interactive video requires the React routing system (`/loan-offer/:id`) to be present on the web server. If you have not yet built and deployed the updated React frontend code (which includes the new page route and styling for `InteractiveLoanOffer.tsx`) to the production web server, the web server's routing does not recognize the `/loan-offer/...` path and returns a `404 Not Found`.
 
 **Resolution**: Rebuild and deploy the frontend React app onto your production server (e.g., run `npm run build` and update the production bundle on the EC2 or CDN). Once deployed, the interactive web link will resolve and function correctly in production.
 
@@ -37,7 +37,7 @@ Because the **database and SQS queues are shared between the local and productio
 | Video type | `remotion` |
 | Render format | `.mp4` (Remotion → ffmpeg) |
 | Interactive player | React page (`InteractiveLoanOffer.tsx`) |
-| Public route | `/i/loan-offer/:id` (no login required) |
+| Public route | `/loan-offer/:id` (no login required) |
 | API endpoint | `GET /api/interactive/loan-offer/:id` |
 
 ---
@@ -209,7 +209,7 @@ The `0.2` second lookahead buffer compensates for `timeupdate` polling granulari
 
 ### 6. Frontend — Interactive Player UI
 
-**Route**: `/i/loan-offer/:id` → `InteractiveLoanOffer.tsx`
+**Route**: `/loan-offer/:id` → `InteractiveLoanOffer.tsx`
 
 The player is a two-column layout on desktop, single column on mobile:
 - **Left**: The phone-frame video player with all overlays
@@ -316,7 +316,7 @@ The interactive player uses CSS custom properties driven by the video's brand co
 
 | Aspect | Standard Template (e.g. Payment Guidance) | Interactive Loan Offer |
 |---|---|---|
-| Delivery | MP4 shared as a link | Web player at `/i/loan-offer/:id` |
+| Delivery | MP4 shared as a link | Web player at `/loan-offer/:id` |
 | User input | None — passive viewing | Tenure/amount selection, call CTA |
 | Video pauses | Never | At two dynamic timestamps |
 | Overlays | Burned into video frames | HTML elements over HTML5 `<video>` |

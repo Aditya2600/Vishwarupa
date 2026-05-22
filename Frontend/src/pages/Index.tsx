@@ -692,21 +692,22 @@ const Index = () => {
       language,
       outputLanguage: language,
       videoType: requestedMode as VideoType,
-      ...(requestedMode === "hybrid_remotion_avatar_pip" ? { videoVariety: "personalized" as const, aspectRatio: "9:16", aspectMode: "portrait_9_16" as const } : {}),
-      ...preservedAvatar,
-      ...preservedVoice,
-      ...(requestedMode === "remotion" ? { remotionTemplateKey: templateKey as any } : {}),
-      ...(requestedMode === "remotion" && (templateKey === "loan_reminder" || templateKey === "scene_loan_offer")
-        ? {
-          aspectRatio: "9:16",
-          ...(templateKey === "loan_reminder"
-            ? {
-                loanReminderImagePaths: DEFAULT_LOAN_REMINDER_ASSET_PATHS,
-                loanReminderImageFileNames: {},
-              }
-            : {}),
-        }
-        : {}),
+        ...(requestedMode === "hybrid_remotion_avatar_pip" ? { videoVariety: "personalized" as const, aspectRatio: "9:16", aspectMode: "portrait_9_16" as const } : {}),
+        ...preservedAvatar,
+        ...preservedVoice,
+        ...(requestedMode === "remotion" ? { remotionTemplateKey: templateKey as any } : {}),
+        ...(requestedMode === "remotion" &&
+        (templateKey === "loan_reminder" || templateKey === "collection_reminder" || templateKey === "scene_loan_offer")
+          ? {
+              aspectRatio: "9:16",
+            }
+          : {}),
+        ...(requestedMode === "remotion" && templateKey === "loan_reminder"
+          ? {
+              loanReminderImagePaths: DEFAULT_LOAN_REMINDER_ASSET_PATHS,
+              loanReminderImageFileNames: {},
+            }
+          : {}),
       transcript: requestedFreshDraft
         ? getDefaultAvatarScript(language, "female")
         : state.avatarTranscriptCustomized
@@ -903,6 +904,17 @@ const Index = () => {
       return;
     }
 
+    if (
+      state.videoType === "remotion" &&
+      (state.remotionTemplateKey === "loan_reminder" ||
+        state.remotionTemplateKey === "collection_reminder") &&
+      !state.paymentUrl.trim()
+    ) {
+      toast.error("Enter a Payment URL for the CTA.");
+      goToStep(2);
+      return;
+    }
+
     const isUniversal = state.videoType === "remotion" && state.videoVariety === "universal";
     const hasTranscript = activeTranscript.trim().length > 0;
 
@@ -937,6 +949,7 @@ const Index = () => {
       state.videoType === "remotion" &&
       state.remotionTemplateKey !== "loan_reminder" &&
       state.remotionTemplateKey !== "scene_loan_offer" &&
+      state.remotionTemplateKey !== "collection_reminder" &&
       !logoFile &&
       !continueWithoutLogoRef.current
     ) {
@@ -978,6 +991,12 @@ const Index = () => {
       client_name: state.clientName.trim(),
       tos: state.tos.trim() || undefined,
       loan_amount: state.loanAmount.trim() || undefined,
+      payment_url:
+        state.videoType === "remotion" &&
+        (state.remotionTemplateKey === "loan_reminder" ||
+          state.remotionTemplateKey === "collection_reminder")
+          ? state.paymentUrl.trim() || undefined
+          : undefined,
       contact_details: state.contactDetails.trim() || undefined,
       product_type: state.productType.trim() || undefined,
       avatar_id: state.videoType === "avatar" ? state.avatarId.trim() || undefined : undefined,
@@ -987,7 +1006,14 @@ const Index = () => {
       script_text: activeTranscript.trim() || undefined,
       background_color: state.backgroundColor,
       include_captions: state.videoType === "remotion" ? state.includeCaptions : false,
-      title_prefix: state.videoType === "avatar" ? state.titlePrefix.trim() || undefined : undefined,
+      title_prefix:
+        state.videoType === "avatar" || state.videoType === "remotion"
+          ? state.titlePrefix.trim() || undefined
+          : undefined,
+      days_overdue:
+        state.videoType === "remotion" && state.remotionTemplateKey === "collection_reminder"
+          ? Number.parseInt(state.daysOverdue.trim(), 10) || undefined
+          : undefined,
       video_width: dimensions.width,
       video_height: dimensions.height,
       voice_gender: state.videoType === "remotion" ? (state.voiceGender || "female") : undefined,

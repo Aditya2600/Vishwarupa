@@ -73,3 +73,6 @@ lipsync_poc/
 # Remotion JSON artifacts
 Remotion/leads.json
 Remotion/props_*.json
+
+# Claude Code
+.claude/
