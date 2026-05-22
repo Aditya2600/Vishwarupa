@@ -435,6 +435,9 @@ export function getDefaultRemotionTranscript(
   if (mode === "personalized" && templateKey === "loan_reminder") {
     return LOAN_REMINDER_TRANSCRIPT;
   }
+  if (mode === "universal" && templateKey === "scene_loan_offer") {
+    return SCENE_LOAN_OFFER_TRANSCRIPT;
+  }
   if (mode === "universal") {
     const val = UNIVERSAL_TEMPLATES[language] ?? UNIVERSAL_TEMPLATES.English;
     return getGenderedText(val, resolvedGender);
