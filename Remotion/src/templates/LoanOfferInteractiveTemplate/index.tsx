@@ -507,6 +507,7 @@ const Selector = ({
 }) => {
   const frame = useCurrentFrame();
   const entrance = Math.min(frame / 24, 1);
+  const selected = getSelectedRow(offer);
 
   return (
     <Shell>
@@ -548,14 +549,15 @@ const Selector = ({
         {/* Title & Subtitle */}
         <div
           style={{
-            fontSize: 44,
-            fontWeight: 950,
+            fontSize: 48,
+            fontWeight: 900,
             background: "linear-gradient(135deg, #702082 0%, #4a105c 100%)",
             WebkitBackgroundClip: "text",
             WebkitTextFillColor: "transparent",
-            letterSpacing: "-0.02em",
+            letterSpacing: "-0.03em",
             opacity: entrance,
             transform: `translateY(${Math.max(16 - frame * 0.7, 0)}px)`,
+            filter: "drop-shadow(0px 4px 12px rgba(112, 32, 130, 0.2))",
           }}
         >
           Choose your loan offer
@@ -563,26 +565,27 @@ const Selector = ({
         <div
           style={{
             marginTop: 14,
-            fontSize: 26,
-            fontWeight: 800,
-            color: "#7b6c86",
+            fontSize: 28,
+            fontWeight: 700,
+            color: "#4a5568",
             overflowWrap: "anywhere",
             lineHeight: 1.2,
             opacity: entrance,
+            letterSpacing: "-0.01em",
           }}
         >
           {customerName}, select amount and tenure
         </div>
 
-        {/* Amount Pill Frame (Blank white pill) */}
+        {/* Amount Pill Frame (Placeholder with default text) */}
         <div
           style={{
             position: "absolute",
             top: "23%",
             left: "25.7%",
             fontSize: 24,
-            fontWeight: 800,
-            color: "#7b6c86",
+            fontWeight: 700,
+            color: "#4a5568",
             letterSpacing: "-0.01em",
           }}
         >
@@ -600,18 +603,27 @@ const Selector = ({
             border: "1px solid rgba(112, 32, 130, 0.15)",
             boxShadow:
               "0 14px 30px rgba(74, 16, 92, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.95)",
+            display: "flex",
+            alignItems: "center",
+            paddingLeft: "6%",
+            fontSize: 26,
+            fontWeight: 800,
+            color: "#4a105c",
+            letterSpacing: "-0.01em",
           }}
-        />
+        >
+          {formatIndian(selected.amount)}
+        </div>
 
-        {/* Tenure Pill Frame (Blank white pill) */}
+        {/* Tenure Pill Frame (Placeholder with default text) */}
         <div
           style={{
             position: "absolute",
             top: "43.8%",
             left: "25.7%",
             fontSize: 24,
-            fontWeight: 800,
-            color: "#7b6c86",
+            fontWeight: 700,
+            color: "#4a5568",
             letterSpacing: "-0.01em",
           }}
         >
@@ -629,8 +641,17 @@ const Selector = ({
             border: "1px solid rgba(112, 32, 130, 0.15)",
             boxShadow:
               "0 14px 30px rgba(74, 16, 92, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.95)",
+            display: "flex",
+            alignItems: "center",
+            paddingLeft: "6%",
+            fontSize: 26,
+            fontWeight: 800,
+            color: "#4a105c",
+            letterSpacing: "-0.01em",
           }}
-        />
+        >
+          {safeText(selected.tenure, "60")} Months
+        </div>
 
         {/* Summary Card background and static labels */}
         <div
@@ -700,13 +721,13 @@ const Selector = ({
           style={{
             position: "absolute",
             top: "65.908%",
-            left: "17%",
+            left: "15%",
             height: "5.5%",
             display: "flex",
             alignItems: "center",
-            fontSize: 24,
-            fontWeight: 800,
-            color: "#7b6c86",
+            fontSize: 26,
+            fontWeight: 700,
+            color: "#4a5568",
           }}
         >
           Amount
@@ -715,13 +736,13 @@ const Selector = ({
           style={{
             position: "absolute",
             top: "71.647%",
-            left: "17%",
+            left: "15%",
             height: "5.5%",
             display: "flex",
             alignItems: "center",
-            fontSize: 24,
-            fontWeight: 800,
-            color: "#7b6c86",
+            fontSize: 26,
+            fontWeight: 700,
+            color: "#4a5568",
           }}
         >
           Tenure
@@ -730,13 +751,13 @@ const Selector = ({
           style={{
             position: "absolute",
             top: "78.082%",
-            left: "17%",
+            left: "15%",
             height: "5.5%",
             display: "flex",
             alignItems: "center",
-            fontSize: 24,
-            fontWeight: 800,
-            color: "#7b6c86",
+            fontSize: 26,
+            fontWeight: 700,
+            color: "#4a5568",
           }}
         >
           EMI

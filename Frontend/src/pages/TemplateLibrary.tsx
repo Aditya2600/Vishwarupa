@@ -58,6 +58,12 @@ export default function TemplateLibrary() {
             <PictureInPicture2 className="h-6 w-6" />
           </div>
         );
+      case "tvs_credit_emi":
+        return (
+          <div className="p-3 rounded-xl bg-gradient-to-br from-indigo-500/20 to-blue-500/20 text-indigo-400 border border-indigo-500/10">
+            <Video className="h-6 w-6" />
+          </div>
+        );
       default:
         return (
           <div className="p-3 rounded-xl bg-gradient-to-br from-gray-500/20 to-slate-500/20 text-gray-400 border border-gray-500/10">

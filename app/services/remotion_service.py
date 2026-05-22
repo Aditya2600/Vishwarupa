@@ -607,8 +607,8 @@ class RemotionService:
             "language": request.language,
             "video_variety": request.video_variety or "personalized",
             "template_key": request.template_key or "account_notice",
-            "video_width": 1080 if request.template_key in ("payment_link_guidance", "overdue_template", "loan_offer_interactive", "scene_loan_offer") else None,
-            "video_height": 1920 if request.template_key in ("payment_link_guidance", "overdue_template", "loan_offer_interactive", "scene_loan_offer") else None,
+            "video_width": 1080 if request.template_key in ("payment_link_guidance", "overdue_template", "loan_offer_interactive", "scene_loan_offer", "tvs_credit_emi") else None,
+            "video_height": 1920 if request.template_key in ("payment_link_guidance", "overdue_template", "loan_offer_interactive", "scene_loan_offer", "tvs_credit_emi") else None,
             "audio_url": audio_path,
             "subtitles": subtitles,
             "customer_name": "" if is_universal else request.customer_name,
@@ -771,6 +771,8 @@ class RemotionService:
                 "audioPlaybackRate": 1,
                 "durationInFrames": max(900, int(audio_duration * 30) + 15),
                 "subtitles": subtitles,
+                "customer_name": "" if is_universal else request.customer_name,
+                "loan_amount": "" if is_universal else (request.max_loan_amount or request.loan_amount),
             }
             video_url = await self.render_video(request, tts["video_id"], {}, render_p)
             return {

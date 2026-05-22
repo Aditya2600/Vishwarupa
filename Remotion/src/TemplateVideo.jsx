@@ -12,6 +12,7 @@ import {
 import {PaymentLinkGuidanceTemplate} from './templates/PaymentLinkGuidanceTemplate';
 import {OverdueTemplate} from './templates/OverdueTemplate';
 import {LoanOfferInteractiveTemplate} from './templates/LoanOfferInteractiveTemplate';
+import {TVSCreditEMITemplate} from './templates/TVSCreditEMITemplate';
 import {
   TRANSITION_FRAMES,
   HEIGHT,
@@ -2481,6 +2482,44 @@ export const TemplateVideo = ({leadId}) => {
             subtitleProgress={subtitleProgress}
             branding={{...subtitleBranding, color: 'Black'}}
             fallbackText={safeString(lead.cta_text, paymentCopy.fallbackSubtitle)}
+          />
+        ) : null}
+      </AbsoluteFill>
+    );
+  }
+
+  if (lead.template_key === 'tvs_credit_emi') {
+    const toFrames = (secs) => secs != null ? Math.round(secs * fps) : null;
+    const stepBoundaries = [
+      toFrames(findSubtitleStart(track.subtitles, 'WhatsApp') || findSubtitleStart(track.subtitles, 'व्हाट्सएप') || 4.0),
+      toFrames(findSubtitleStart(track.subtitles, 'SMS') || findSubtitleStart(track.subtitles, 'एसएमएस') || 8.0),
+      toFrames(findSubtitleStart(track.subtitles, 'PhonePe') || findSubtitleStart(track.subtitles, 'PhonePay') || 12.0),
+      toFrames(findSubtitleStart(track.subtitles, 'Repayment') || findSubtitleStart(track.subtitles, 'पुनर्भुगतान') || 16.0),
+      toFrames(findSubtitleStart(track.subtitles, 'UPI PIN') || findSubtitleStart(track.subtitles, 'UPI पिन') || 20.0),
+      toFrames(findSubtitleStart(track.subtitles, 'Collection Shop') || findSubtitleStart(track.subtitles, 'कलेक्शन शॉप') || 24.0),
+      toFrames(findSubtitleStart(track.subtitles, 'Contact') || findSubtitleStart(track.subtitles, 'संपर्क') || findSubtitleStart(track.subtitles, 'विकल्पों') || 28.0),
+    ];
+
+    return (
+      <AbsoluteFill style={{backgroundColor: '#ffffff', fontFamily: FONT_FAMILY, overflow: 'hidden'}}>
+        {audioSrc ? <Audio src={audioSrc} /> : null}
+        <TVSCreditEMITemplate
+          enableNarration={false}
+          customerName={lead.customer_name}
+          productType={lead.product_type}
+          clientName={lead.client_name}
+          tos={lead.tos}
+          lan={lead.lan}
+          contactDetails={lead.contact_details}
+          stepBoundaries={stepBoundaries}
+        />
+        <LogoOverlay logo={logoBranding} forceAll={true} />
+        {subtitleBranding.enabled ? (
+          <SubtitlePanel
+            subtitle={currentSubtitle}
+            subtitleProgress={subtitleProgress}
+            branding={subtitleBranding}
+            fallbackText={safeString(lead.cta_text, 'Thank you')}
           />
         ) : null}
       </AbsoluteFill>

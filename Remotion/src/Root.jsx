@@ -1,6 +1,7 @@
 import {Composition} from 'remotion';
 import {TemplateVideo} from './TemplateVideo';
 import {PaymentLinkGuidanceTemplate} from './templates/PaymentLinkGuidanceTemplate';
+import {TVSCreditEMITemplate} from './templates/TVSCreditEMITemplate';
 import {LoanOfferInteractiveTemplate} from './templates/LoanOfferInteractiveTemplate';
 import {SceneLoanOfferVideo, SCENE_LOAN_OFFER_DURATION} from './SceneLoanOfferVideo';
 import {PAYMENT_LINK_GUIDANCE_DURATION} from './templates/PaymentLinkGuidanceTemplate/scenes';
@@ -37,6 +38,23 @@ export const RemotionRoot = () => {
         id="PaymentLinkGuidanceTemplate"
         component={PaymentLinkGuidanceTemplate}
         durationInFrames={PAYMENT_LINK_GUIDANCE_DURATION}
+        fps={30}
+        width={1080}
+        height={1920}
+      />
+      <Composition
+        id="TVSCreditEMITemplate"
+        component={TVSCreditEMITemplate}
+        durationInFrames={300}
+        calculateMetadata={({props}) => {
+          const requestedDuration = Number(props?.durationInFrames);
+          return {
+            durationInFrames:
+              Number.isFinite(requestedDuration) && requestedDuration > 0
+                ? requestedDuration
+                : 300,
+          };
+        }}
         fps={30}
         width={1080}
         height={1920}

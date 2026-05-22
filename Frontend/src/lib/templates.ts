@@ -17,6 +17,8 @@ export type RemotionTemplateKey =
   | "overdue_template"
   | "loan_offer_interactive"
   | "loan_reminder"
+  | "scene_loan_offer"
+  | "tvs_credit_emi";
   | "collection_reminder"
   | "scene_loan_offer";
 export type CreateMode = "avatar" | "remotion" | "hybrid_remotion_avatar_pip";
@@ -262,6 +264,64 @@ Thank you.`,
   },
 };
 
+export const TVS_CREDIT_EMI_TEMPLATES: Record<string, TemplateValue> = {
+  English: `Hello {{ customer_name }}. Regarding your {{ product_type }} account from {{ client_name }}. An outstanding amount of ₹{{ tos }} is pending on account {{ lan }}.
+A secure link has been sent to you on WhatsApp.
+You can also find the payment link shared via SMS.
+Pay conveniently using PhonePe, Google Pay, or any UPI app.
+Go to Repayment, search for TVS Credit, and enter your LAN.
+Complete the payment using your UPI PIN.
+Visit your nearest EMI Collection Shop to deposit your EMI amount.
+Contact {{ contact_details }} immediately to discuss options and avoid charges.`,
+  Hindi: {
+    male: `नमस्ते {{ customer_name }}। आपके {{ client_name }} के {{ product_type }} खाते के संबंध में। आपके {{ lan }} खाते पर ₹{{ tos }} की बकाया राशि लंबित है।
+व्हाट्सएप पर आपको एक सुरक्षित लिंक भेजा गया है।
+आप एसएमएस के माध्यम से साझा किया गया भुगतान लिंक भी पा सकते हैं।
+PhonePe, Google Pay या किसी भी UPI ऐप का उपयोग करके आसानी से भुगतान करें।
+पुनर्भुगतान (Repayment) पर जाएं, TVS Credit खोजें, और अपना LAN दर्ज करें।
+अपने UPI पिन का उपयोग करके भुगतान पूरा करें।
+अपनी EMI राशि जमा करने के लिए अपने नजदीकी EMI कलेक्शन शॉप पर जाएं।
+विकल्पों पर चर्चा करने और अतिरिक्त शुल्क से बचने के लिए तुरंत {{ contact_details }} पर संपर्क करें।`,
+    female: `नमस्ते {{ customer_name }}। आपके {{ client_name }} के {{ product_type }} खाते के संबंध में। आपके {{ lan }} खाते पर ₹{{ tos }} की बकाया राशि लंबित है।
+व्हाट्सएप पर आपको एक सुरक्षित लिंक भेजा गया है।
+आप एसएमएस के माध्यम से साझा किया गया भुगतान लिंक भी पा सकते हैं।
+PhonePe, Google Pay या किसी भी UPI ऐप का उपयोग करके आसानी से भुगतान करें।
+पुनर्भुगतान (Repayment) पर जाएं, TVS Credit खोजें, और अपना LAN दर्ज करें।
+अपने UPI पिन का उपयोग करके भुगतान पूरा करें।
+अपनी EMI राशि जमा करने के लिए अपने नजदीकी EMI कलेक्शन शॉप पर जाएं।
+विकल्पों पर चर्चा करने और अतिरिक्त शुल्क से बचने के लिए तुरंत {{ contact_details }} पर संपर्क करें।`,
+  }
+};
+
+export const TVS_CREDIT_EMI_UNIVERSAL_TEMPLATES: Record<string, TemplateValue> = {
+  English: `Hello. Regarding your account from our team. An outstanding amount is pending on your account.
+A secure link has been sent to you on WhatsApp.
+You can also find the payment link shared via SMS.
+Pay conveniently using PhonePe, Google Pay, or any UPI app.
+Go to Repayment, search for TVS Credit, and enter your LAN.
+Complete the payment using your UPI PIN.
+Visit your nearest EMI Collection Shop to deposit your EMI amount.
+Contact our team immediately to discuss options and avoid charges.`,
+  Hindi: {
+    male: `नमस्ते। हमारी टीम की ओर से आपके खाते के संबंध में। आपके खाते पर बकाया राशि लंबित है।
+व्हाट्सएप पर आपको एक सुरक्षित लिंक भेजा गया है।
+आप एसएमएस के माध्यम से साझा किया गया भुगतान लिंक भी पा सकते हैं।
+PhonePe, Google Pay या किसी भी UPI ऐप का उपयोग करके आसानी से भुगतान करें।
+पुनर्भुगतान (Repayment) पर जाएं, TVS Credit खोजें, और अपना LAN दर्ज करें।
+अपने UPI पिन का उपयोग करके भुगतान पूरा करें।
+अपनी EMI राशि जमा करने के लिए अपने नजदीकी EMI कलेक्शन शॉप पर जाएं।
+विकल्पों पर चर्चा करने और अतिरिक्त शुल्क से बचने के लिए तुरंत हमारी टीम से संपर्क करें।`,
+    female: `नमस्ते। हमारी टीम की ओर से आपके खाते के संबंध में। आपके खाते पर बकाया राशि लंबित है।
+व्हाट्सएप पर आपको एक सुरक्षित लिंक भेजा गया है।
+आप एसएमएस के माध्यम से साझा किया गया भुगतान लिंक भी पा सकते हैं।
+PhonePe, Google Pay या किसी भी UPI ऐप का उपयोग करके आसानी से भुगतान करें।
+पुनर्भुगतान (Repayment) पर जाएं, TVS Credit खोजें, और अपना LAN दर्ज करें।
+अपने UPI पिन का उपयोग करके भुगतान पूरा करें।
+अपनी EMI राशि जमा करने के लिए अपने नजदीकी EMI कलेक्शन शॉप पर जाएं।
+विकल्पों पर चर्चा करने और अतिरिक्त शुल्क से बचने के लिए तुरंत हमारी टीम से संपर्क करें।`,
+  }
+};
+
 export const OVERDUE_TEMPLATES: Record<string, TemplateValue> = {
   English: `Dear {{ customer_name }}. Your {{ client_name }} credit card ending with {{ lan }} has an overdue amount of {{ tos }}. If this continues beyond 90 days, your account will be classified as a Non-Performing Asset (NPA). Non-payment can lead to legal action to recover dues, restrictions on future loans or credit cards, and a lasting negative impact on your financial credibility. But you can take action now. Clear your outstanding balance and avoid these consequences. Timely repayment protects your credit score, ensures access to future loans, and avoids late fees or penalties. We understand that life can be challenging. If full repayment is difficult, you can pay the minimum amount due of {{ loan_amount }} or reach out for further assistance. Act now to protect your financial future. Call us at {{ contact_details }} for assistance. Thank you for choosing {{ client_name }}.`,
   Hindi: {
@@ -328,6 +388,11 @@ export const REMOTION_TEMPLATE_OPTIONS: Array<{ key: RemotionTemplateKey; name: 
     key: "loan_reminder",
     name: "Loan Reminder",
     description: "Portrait loan reminder with scene-wise captions and configurable brand imagery.",
+  },
+  {
+    key: "tvs_credit_emi",
+    name: "TVS Credit EMI Payment",
+    description: "Payment assistance walkthrough specifically designed for TVS Credit with app screenshots.",
   },
   {
     key: "collection_reminder",
@@ -443,6 +508,10 @@ export function getDefaultRemotionTranscript(
     const val = OVERDUE_TEMPLATES[language] ?? OVERDUE_TEMPLATES.English;
     return getGenderedText(val, resolvedGender);
   }
+  if (mode === "personalized" && templateKey === "tvs_credit_emi") {
+    const val = TVS_CREDIT_EMI_TEMPLATES[language] ?? TVS_CREDIT_EMI_TEMPLATES.English;
+    return getGenderedText(val, resolvedGender);
+  }
   if (mode === "personalized" && templateKey === "loan_offer_interactive") {
     const val = LOAN_OFFER_INTERACTIVE_TEMPLATES[language] ?? LOAN_OFFER_INTERACTIVE_TEMPLATES.English;
     return getGenderedText(val, resolvedGender);
@@ -455,6 +524,10 @@ export function getDefaultRemotionTranscript(
   }
   if (mode === "universal" && templateKey === "scene_loan_offer") {
     return SCENE_LOAN_OFFER_TRANSCRIPT;
+  }
+  if (mode === "universal" && templateKey === "tvs_credit_emi") {
+    const val = TVS_CREDIT_EMI_UNIVERSAL_TEMPLATES[language] ?? TVS_CREDIT_EMI_UNIVERSAL_TEMPLATES.English;
+    return getGenderedText(val, resolvedGender);
   }
   if (mode === "personalized" && templateKey === "collection_reminder") {
     return COLLECTION_REMINDER_TRANSCRIPT;
