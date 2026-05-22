@@ -13,22 +13,22 @@ import {
 export const SCENE_LOAN_OFFER_DURATION = 30 * 30;
 
 const scenes = [
-  {src: 'scene1.png', start: 0, end: 3, tone: 'dark'},
-  {src: 'scene2.png', start: 3, end: 6, tone: 'bright'},
-  {src: 'scene3.png', start: 6, end: 10, tone: 'dark'},
-  {src: 'scene4.png', start: 10, end: 23, tone: 'bright'},
-  {src: 'scene5.png', start: 23, end: 30, tone: 'neon'},
+  { src: 'scene1.png', start: 0, end: 3, tone: 'dark' },
+  { src: 'scene2.png', start: 3, end: 6, tone: 'bright' },
+  { src: 'scene3.png', start: 6, end: 10, tone: 'dark' },
+  { src: 'scene4.png', start: 10, end: 23, tone: 'bright' },
+  { src: 'scene5.png', start: 23, end: 30, tone: 'neon' },
 ];
 
 const fallbackCaptions = [
-  {start: 0, end: 3, text: 'पैसों की परेशानी से जूझ रहे हैं? अब चिंता छोड़िए।'},
-  {start: 3, end: 6, text: 'बधाई हो! आपके लिए एक खास प्री-अप्रूव्ड लोन ऑफर तैयार है।'},
-  {start: 6, end: 10, text: 'नया बाइक हो, ज़रूरी खर्च हो या आपके सपने — अब सब होगा आसान।'},
-  {start: 10, end: 14, text: 'अपनी जरूरत के हिसाब से आसान लोन विकल्प चुनना अब और भी सरल है।'},
-  {start: 14, end: 18, text: 'तेज़ प्रोसेस, कम दस्तावेज़ और भरोसेमंद सहायता।'},
-  {start: 18, end: 22, text: 'हर कदम पर हमारी टीम आपके साथ है।'},
-  {start: 22, end: 26, text: 'अपने सपनों को आगे बढ़ाइए और बेहतर कल की शुरुआत कीजिए।'},
-  {start: 26, end: 30, text: 'आपका प्री-अप्रूव्ड ऑफर आपका इंतज़ार कर रहा है।'},
+  { start: 0, end: 3, text: 'पैसों की परेशानी से जूझ रहे हैं? अब चिंता छोड़िए।' },
+  { start: 3, end: 6, text: 'बधाई हो! आपके लिए एक खास प्री-अप्रूव्ड लोन ऑफर तैयार है।' },
+  { start: 6, end: 10, text: 'नया बाइक हो, ज़रूरी खर्च हो या आपके सपने — अब सब होगा आसान।' },
+  { start: 10, end: 14, text: 'अपनी जरूरत के हिसाब से आसान लोन विकल्प चुनना अब और भी सरल है।' },
+  { start: 14, end: 18, text: 'तेज़ प्रोसेस, कम दस्तावेज़ और भरोसेमंद सहायता।' },
+  { start: 18, end: 22, text: 'हर कदम पर हमारी टीम आपके साथ है।' },
+  { start: 22, end: 26, text: 'अपने सपनों को आगे बढ़ाइए और बेहतर कल की शुरुआत कीजिए।' },
+  { start: 26, end: 30, text: 'आपका प्री-अप्रूव्ड ऑफर आपका इंतज़ार कर रहा है।' },
 ];
 
 const formatSeconds = (frame, fps) => frame / fps;
@@ -68,7 +68,7 @@ export const SceneLoanOfferVideo = ({
   const name = props.customer_name || props.customerName || props.lead?.customer_name || props.lead?.customerName || "Customer";
   const amount = props.max_loan_amount || props.loan_amount || props.loanAmount || props.lead?.loan_offer?.max_loan_amount || "1,00,000";
   const frame = useCurrentFrame();
-  const {fps, durationInFrames} = useVideoConfig();
+  const { fps, durationInFrames } = useVideoConfig();
   const time = formatSeconds(frame, fps);
   const captionTrack = Array.isArray(subtitles) && subtitles.length > 0 ? subtitles : fallbackCaptions;
   const totalDuration = durationInFrames / fps;
@@ -119,7 +119,7 @@ export const SceneLoanOfferVideo = ({
           extrapolateRight: 'clamp',
         });
         return (
-          <AbsoluteFill key={`${item.src}-${item.start}`} style={{opacity: itemOpacity}}>
+          <AbsoluteFill key={`${item.src}-${item.start}`} style={{ opacity: itemOpacity }}>
             <Img
               src={staticFile(item.src)}
               style={{

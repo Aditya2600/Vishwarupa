@@ -54,8 +54,7 @@ yarn-error.log*
 Remotion/public/metadata.json
 Remotion/public/audio/*
 !Remotion/public/audio/.gitkeep
-Remotion/public/assets/*
-!Remotion/public/assets/credresolve_logo_2-removebg-preview.png
+Remotion/public/assets/*.vtt
 Remotion/out/
 Remotion/output.mp4
 
