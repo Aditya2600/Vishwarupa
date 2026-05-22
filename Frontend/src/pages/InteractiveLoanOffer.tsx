@@ -225,14 +225,25 @@ export default function InteractiveLoanOffer() {
       const isPastIntro = hasDismissedAvail && time >= introTransitionTime && !confirmed;
       setShowSelectorsOverlay(isPastIntro);
 
-      if (time >= introEndSeconds && !showAvail && !hasDismissedAvail && !confirmed) {
+      // Show the Avail Now button 2.5 seconds before pausing, so it matches the audio
+      if (time >= Math.max(0, introEndSeconds - 2.5) && !hasDismissedAvail && !confirmed) {
         setShowAvail(true);
+      }
+
+      // Pause at the end of the intro
+      if (time >= introEndSeconds && !hasDismissedAvail && !confirmed) {
         setShowSelectorsOverlay(false);
         video.pause();
         video.currentTime = introEndSeconds;
       }
-      if (hasDismissedAvail && time >= selectorEndSeconds && !showSelector && !hasDismissedSelector && !confirmed) {
+
+      // Show the Confirm button 3 seconds before pausing
+      if (hasDismissedAvail && time >= Math.max(0, selectorEndSeconds - 3.0) && !hasDismissedSelector && !confirmed) {
         setShowSelector(true);
+      }
+
+      // Pause at the end of the selector phase
+      if (hasDismissedAvail && time >= selectorEndSeconds && !hasDismissedSelector && !confirmed) {
         video.pause();
         video.currentTime = selectorEndSeconds;
       }
@@ -429,11 +440,12 @@ export default function InteractiveLoanOffer() {
           }
         }
         .premium-btn-inner {
-          border: 1px solid rgba(255, 255, 255, 0.2) !important;
-          box-shadow: inset 0 1px 1.5px rgba(255, 255, 255, 0.25), 0 8px 24px rgba(0, 0, 0, 0.15) !important;
+          border: 1px solid rgba(255, 255, 255, 0.3) !important;
+          box-shadow: inset 0 1px 1.5px rgba(255, 255, 255, 0.4), 0 12px 30px rgba(112, 32, 130, 0.5), 0 0 15px rgba(112, 32, 130, 0.4) !important;
           font-weight: 900 !important;
           text-transform: uppercase !important;
-          letter-spacing: 0.06em !important;
+          letter-spacing: 0.08em !important;
+          text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
         }
         .premium-select {
           border: 1px solid rgba(112, 32, 130, 0.18) !important;
@@ -493,16 +505,18 @@ export default function InteractiveLoanOffer() {
             <Button
               type="button"
               onClick={() => void togglePlayPause()}
-              className="h-9 w-9 rounded-full p-0 flex items-center justify-center text-white shadow-lg backdrop-blur-md bg-black/40 hover:bg-black/60 transition-colors border-0"
+              className="h-10 w-10 rounded-full p-0 flex items-center justify-center text-white backdrop-blur-md bg-[#702082]/90 hover:bg-[#702082] transition-colors border border-white/30"
+              style={{ boxShadow: '0 8px 20px rgba(112, 32, 130, 0.4)' }}
             >
               {isPlaying ? <Pause className="h-4 w-4 fill-current" /> : <Play className="ml-0.5 h-4 w-4 fill-current" />}
             </Button>
             <Button
               type="button"
               onClick={handleCall}
-              className="h-9 rounded-full px-4 text-xs font-bold text-white shadow-lg backdrop-blur-md bg-black/40 hover:bg-black/60 transition-colors border-0"
+              className="h-10 rounded-full px-5 text-sm font-bold text-white backdrop-blur-md bg-[#702082]/90 hover:bg-[#702082] transition-colors border border-white/30"
+              style={{ boxShadow: '0 8px 20px rgba(112, 32, 130, 0.4)', textShadow: '0 1px 2px rgba(0,0,0,0.2)' }}
             >
-              <Phone className="mr-2 h-3.5 w-3.5" />
+              <Phone className="mr-2 h-4 w-4" />
               Call Now
             </Button>
           </div>
@@ -628,9 +642,10 @@ export default function InteractiveLoanOffer() {
                   setSelectedAmount(nextAmount);
                   setSelectedTenure(nextRow.tenure);
                 }}
-                className="w-full h-full bg-white font-bold text-slate-800 rounded-full pl-5 pr-10 outline-none cursor-pointer premium-select"
+                className="w-full h-full bg-white font-extrabold text-[#4a105c] rounded-full pl-6 pr-12 outline-none cursor-pointer premium-select"
                 style={{
-                  fontSize: `${videoWidth * 0.04}px`,
+                  fontSize: `${videoWidth * 0.046}px`,
+                  letterSpacing: "-0.01em",
                   appearance: "none",
                   WebkitAppearance: "none",
                   backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='${encodeURIComponent(brandColor)}' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`,
@@ -662,9 +677,10 @@ export default function InteractiveLoanOffer() {
               <select
                 value={selectedTenure}
                 onChange={(event) => setSelectedTenure(event.target.value)}
-                className="w-full h-full bg-white font-bold text-slate-800 rounded-full pl-5 pr-10 outline-none cursor-pointer premium-select"
+                className="w-full h-full bg-white font-extrabold text-[#4a105c] rounded-full pl-6 pr-12 outline-none cursor-pointer premium-select"
                 style={{
-                  fontSize: `${videoWidth * 0.04}px`,
+                  fontSize: `${videoWidth * 0.046}px`,
+                  letterSpacing: "-0.01em",
                   appearance: "none",
                   WebkitAppearance: "none",
                   backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='${encodeURIComponent(brandColor)}' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`,
@@ -699,10 +715,10 @@ export default function InteractiveLoanOffer() {
             >
               <div
                 style={{
-                  fontSize: `${videoWidth * 0.038}px`,
+                  fontSize: `${videoWidth * 0.044}px`,
                   color: brandColor,
                   fontWeight: "900",
-                  letterSpacing: "0.01em",
+                  letterSpacing: "-0.01em",
                   fontFamily: "figtreeregular, Inter, sans-serif",
                 }}
               >
@@ -728,10 +744,10 @@ export default function InteractiveLoanOffer() {
             >
               <div
                 style={{
-                  fontSize: `${videoWidth * 0.038}px`,
+                  fontSize: `${videoWidth * 0.044}px`,
                   color: brandColor,
                   fontWeight: "900",
-                  letterSpacing: "0.01em",
+                  letterSpacing: "-0.01em",
                   fontFamily: "figtreeregular, Inter, sans-serif",
                 }}
               >
@@ -757,10 +773,10 @@ export default function InteractiveLoanOffer() {
             >
               <div
                 style={{
-                  fontSize: `${videoWidth * 0.038}px`,
+                  fontSize: `${videoWidth * 0.044}px`,
                   color: brandColor,
                   fontWeight: "900",
-                  letterSpacing: "0.01em",
+                  letterSpacing: "-0.01em",
                   fontFamily: "figtreeregular, Inter, sans-serif",
                 }}
               >
@@ -771,7 +787,7 @@ export default function InteractiveLoanOffer() {
         ) : null}
 
         {/* Confirm Loan Offer Pulsing Button */}
-        {showSelector && !confirmed && selectedRow ? (
+        {(showSelector || showSelectorsOverlay) && !confirmed && selectedRow ? (
           <div
             className="button-pulse"
             style={{
