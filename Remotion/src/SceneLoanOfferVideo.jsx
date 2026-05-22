@@ -59,7 +59,14 @@ const chipStyle = {
   padding: '0 26px',
 };
 
-export const SceneLoanOfferVideo = ({voiceoverAudioSrc = null, subtitles = null, audioPlaybackRate = 1}) => {
+export const SceneLoanOfferVideo = ({
+  voiceoverAudioSrc = null,
+  subtitles = null,
+  audioPlaybackRate = 1,
+  ...props
+}) => {
+  const name = props.customer_name || props.customerName || props.lead?.customer_name || props.lead?.customerName || "Customer";
+  const amount = props.max_loan_amount || props.loan_amount || props.loanAmount || props.lead?.loan_offer?.max_loan_amount || "1,00,000";
   const frame = useCurrentFrame();
   const {fps, durationInFrames} = useVideoConfig();
   const time = formatSeconds(frame, fps);
@@ -191,14 +198,19 @@ export const SceneLoanOfferVideo = ({voiceoverAudioSrc = null, subtitles = null,
         <div
           style={{
             color: '#9df6bd',
-            fontSize: 23,
+            fontSize: 25,
             fontWeight: 950,
-            letterSpacing: '0.08em',
+            letterSpacing: '0.04em',
             marginBottom: 14,
             textTransform: 'uppercase',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
           }}
         >
-          Sales Highlight
+          <span>{name}</span>
+          <span style={{ color: '#ffffff', opacity: 0.5 }}>|</span>
+          <span style={{ color: '#ffffff' }}>Pre-approved: ₹{amount}</span>
         </div>
         <div
           style={{

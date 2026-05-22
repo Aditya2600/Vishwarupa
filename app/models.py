@@ -134,6 +134,7 @@ class RemotionVideoRequest(DirectVideoRequest):
         'loan_offer_interactive',
         'loan_reminder',
         'scene_loan_offer',
+        'tvs_credit_emi',
     ] | None = 'account_notice'
     title_prefix: str = 'Loan Recall'
     subtitle_color: str = 'White'
