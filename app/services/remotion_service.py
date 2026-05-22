@@ -798,6 +798,10 @@ class RemotionService:
                 "lan": request.lan or "1234",
                 "contactDetails": request.contact_details or "1800-123-4567",
                 "durationInFrames": max(900, int(audio_duration * 30) + 15),
+                "language": request.language,
+                "logoUrl": f"assets/{request.logo_filename}" if request.logo_filename else None,
+                "logoPosition": request.logo_position or "Top Right",
+                "logoOpacity": request.logo_opacity if request.logo_opacity is not None else 80,
             }
             video_url = await self.render_video(request, tts["video_id"], {}, render_p)
             return {

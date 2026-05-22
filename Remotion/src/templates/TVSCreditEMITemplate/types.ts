@@ -5,13 +5,17 @@ export type TVSCreditEMIScene = {
   eyebrow?: string;
   title?: string;
   subtitle?: string;
-  relativeDuration: number;
+  relativeDuration: {
+    en: number;
+    hi: number;
+  };
   caption?: string;
 };
 
 export type TVSCreditEMITemplateProps = {
   enableNarration?: boolean;
   narrationAudioPath?: string;
+  language?: string;
   customerName?: string;
   productType?: string;
   clientName?: string;
@@ -20,4 +24,7 @@ export type TVSCreditEMITemplateProps = {
   contactDetails?: string;
   stepBoundaries?: number[];
   durationInFrames?: number;
+  logoUrl?: string;
+  logoPosition?: string;
+  logoOpacity?: number;
 };

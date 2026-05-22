@@ -289,6 +289,10 @@ export const TVSCreditEMITemplate = ({
   lan = 'TVS000123456',
   contactDetails = '1800 123 4567',
   stepBoundaries = [],
+  logoUrl,
+  logoPosition = 'top-right',
+  logoOpacity = 100,
+  language = 'English',
 }: TVSCreditEMITemplateProps) => {
   const {durationInFrames} = useVideoConfig();
 
@@ -311,8 +315,9 @@ export const TVSCreditEMITemplate = ({
     
     // Calculate cumulative relative duration up to this index
     let cumulativeDuration = 0;
+    const lang = (language?.toLowerCase() === 'hindi' || language?.toLowerCase() === 'hi') ? 'hi' : 'en';
     for (let i = 0; i < index; i++) {
-      cumulativeDuration += TVS_CREDIT_EMI_SCENES[i].relativeDuration;
+      cumulativeDuration += TVS_CREDIT_EMI_SCENES[i].relativeDuration[lang];
     }
     return Math.round(cumulativeDuration * durationInFrames);
   };
@@ -330,7 +335,23 @@ export const TVSCreditEMITemplate = ({
       {enableNarration && narrationAudioPath && (
         <Audio src={staticFile(narrationAudioPath)} />
       )}
-      
+      {logoUrl && (
+        <Img
+          src={logoUrl.startsWith('http') ? logoUrl : staticFile(logoUrl)}
+          style={{
+            position: 'absolute',
+            top: logoPosition.includes('top') ? 60 : undefined,
+            bottom: logoPosition.includes('bottom') ? 60 : undefined,
+            left: logoPosition.includes('left') ? 60 : undefined,
+            right: logoPosition.includes('right') ? 60 : undefined,
+            height: 120,
+            opacity: logoOpacity / 100,
+            zIndex: 100,
+            objectFit: 'contain',
+          }}
+        />
+      )}
+
       {TVS_CREDIT_EMI_SCENES.map((scene, index) => (
         <SceneWrapper
           key={`scene-${index}`}
