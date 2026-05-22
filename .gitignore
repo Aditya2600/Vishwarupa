@@ -59,6 +59,8 @@ Remotion/out/
 Remotion/output.mp4
 
 # Temporary files and Debug Scripts
+scratch/
+scratch.py
 *.tmp
 *.swp
 *.mp3
