@@ -5,8 +5,8 @@ export const TVS_CREDIT_EMI_SCENES: TVSCreditEMIScene[] = [
     kind: 'intro',
     eyebrow: 'Important Update',
     title: 'Hello {{customerName}}',
-    subtitle: 'Regarding your {{productType}} account from {{clientName}}. An outstanding amount of ₹{{tos}} is pending on account {{lan}}.',
-    relativeDuration: 0.265, // 26.5% of total time
+    subtitle: 'Regarding your {{productType}} account from {{clientName}}. An EMI amount of ₹{{tos}} is pending on account {{lan}}.',
+    relativeDuration: { en: 0.286, hi: 0.265 },
   },
   {
     kind: 'text-only',
@@ -14,21 +14,21 @@ export const TVS_CREDIT_EMI_SCENES: TVSCreditEMIScene[] = [
     eyebrow: 'Method 1',
     title: 'Payment Link',
     subtitle: 'A secure link has been sent to you on WhatsApp and SMS.',
-    relativeDuration: 0.05, // 5%
+    relativeDuration: { en: 0.043, hi: 0.050 },
   },
   {
     kind: 'fullscreen-image',
     method: 1,
     image: 'whatsapp_paynow.png',
     caption: 'Click the "Pay Now" button on WhatsApp',
-    relativeDuration: 0.056, // 5.6%
+    relativeDuration: { en: 0.055, hi: 0.056 },
   },
   {
     kind: 'fullscreen-image',
     method: 1,
     image: 'sms link.png',
     caption: 'Or click the link shared via SMS',
-    relativeDuration: 0.075, // 7.5%
+    relativeDuration: { en: 0.059, hi: 0.075 },
   },
   {
     kind: 'text-only',
@@ -36,35 +36,35 @@ export const TVS_CREDIT_EMI_SCENES: TVSCreditEMIScene[] = [
     eyebrow: 'Method 2',
     title: 'UPI / Payment Apps',
     subtitle: 'Pay conveniently using PhonePe, Google Pay, or any UPI app.',
-    relativeDuration: 0.057, // 5.7%
+    relativeDuration: { en: 0.055, hi: 0.057 },
   },
   {
     kind: 'fullscreen-image',
     method: 2,
     image: 'upi apps.png',
     caption: 'Open PhonePe or Google Pay',
-    relativeDuration: 0.086, // 8.6%
+    relativeDuration: { en: 0.070, hi: 0.086 },
   },
   {
     kind: 'fullscreen-image',
     method: 2,
     image: 'openapp_and serach tvs credit.png',
     caption: 'Go to Repayment and search for TVS Credit',
-    relativeDuration: 0.087, // 8.7%
+    relativeDuration: { en: 0.070, hi: 0.087 },
   },
   {
     kind: 'fullscreen-image',
     method: 2,
     image: 'enterlan.png',
     caption: 'Enter LAN and complete payment using UPI PIN',
-    relativeDuration: 0.052, // 5.2%
+    relativeDuration: { en: 0.047, hi: 0.052 },
   },
   {
     kind: 'fullscreen-image',
     method: 2,
     image: 'payment sucess.png',
     caption: 'Wait for successful payment confirmation',
-    relativeDuration: 0.046, // 4.6%
+    relativeDuration: { en: 0.051, hi: 0.046 },
   },
   {
     kind: 'text-only',
@@ -72,13 +72,13 @@ export const TVS_CREDIT_EMI_SCENES: TVSCreditEMIScene[] = [
     eyebrow: 'Method 3',
     title: 'EMI Collection Shop',
     subtitle: 'Visit your nearest EMI Collection Shop to deposit your EMI amount.',
-    relativeDuration: 0.111, // 11.1%
+    relativeDuration: { en: 0.116, hi: 0.111 },
   },
   {
     kind: 'final',
     eyebrow: 'Final Reminder',
     title: 'Pay Today',
     subtitle: 'Contact {{contactDetails}} immediately to discuss options and avoid charges.',
-    relativeDuration: 0.115, // 11.5%
+    relativeDuration: { en: 0.149, hi: 0.115 },
   },
 ];

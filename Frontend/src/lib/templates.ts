@@ -264,18 +264,18 @@ Thank you.`,
 };
 
 export const TVS_CREDIT_EMI_TEMPLATES: Record<string, TemplateValue> = {
-  English: `Hello {{ customer_name }}. Regarding your {{ product_type }} account from {{ client_name }}. An outstanding amount of ₹{{ tos }} is pending on account {{ lan }}. For your convenience, below are 3 easy ways to make your EMI payment.
+  English: `Hello {{ customer_name }}. Regarding your {{ product_type }} account from {{ client_name }}. An EMI amount of ₹{{ tos }} is pending on account {{ lan }}. For your convenience, below are 3 easy ways to make your EMI payment.
 Method 1 — Payment via Payment Link. A secure link has been sent to you on WhatsApp. You can also find the payment link shared via SMS.
 Method 2 — Payment through UPI or Payment Apps. Pay conveniently using PhonePe, Google Pay, or any UPI app. Go to Repayment, search for TVS Credit, and enter your LAN. Complete the payment using your UPI PIN. Wait for the successful payment confirmation.
 Method 3 — EMI Collection Shop. Visit your nearest EMI Collection Shop to deposit your EMI amount.
 Please treat this communication as important and contact {{ contact_details }} immediately to discuss options and avoid charges.`,
   Hindi: {
-    male: `नमस्ते {{ customer_name }}। आपके {{ client_name }} के {{ product_type }} खाते के संबंध में। आपके {{ lan }} खाते पर ₹{{ tos }} की बकाया राशि लंबित है। आपकी सुविधा के लिए, EMI भुगतान करने के 3 आसान तरीके नीचे दिए गए हैं।
+    male: `नमस्ते {{ customer_name }}। आपके {{ client_name }} के {{ product_type }} खाते के संबंध में। आपके {{ lan }} खाते पर {{ tos }} रुपये की EMI राशि लंबित है। आपकी सुविधा के लिए, EMI भुगतान करने के 3 आसान तरीके नीचे दिए गए हैं।
 Method 1 - पेमेंट लिंक के माध्यम से भुगतान। व्हाट्सएप पर आपको एक सुरक्षित लिंक भेजा गया है। आप एसएमएस के माध्यम से साझा किया गया भुगतान लिंक भी पा सकते हैं।
 Method 2 - UPI या पेमेंट ऐप के माध्यम से भुगतान। PhonePe, Google Pay या किसी भी UPI ऐप का उपयोग करके आसानी से भुगतान करें। पुनर्भुगतान (Repayment) पर जाएं, TVS Credit खोजें, और अपना LAN दर्ज करें। अपने UPI पिन का उपयोग करके भुगतान पूरा करें। सफल भुगतान की पुष्टि की प्रतीक्षा करें।
 Method 3 - EMI कलेक्शन शॉप। अपनी EMI राशि जमा करने के लिए अपने नजदीकी EMI कलेक्शन शॉप पर जाएं।
 विकल्पों पर चर्चा करने और अतिरिक्त शुल्क से बचने के लिए तुरंत {{ contact_details }} पर संपर्क करें।`,
-    female: `नमस्ते {{ customer_name }}। आपके {{ client_name }} के {{ product_type }} खाते के संबंध में। आपके {{ lan }} खाते पर ₹{{ tos }} की बकाया राशि लंबित है। आपकी सुविधा के लिए, EMI भुगतान करने के 3 आसान तरीके नीचे दिए गए हैं।
+    female: `नमस्ते {{ customer_name }}। आपके {{ client_name }} के {{ product_type }} खाते के संबंध में। आपके {{ lan }} खाते पर {{ tos }} रुपये की EMI राशि लंबित है। आपकी सुविधा के लिए, EMI भुगतान करने के 3 आसान तरीके नीचे दिए गए हैं।
 Method 1 - पेमेंट लिंक के माध्यम से भुगतान। व्हाट्सएप पर आपको एक सुरक्षित लिंक भेजा गया है। आप एसएमएस के माध्यम से साझा किया गया भुगतान लिंक भी पा सकते हैं।
 Method 2 - UPI या पेमेंट ऐप के माध्यम से भुगतान। PhonePe, Google Pay या किसी भी UPI ऐप का उपयोग करके आसानी से भुगतान करें। पुनर्भुगतान (Repayment) पर जाएं, TVS Credit खोजें, और अपना LAN दर्ज करें। अपने UPI पिन का उपयोग करके भुगतान पूरा करें। सफल भुगतान की पुष्टि की प्रतीक्षा करें।
 Method 3 - EMI कलेक्शन शॉप। अपनी EMI राशि जमा करने के लिए अपने नजदीकी EMI कलेक्शन शॉप पर जाएं।
