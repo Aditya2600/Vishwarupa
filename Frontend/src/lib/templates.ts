@@ -16,7 +16,8 @@ export type RemotionTemplateKey =
   | "payment_link_guidance"
   | "overdue_template"
   | "loan_offer_interactive"
-  | "loan_reminder";
+  | "loan_reminder"
+  | "scene_loan_offer";
 export type CreateMode = "avatar" | "remotion" | "hybrid_remotion_avatar_pip";
 export type LoanReminderAssetKey =
   | "logo"
@@ -270,6 +271,15 @@ Thank you. Your offer is confirmed, and our team will contact you shortly to com
   },
 };
 
+export const SCENE_LOAN_OFFER_TRANSCRIPT = `पैसों की परेशानी से जूझ रहे हैं? अब चिंता छोड़िए।
+बधाई हो! आपके लिए एक खास प्री-अप्रूव्ड लोन ऑफर तैयार है।
+नया बाइक हो, ज़रूरी खर्च हो या आपके सपने, अब सब होगा आसान।
+अपनी जरूरत के हिसाब से आसान लोन विकल्प चुनना अब और भी सरल है।
+तेज़ प्रोसेस, कम दस्तावेज़ और भरोसेमंद सहायता।
+हर कदम पर हमारी टीम आपके साथ है।
+अपने सपनों को आगे बढ़ाइए और बेहतर कल की शुरुआत कीजिए।
+आपका प्री-अप्रूव्ड ऑफर आपका इंतज़ार कर रहा है।`;
+
 export const REMOTION_TEMPLATE_OPTIONS: Array<{ key: RemotionTemplateKey; name: string; description: string }> = [
   {
     key: "account_notice",
@@ -297,6 +307,11 @@ export const REMOTION_TEMPLATE_OPTIONS: Array<{ key: RemotionTemplateKey; name: 
     description: "Brand-editable loan offer with Avail Now, amount/tenure selection, EMI summary, and confirm CTA.",
   },
   {
+    key: "scene_loan_offer",
+    name: "Sales Template",
+    description: "Image-led sales video using the five provided scenes.",
+  },
+  {
     key: "loan_reminder",
     name: "Loan Reminder",
     description: "Portrait loan reminder with scene-wise captions and configurable brand imagery.",
@@ -313,7 +328,7 @@ export const TEMPLATE_LIBRARY_QUICK_STARTS: Array<{
   {
     mode: "hybrid_remotion_avatar_pip",
     name: "Hybrid Avatar PIP",
-    description: "HeyGen raw avatar + Remotion collection layout (portrait/landscape auto supported).",
+    description: "Avatar clip with a custom collection layout (portrait/landscape auto supported).",
     iconKey: "hybrid_avatar_pip",
   },
 ];
@@ -413,6 +428,9 @@ export function getDefaultRemotionTranscript(
   if (mode === "personalized" && templateKey === "loan_offer_interactive") {
     const val = LOAN_OFFER_INTERACTIVE_TEMPLATES[language] ?? LOAN_OFFER_INTERACTIVE_TEMPLATES.English;
     return getGenderedText(val, resolvedGender);
+  }
+  if (mode === "personalized" && templateKey === "scene_loan_offer") {
+    return SCENE_LOAN_OFFER_TRANSCRIPT;
   }
   if (mode === "personalized" && templateKey === "loan_reminder") {
     return LOAN_REMINDER_TRANSCRIPT;

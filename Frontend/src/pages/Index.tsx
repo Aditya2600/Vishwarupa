@@ -696,11 +696,15 @@ const Index = () => {
       ...preservedAvatar,
       ...preservedVoice,
       ...(requestedMode === "remotion" ? { remotionTemplateKey: templateKey as any } : {}),
-      ...(requestedMode === "remotion" && templateKey === "loan_reminder"
+      ...(requestedMode === "remotion" && (templateKey === "loan_reminder" || templateKey === "scene_loan_offer")
         ? {
           aspectRatio: "9:16",
-          loanReminderImagePaths: DEFAULT_LOAN_REMINDER_ASSET_PATHS,
-          loanReminderImageFileNames: {},
+          ...(templateKey === "loan_reminder"
+            ? {
+                loanReminderImagePaths: DEFAULT_LOAN_REMINDER_ASSET_PATHS,
+                loanReminderImageFileNames: {},
+              }
+            : {}),
         }
         : {}),
       transcript: requestedFreshDraft
@@ -932,6 +936,7 @@ const Index = () => {
     if (
       state.videoType === "remotion" &&
       state.remotionTemplateKey !== "loan_reminder" &&
+      state.remotionTemplateKey !== "scene_loan_offer" &&
       !logoFile &&
       !continueWithoutLogoRef.current
     ) {

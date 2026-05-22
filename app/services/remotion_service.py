@@ -45,6 +45,14 @@ VOICE_MAP = {
 
 DEFAULT_SCRIPT_EN = "Hello {{ customer_name }}. I am calling from {{ client_name }} regarding your {{ product_type }} account. The total outstanding balance is {{ tos }}. Please contact us at {{ contact_details }} to discuss repayment options."
 DEFAULT_SCRIPT_HI = "नमस्ते {{ customer_name }}। मैं {{ client_name }} से आपके {{ product_type }} खाते के संबंध में बोल रही हूँ। आपकी कुल बकाया राशि {{ tos }} है। कृपया भुगतान विकल्पों पर चर्चा करने के लिए हमसे {{ contact_details }} पर संपर्क करें।"
+DEFAULT_SCENE_LOAN_OFFER_HI = """पैसों की परेशानी से जूझ रहे हैं? अब चिंता छोड़िए।
+बधाई हो! आपके लिए एक खास प्री-अप्रूव्ड लोन ऑफर तैयार है।
+नया बाइक हो, ज़रूरी खर्च हो या आपके सपने, अब सब होगा आसान।
+अपनी जरूरत के हिसाब से आसान लोन विकल्प चुनना अब और भी सरल है।
+तेज़ प्रोसेस, कम दस्तावेज़ और भरोसेमंद सहायता।
+हर कदम पर हमारी टीम आपके साथ है।
+अपने सपनों को आगे बढ़ाइए और बेहतर कल की शुरुआत कीजिए।
+आपका प्री-अप्रूव्ड ऑफर आपका इंतज़ार कर रहा है।"""
 
 LOAN_REMINDER_DEFAULT_ASSETS = {
     "logo": "assets/tvs_credit_logo.png",
@@ -69,6 +77,18 @@ def _prepare_tts_pronunciation(text: str, lan: str = None) -> str:
             text = re.sub(rf'\b{escaped_lan}\b', spaced_lan, text)
             
     return text
+
+
+def _strip_timestamp_markers(text: str) -> str:
+    return re.sub(r'^\s*\(\d{1,2}:\d{2}(?::\d{2})?\)\s*', '', text, flags=re.MULTILINE).strip()
+
+
+def _clean_scene_sales_script(text: str) -> str:
+    text = _strip_timestamp_markers(text)
+    text = re.sub(r'^\s*[\d०-९]+[\).:-]?\s*', '', text, flags=re.MULTILINE)
+    text = re.sub(r'[\d०-९]+', '', text)
+    text = re.sub(r'[ \t]+', ' ', text)
+    return '\n'.join(line.strip() for line in text.splitlines() if line.strip())
 
 
 def _restore_display_spellings(text: str, lan: str = None) -> str:
@@ -194,6 +214,8 @@ class RemotionService:
 
         if request.template_key == 'loan_offer_interactive':
             raw_script = request.script_text or (DEFAULT_LOAN_OFFER_HI if request.language == "Hindi" else DEFAULT_LOAN_OFFER_EN)
+        elif request.template_key == 'scene_loan_offer':
+            raw_script = request.script_text or DEFAULT_SCENE_LOAN_OFFER_HI
         else:
             raw_script = request.script_text or (DEFAULT_SCRIPT_HI if request.language == "Hindi" else DEFAULT_SCRIPT_EN)
 
@@ -212,6 +234,9 @@ class RemotionService:
                 lan=request.lan,
                 contact_details=request.contact_details,
             )
+        
+        if request.template_key == 'scene_loan_offer':
+            script_text = _clean_scene_sales_script(script_text)
 
         tts_text = _prepare_tts_pronunciation(script_text, request.lan)
         if request.language == "Hindi":
@@ -556,8 +581,8 @@ class RemotionService:
             "language": request.language,
             "video_variety": request.video_variety or "personalized",
             "template_key": request.template_key or "account_notice",
-            "video_width": 1080 if request.template_key in ("payment_link_guidance", "overdue_template", "loan_offer_interactive") else None,
-            "video_height": 1920 if request.template_key in ("payment_link_guidance", "overdue_template", "loan_offer_interactive") else None,
+            "video_width": 1080 if request.template_key in ("payment_link_guidance", "overdue_template", "loan_offer_interactive", "scene_loan_offer") else None,
+            "video_height": 1920 if request.template_key in ("payment_link_guidance", "overdue_template", "loan_offer_interactive", "scene_loan_offer") else None,
             "audio_url": audio_path,
             "subtitles": subtitles,
             "customer_name": "" if is_universal else request.customer_name,
@@ -620,7 +645,8 @@ class RemotionService:
         logger.info("Render video started")
         leads_path = self.remotion_path / "leads.json"
         is_loan_reminder = request.template_key == "loan_reminder"
-        if not is_loan_reminder:
+        is_scene_loan_offer = request.template_key == "scene_loan_offer"
+        if not is_loan_reminder and not is_scene_loan_offer:
             leads = [render_payload] # Keep it simple for now
             leads_path.write_text(json.dumps(leads, ensure_ascii=False, indent=2), encoding='utf-8')
         
@@ -630,7 +656,7 @@ class RemotionService:
         
         props_path = self.remotion_path / f"props_{video_id}.json"
         props_path.write_text(
-            json.dumps(render_payload if is_loan_reminder else {"leadId": video_id}, ensure_ascii=False),
+            json.dumps(render_payload if (is_loan_reminder or is_scene_loan_offer) else {"leadId": video_id}, ensure_ascii=False),
             encoding='utf-8',
         )
         logger.info("Render video started command")
@@ -642,6 +668,8 @@ class RemotionService:
             npx = "npx.cmd" if os.name == 'nt' else "npx"
             if is_loan_reminder:
                 c = f'{npx} --yes remotion render src/Root.tsx LoanReminderVideo "{output_path}" --props="{str(props_path).replace(os.sep, "/")}" --overwrite'
+            elif is_scene_loan_offer:
+                c = f'{npx} --yes remotion render src/index.jsx SceneLoanOfferVideo "{output_path}" --props="{str(props_path).replace(os.sep, "/")}" --overwrite'
             else:
                 c = f'{npx} --yes remotion render src/index.jsx main "{output_path}" --props="{str(props_path).replace(os.sep, "/")}" --overwrite'
             if settings.remotion_browser_executable:
@@ -706,6 +734,25 @@ class RemotionService:
         is_universal = (request.video_variety or "personalized") == "universal"
 
         tts = await self.generate_tts(request, video_id=video_id)
+        if request.template_key == "scene_loan_offer":
+            audio_duration = float(tts.get("duration") or 30)
+            subtitles = self.parse_vtt(tts["vtt_path"])
+            render_p = {
+                "voiceoverAudioSrc": tts["audio_path"].lstrip("/") if tts.get("audio_path") else None,
+                "audioPlaybackRate": 1,
+                "durationInFrames": max(900, int(audio_duration * 30) + 15),
+                "subtitles": subtitles,
+            }
+            video_url = await self.render_video(request, tts["video_id"], {}, render_p)
+            return {
+                "video_url": video_url,
+                "video_path": settings.output_dir / video_url.lstrip('/'),
+                "audio_path": self.remotion_path / "public" / tts['audio_path'].lstrip('/'),
+                "audio_url": tts['audio_path'],
+                "video_id": tts['video_id'],
+                "text": tts['text'],
+            }
+
         if request.template_key == "loan_reminder":
             loan_assets = await self._persist_loan_reminder_assets(request, tts["video_id"])
             render_p = self.build_loan_reminder_props(request, tts["audio_path"], loan_assets)

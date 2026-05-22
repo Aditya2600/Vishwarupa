@@ -91,8 +91,8 @@ settings.output_dir.mkdir(parents=True, exist_ok=True)
 (settings.output_dir / "avatar-videos").mkdir(parents=True, exist_ok=True)
 HYBRID_PUBLIC_DIR = Path("/tmp/hybrid-public")
 HYBRID_PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
-PORTRAIT_REMOTION_TEMPLATE_KEYS = {"payment_link_guidance", "overdue_template", "loan_offer_interactive"}
-LOCAL_REMOTION_WORKER_TEMPLATE_KEYS = {"payment_link_guidance", "loan_offer_interactive", "loan_reminder"}
+PORTRAIT_REMOTION_TEMPLATE_KEYS = {"payment_link_guidance", "overdue_template", "loan_offer_interactive", "scene_loan_offer"}
+LOCAL_REMOTION_WORKER_TEMPLATE_KEYS = {"payment_link_guidance", "loan_offer_interactive", "loan_reminder", "scene_loan_offer"}
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,

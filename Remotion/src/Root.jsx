@@ -2,6 +2,7 @@ import {Composition} from 'remotion';
 import {TemplateVideo} from './TemplateVideo';
 import {PaymentLinkGuidanceTemplate} from './templates/PaymentLinkGuidanceTemplate';
 import {LoanOfferInteractiveTemplate} from './templates/LoanOfferInteractiveTemplate';
+import {SceneLoanOfferVideo, SCENE_LOAN_OFFER_DURATION} from './SceneLoanOfferVideo';
 import {PAYMENT_LINK_GUIDANCE_DURATION} from './templates/PaymentLinkGuidanceTemplate/scenes';
 import {
   FPS,
@@ -38,6 +39,23 @@ export const RemotionRoot = () => {
         id="LoanOfferInteractiveTemplate"
         component={LoanOfferInteractiveTemplate}
         durationInFrames={LOAN_OFFER_INTERACTIVE_DURATION}
+        fps={FPS}
+        width={1080}
+        height={1920}
+      />
+      <Composition
+        id="SceneLoanOfferVideo"
+        component={SceneLoanOfferVideo}
+        durationInFrames={SCENE_LOAN_OFFER_DURATION}
+        calculateMetadata={({props}) => {
+          const requestedDuration = Number(props?.durationInFrames);
+          return {
+            durationInFrames:
+              Number.isFinite(requestedDuration) && requestedDuration > 0
+                ? requestedDuration
+                : SCENE_LOAN_OFFER_DURATION,
+          };
+        }}
         fps={FPS}
         width={1080}
         height={1920}

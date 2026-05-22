@@ -425,7 +425,8 @@ const handleRemotionTemplateSelect = (templateKey: RemotionTemplateKey) => {
     templateKey === "payment_link_guidance" ||
     templateKey === "overdue_template" ||
     templateKey === "loan_offer_interactive" ||
-    templateKey === "loan_reminder";
+    templateKey === "loan_reminder" ||
+    templateKey === "scene_loan_offer";
   const nextVariety = isPersonalizedTemplate ? "personalized" : state.videoVariety;
   const nextTitlePrefix =
     templateKey === "payment_guidance"
@@ -434,11 +435,13 @@ const handleRemotionTemplateSelect = (templateKey: RemotionTemplateKey) => {
         ? "Payment Link Guidance"
         : templateKey === "loan_reminder"
           ? "Loan Reminder"
-          : templateKey === "overdue_template"
-            ? "Credit Card Overdue Notice"
-            : templateKey === "loan_offer_interactive"
-              ? "Loan Offer"
-              : state.titlePrefix;
+          : templateKey === "scene_loan_offer"
+            ? "Sales Template"
+            : templateKey === "overdue_template"
+              ? "Credit Card Overdue Notice"
+              : templateKey === "loan_offer_interactive"
+                ? "Loan Offer"
+                : state.titlePrefix;
   update({
     remotionTemplateKey: templateKey,
     videoVariety: nextVariety,
@@ -451,11 +454,15 @@ const handleRemotionTemplateSelect = (templateKey: RemotionTemplateKey) => {
     remotionTranscriptCustomized: false,
     titlePrefix: nextTitlePrefix,
     productType: "loan",
-    ...(templateKey === "loan_reminder"
+    ...(templateKey === "loan_reminder" || templateKey === "scene_loan_offer"
       ? {
         aspectRatio: "9:16",
-        loanReminderImagePaths: DEFAULT_LOAN_REMINDER_ASSET_PATHS,
-        loanReminderImageFileNames: {},
+        ...(templateKey === "loan_reminder"
+          ? {
+              loanReminderImagePaths: DEFAULT_LOAN_REMINDER_ASSET_PATHS,
+              loanReminderImageFileNames: {},
+            }
+          : {}),
       }
       : {}),
     ...RESET_GENERATION_STATE,

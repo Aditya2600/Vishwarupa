@@ -130,7 +130,7 @@ export function HeaderBar({ onCreateVideo, primaryLabel = "Create Video" }: Head
                   Hybrid Avatar PIP
                 </p>
                 <p className="text-xs text-muted-foreground group-hover:text-white group-data-[highlighted]:text-white">
-                  Combine a HeyGen avatar clip with the Remotion collection layout.
+                  Combine an avatar clip with a custom collection layout.
                 </p>
               </div>
             </DropdownMenuItem>

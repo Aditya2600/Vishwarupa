@@ -133,6 +133,7 @@ class RemotionVideoRequest(DirectVideoRequest):
         'overdue_template',
         'loan_offer_interactive',
         'loan_reminder',
+        'scene_loan_offer',
     ] | None = 'account_notice'
     title_prefix: str = 'Loan Recall'
     subtitle_color: str = 'White'
