@@ -4,6 +4,12 @@ import {PaymentLinkGuidanceTemplate} from './templates/PaymentLinkGuidanceTempla
 import {LoanOfferInteractiveTemplate} from './templates/LoanOfferInteractiveTemplate';
 import {PAYMENT_LINK_GUIDANCE_DURATION} from './templates/PaymentLinkGuidanceTemplate/scenes';
 import {
+  COLLECTION_REMINDER_DURATION_IN_FRAMES,
+  COLLECTION_REMINDER_FPS,
+  CollectionReminderVideo,
+} from './CollectionReminderVideo';
+import {collectionReminderData} from './data/collectionReminderData';
+import {
   FPS,
   LOAN_OFFER_INTERACTIVE_DURATION,
   getDurationInFrames,
@@ -41,6 +47,15 @@ export const RemotionRoot = () => {
         fps={FPS}
         width={1080}
         height={1920}
+      />
+      <Composition
+        id="CollectionReminderVideo"
+        component={CollectionReminderVideo}
+        durationInFrames={COLLECTION_REMINDER_DURATION_IN_FRAMES}
+        fps={COLLECTION_REMINDER_FPS}
+        width={1080}
+        height={1920}
+        defaultProps={collectionReminderData}
       />
       {leads.map((lead) => {
         const dimensions = getLeadDimensions(lead);

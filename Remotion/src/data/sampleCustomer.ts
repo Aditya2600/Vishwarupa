@@ -14,10 +14,6 @@ export type LoanReminderCustomer = {
   loanNumber: string;
   overdueAmount: string;
   lenderName: string;
-  ctaPrimary: string;
-  ctaSecondary: string;
-  paymentUrl: string;
-  callbackPhone: string;
   voiceoverLanguage: 'loan_reminder';
   voiceoverAudioSrc?: string;
   loanReminderAssets: LoanReminderAssets;
@@ -38,10 +34,6 @@ export const sampleCustomer: LoanReminderCustomer = {
   loanNumber: '123445555555',
   overdueAmount: '₹50,000',
   lenderName: 'TVS Credit',
-  ctaPrimary: 'Pay Now',
-  ctaSecondary: 'Request a Call Back',
-  paymentUrl: 'https://pay.example.com/customer123',
-  callbackPhone: '+911234567890',
   voiceoverLanguage: 'loan_reminder',
   loanReminderAssets: defaultLoanReminderAssets,
 };

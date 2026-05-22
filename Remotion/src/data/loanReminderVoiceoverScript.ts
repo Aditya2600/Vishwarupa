@@ -52,7 +52,7 @@ export const sceneVoiceoverScript: SceneVoiceoverScript = {
   ctaScene: {
     duration: '46-55s',
     voiceover:
-      'Aap Pay Now option se turant payment kar sakte hain. Agar aapko assistance chahiye, toh Request a Call Back option select karein.',
+      'Aap apne overdue amount ko secure repayment channel ke through clear kar sakte hain. Zarurat ho toh assistance ke liye support team se sampark karein.',
   },
   financialBurden: {
     duration: '55-61s',

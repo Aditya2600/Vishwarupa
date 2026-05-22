@@ -6,7 +6,8 @@
     "dev": "remotion studio src/index.jsx",
     "preview": "remotion preview",
     "render": "remotion render src/Root.tsx LoanReminderVideo out/loan-reminder.mp4",
-    "render:main": "remotion render src/index.jsx main out/preview.mp4 --overwrite"
+    "render:main": "remotion render src/index.jsx main out/preview.mp4 --overwrite",
+    "render:collection-reminder": "remotion render src/Root.tsx CollectionReminderVideo out/collection-reminder.mp4 --overwrite"
   },
   "dependencies": {
     "react": "^18.3.1",
