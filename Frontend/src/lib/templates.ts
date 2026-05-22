@@ -18,9 +18,8 @@ export type RemotionTemplateKey =
   | "loan_offer_interactive"
   | "loan_reminder"
   | "scene_loan_offer"
-  | "tvs_credit_emi";
   | "collection_reminder"
-  | "scene_loan_offer";
+  | "tvs_credit_emi";
 export type CreateMode = "avatar" | "remotion" | "hybrid_remotion_avatar_pip";
 export type LoanReminderAssetKey =
   | "logo"
@@ -393,11 +392,6 @@ export const REMOTION_TEMPLATE_OPTIONS: Array<{ key: RemotionTemplateKey; name: 
     key: "tvs_credit_emi",
     name: "TVS Credit EMI Payment",
     description: "Payment assistance walkthrough specifically designed for TVS Credit with app screenshots.",
-  },
-  {
-    key: "collection_reminder",
-    name: "Collection Reminder",
-    description: "Modern TVS Credit themed repayment reminder using the new collection reminder scene flow.",
   },
 ];
 

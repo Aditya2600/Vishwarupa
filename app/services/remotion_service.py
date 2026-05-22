@@ -670,7 +670,7 @@ class RemotionService:
     async def render_video(self, request: RemotionVideoRequest, video_id: str, scene_payload: dict[str, Any], render_payload: dict[str, Any]) -> str:
         logger.info("Render video started")
         leads_path = self.remotion_path / "leads.json"
-        is_root_props_template = request.template_key in {"loan_reminder", "collection_reminder"}
+        is_root_props_template = request.template_key in {"loan_reminder", "collection_reminder", "tvs_credit_emi"}
         is_loan_reminder = request.template_key == "loan_reminder"
         is_scene_loan_offer = request.template_key == "scene_loan_offer"
         if not is_root_props_template and not is_scene_loan_offer:
@@ -697,6 +697,8 @@ class RemotionService:
                 c = f'{npx} --yes remotion render src/Root.tsx LoanReminderVideo "{output_path}" --props="{str(props_path).replace(os.sep, "/")}" --overwrite'
             elif request.template_key == "collection_reminder":
                 c = f'{npx} --yes remotion render src/Root.tsx CollectionReminderVideo "{output_path}" --props="{str(props_path).replace(os.sep, "/")}" --overwrite'
+            elif request.template_key == "tvs_credit_emi":
+                c = f'{npx} --yes remotion render src/index.jsx TVSCreditEMITemplate "{output_path}" --props="{str(props_path).replace(os.sep, "/")}" --overwrite'
             elif is_scene_loan_offer:
                 c = f'{npx} --yes remotion render src/index.jsx SceneLoanOfferVideo "{output_path}" --props="{str(props_path).replace(os.sep, "/")}" --overwrite'
             else:
@@ -782,6 +784,29 @@ class RemotionService:
                 "audio_url": tts['audio_path'],
                 "video_id": tts['video_id'],
                 "text": tts['text'],
+            }
+
+        if request.template_key == "tvs_credit_emi":
+            audio_duration = float(tts.get("duration") or 30)
+            render_p = {
+                "enableNarration": True,
+                "narrationAudioPath": tts["audio_path"].lstrip("/") if tts.get("audio_path") else None,
+                "customerName": request.customer_name or "Customer",
+                "productType": request.product_type or "Two Wheeler Loan",
+                "clientName": request.client_name or "TVS Credit",
+                "tos": str(request.tos or "0"),
+                "lan": request.lan or "1234",
+                "contactDetails": request.contact_details or "1800-123-4567",
+                "durationInFrames": max(900, int(audio_duration * 30) + 15),
+            }
+            video_url = await self.render_video(request, tts["video_id"], {}, render_p)
+            return {
+                "video_url": video_url,
+                "video_path": settings.output_dir / video_url.lstrip('/'),
+                "audio_path": self.remotion_path / "public" / tts['audio_path'].lstrip('/'),
+                "audio_url": tts['audio_path'],
+                "video_id": tts['video_id'],
+                "text": tts['text']
             }
 
         if request.template_key == "loan_reminder":
