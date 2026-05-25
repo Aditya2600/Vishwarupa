@@ -92,7 +92,7 @@ settings.output_dir.mkdir(parents=True, exist_ok=True)
 HYBRID_PUBLIC_DIR = Path("/tmp/hybrid-public")
 HYBRID_PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
 PORTRAIT_REMOTION_TEMPLATE_KEYS = {"payment_link_guidance", "overdue_template", "loan_offer_interactive", "scene_loan_offer"}
-LOCAL_REMOTION_WORKER_TEMPLATE_KEYS = {"payment_link_guidance", "loan_offer_interactive", "loan_reminder", "scene_loan_offer"}
+LOCAL_REMOTION_WORKER_TEMPLATE_KEYS = {"payment_link_guidance", "loan_offer_interactive", "loan_reminder", "scene_loan_offer", "tvs_credit_emi"}
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -492,6 +492,24 @@ LOAN_REMINDER_IMAGE_KEYS = {
     'financialBurden',
 }
 
+SALES_TEMPLATE_IMAGE_KEYS = {
+    'scene1',
+    'scene2',
+    'scene3',
+    'scene4',
+    'scene5',
+}
+
+EMI_TEMPLATE_IMAGE_KEYS = {
+    'whatsappPaynow',
+    'smsLink',
+    'upiApps',
+    'openappSearch',
+    'enterlan',
+    'paymentSuccess',
+    'shopVisit',
+}
+
 
 async def _parse_remotion_payload(request: Request) -> RemotionVideoRequest:
     content_type = request.headers.get('content-type', '').lower()
@@ -512,6 +530,12 @@ async def _parse_remotion_payload(request: Request) -> RemotionVideoRequest:
     loan_reminder_image_paths: dict[str, str] = {}
     loan_reminder_image_filenames: dict[str, str] = {}
     loan_reminder_image_bytes: dict[str, bytes] = {}
+    sales_image_paths: dict[str, str] = {}
+    sales_image_filenames: dict[str, str] = {}
+    sales_image_bytes: dict[str, bytes] = {}
+    emi_image_paths: dict[str, str] = {}
+    emi_image_filenames: dict[str, str] = {}
+    emi_image_bytes: dict[str, bytes] = {}
 
     if isinstance(logo_file, UploadFile) or (
         logo_file is not None and hasattr(logo_file, 'read') and hasattr(logo_file, 'filename')
@@ -540,6 +564,50 @@ async def _parse_remotion_payload(request: Request) -> RemotionVideoRequest:
         ):
             loan_reminder_image_filenames[key] = image_file.filename
             loan_reminder_image_bytes[key] = await image_file.read()
+
+    raw_sales_paths = _form_text(form.get('sales_image_paths'))
+    if raw_sales_paths:
+        try:
+            parsed_sales_paths = json.loads(raw_sales_paths)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=422, detail='Invalid sales_image_paths JSON.') from exc
+        if not isinstance(parsed_sales_paths, dict):
+            raise HTTPException(status_code=422, detail='sales_image_paths must be an object.')
+        sales_image_paths = {
+            str(key): str(value).strip()
+            for key, value in parsed_sales_paths.items()
+            if key in SALES_TEMPLATE_IMAGE_KEYS and str(value).strip()
+        }
+
+    for key in SALES_TEMPLATE_IMAGE_KEYS:
+        image_file = form.get(f'sales_image_{key}')
+        if isinstance(image_file, UploadFile) or (
+            image_file is not None and hasattr(image_file, 'read') and hasattr(image_file, 'filename')
+        ):
+            sales_image_filenames[key] = image_file.filename
+            sales_image_bytes[key] = await image_file.read()
+
+    raw_emi_paths = _form_text(form.get('emi_image_paths'))
+    if raw_emi_paths:
+        try:
+            parsed_emi_paths = json.loads(raw_emi_paths)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=422, detail='Invalid emi_image_paths JSON.') from exc
+        if not isinstance(parsed_emi_paths, dict):
+            raise HTTPException(status_code=422, detail='emi_image_paths must be an object.')
+        emi_image_paths = {
+            str(key): str(value).strip()
+            for key, value in parsed_emi_paths.items()
+            if key in EMI_TEMPLATE_IMAGE_KEYS and str(value).strip()
+        }
+
+    for key in EMI_TEMPLATE_IMAGE_KEYS:
+        image_file = form.get(f'emi_image_{key}')
+        if isinstance(image_file, UploadFile) or (
+            image_file is not None and hasattr(image_file, 'read') and hasattr(image_file, 'filename')
+        ):
+            emi_image_filenames[key] = image_file.filename
+            emi_image_bytes[key] = await image_file.read()
 
     logo_opacity = _form_int(form.get('logo_opacity'))
 
@@ -571,6 +639,12 @@ async def _parse_remotion_payload(request: Request) -> RemotionVideoRequest:
         'loan_reminder_image_paths': loan_reminder_image_paths or None,
         'loan_reminder_image_filenames': loan_reminder_image_filenames or None,
         'loan_reminder_image_bytes': loan_reminder_image_bytes or None,
+        'sales_image_paths': sales_image_paths or None,
+        'sales_image_filenames': sales_image_filenames or None,
+        'sales_image_bytes': sales_image_bytes or None,
+        'emi_image_paths': emi_image_paths or None,
+        'emi_image_filenames': emi_image_filenames or None,
+        'emi_image_bytes': emi_image_bytes or None,
         'voice_gender': _form_text(form.get('voice_gender')) or 'female',
         'max_loan_amount': _form_text(form.get('max_loan_amount')),
         'max_tenure': _form_text(form.get('max_tenure')),
@@ -589,6 +663,8 @@ async def _parse_remotion_payload(request: Request) -> RemotionVideoRequest:
         'emi_calculation48': _form_text(form.get('emi_calculation48')),
         'emi_calculation60': _form_text(form.get('emi_calculation60')),
         'cta_phone_number': _form_text(form.get('cta_phone_number')),
+        'interactive_background_color': _form_text(form.get('interactive_background_color')),
+        'interactive_cta_color': _form_text(form.get('interactive_cta_color')),
     }
 
     try:
@@ -1903,6 +1979,16 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
             key: len(value) if isinstance(value, (bytes, bytearray)) else str(value)
             for key, value in payload_dict['loan_reminder_image_bytes'].items()
         }
+    if 'sales_image_bytes' in payload_dict and payload_dict['sales_image_bytes']:
+        payload_dict['sales_image_bytes'] = {
+            key: len(value) if isinstance(value, (bytes, bytearray)) else str(value)
+            for key, value in payload_dict['sales_image_bytes'].items()
+        }
+    if 'emi_image_bytes' in payload_dict and payload_dict['emi_image_bytes']:
+        payload_dict['emi_image_bytes'] = {
+            key: len(value) if isinstance(value, (bytes, bytearray)) else str(value)
+            for key, value in payload_dict['emi_image_bytes'].items()
+        }
     
     payload_str = json.dumps(payload_dict, sort_keys=True, ensure_ascii=False)
     payload_hash = hashlib.sha256(payload_str.encode('utf-8')).hexdigest()
@@ -2186,6 +2272,8 @@ async def get_interactive_loan_offer(video_id: str):
         "contact_details": field("contact_details", "1800-555-999"),
         "primary_color": field("primary_color", "#053666"),
         "secondary_color": field("secondary_color", "#0f7734"),
+        "interactive_background_color": field("interactive_background_color", "#f5f7fb"),
+        "interactive_cta_color": field("interactive_cta_color", "#702082"),
         "loan_offer": {
             "max_loan_amount": field("max_loan_amount", field("loan_amount", "105000")),
             "max_tenure": field("max_tenure", "60"),

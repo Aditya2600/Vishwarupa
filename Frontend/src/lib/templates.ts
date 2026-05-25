@@ -381,8 +381,8 @@ export const REMOTION_TEMPLATE_OPTIONS: Array<{ key: RemotionTemplateKey; name: 
   },
   {
     key: "tvs_credit_emi",
-    name: "TVS Credit EMI Payment",
-    description: "Payment assistance walkthrough specifically designed for TVS Credit with app screenshots.",
+    name: "Full 3 Method Payment Guidance",
+    description: "Comprehensive 3-method payment guidance walkthrough designed with custom app image uploads.",
   },
 ];
 

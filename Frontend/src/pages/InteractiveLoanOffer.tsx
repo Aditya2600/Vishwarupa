@@ -97,6 +97,18 @@ function reportEvent(videoId: string, action: string, row?: OfferRow) {
   }).catch(() => undefined);
 }
 
+function getTextColorForBg(hex: string): string {
+  if (!hex) return "#ffffff";
+  const cleanHex = hex.replace("#", "");
+  if (cleanHex.length < 6) return "#ffffff";
+  const r = parseInt(cleanHex.substring(0, 2), 16);
+  const g = parseInt(cleanHex.substring(2, 4), 16);
+  const b = parseInt(cleanHex.substring(4, 6), 16);
+  if (isNaN(r) || isNaN(g) || isNaN(b)) return "#ffffff";
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+  return brightness > 145 ? "#000000" : "#ffffff";
+}
+
 export default function InteractiveLoanOffer() {
   const { id } = useParams<{ id: string }>();
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -264,8 +276,10 @@ export default function InteractiveLoanOffer() {
 
   const brandColor = safeText(data?.primary_color, "#053666");
   const accentColor = safeText(data?.secondary_color, "#0f7734");
-  const ctaColor = "#702082";
-  const ctaDarkColor = "#4a105c";
+  const backgroundColor = safeText(data?.interactive_background_color, "#f5f7fb");
+  const ctaColor = safeText(data?.interactive_cta_color, "#702082");
+  const ctaDarkColor = ctaColor.length === 7 ? `${ctaColor}e6` : ctaColor;
+  const ctaTextColor = getTextColorForBg(ctaColor);
   const phoneNumber = safeText(data?.loan_offer?.cta_phone_number, safeText(data?.contact_details, "1800-555-999"));
 
   const playFromStart = async () => {
@@ -322,7 +336,7 @@ export default function InteractiveLoanOffer() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#f5f7fb] flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor }}>
         <Loader2 className="h-8 w-8 animate-spin text-slate-700" />
       </div>
     );
@@ -330,7 +344,7 @@ export default function InteractiveLoanOffer() {
 
   if (error || !data) {
     return (
-      <div className="min-h-screen bg-[#f5f7fb] flex items-center justify-center px-6">
+      <div className="min-h-screen flex items-center justify-center px-6" style={{ backgroundColor }}>
         <div className="max-w-md text-center">
           <AlertCircle className="mx-auto h-11 w-11 text-red-500" />
           <h1 className="mt-4 text-xl font-bold text-slate-950">Offer unavailable</h1>
@@ -346,8 +360,9 @@ export default function InteractiveLoanOffer() {
 
   return (
     <main
-      className="min-h-screen bg-[#f5f7fb] text-slate-950 flex items-center justify-center p-4 lg:p-8"
+      className="min-h-screen text-slate-950 flex items-center justify-center p-4 lg:p-8"
       style={{
+        backgroundColor,
         "--brand": brandColor,
         "--accent": accentColor,
         "--pulse-bg": brandColor,
@@ -441,24 +456,24 @@ export default function InteractiveLoanOffer() {
         }
         .premium-btn-inner {
           border: 1px solid rgba(255, 255, 255, 0.3) !important;
-          box-shadow: inset 0 1px 1.5px rgba(255, 255, 255, 0.4), 0 12px 30px rgba(112, 32, 130, 0.5), 0 0 15px rgba(112, 32, 130, 0.4) !important;
+          box-shadow: inset 0 1px 1.5px rgba(255, 255, 255, 0.4), 0 12px 30px ${ctaColor}80, 0 0 15px ${ctaColor}66 !important;
           font-weight: 900 !important;
           text-transform: uppercase !important;
           letter-spacing: 0.08em !important;
           text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
         }
         .premium-select {
-          border: 1px solid rgba(112, 32, 130, 0.18) !important;
-          box-shadow: 0 4px 12px rgba(112, 32, 130, 0.05), inset 0 2px 4px rgba(0, 0, 0, 0.01) !important;
+          border: 1px solid ${ctaColor}2e !important;
+          box-shadow: 0 4px 12px ${ctaColor}0d, inset 0 2px 4px rgba(0, 0, 0, 0.01) !important;
           transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
         }
         .premium-select:hover {
-          border-color: rgba(112, 32, 130, 0.35) !important;
-          box-shadow: 0 6px 16px rgba(112, 32, 130, 0.08) !important;
+          border-color: ${ctaColor}59 !important;
+          box-shadow: 0 6px 16px ${ctaColor}14 !important;
         }
         .premium-select:focus {
           border-color: var(--brand, #053666) !important;
-          box-shadow: 0 0 0 3px rgba(112, 32, 130, 0.15) !important;
+          box-shadow: 0 0 0 3px ${ctaColor}26 !important;
         }
       `}</style>
 
@@ -505,16 +520,16 @@ export default function InteractiveLoanOffer() {
             <Button
               type="button"
               onClick={() => void togglePlayPause()}
-              className="h-10 w-10 rounded-full p-0 flex items-center justify-center text-white backdrop-blur-md bg-[#702082]/90 hover:bg-[#702082] transition-colors border border-white/30"
-              style={{ boxShadow: '0 8px 20px rgba(112, 32, 130, 0.4)' }}
+              className="h-10 w-10 rounded-full p-0 flex items-center justify-center backdrop-blur-md transition-colors border border-white/30"
+              style={{ backgroundColor: ctaDarkColor, color: ctaTextColor, boxShadow: `0 8px 20px ${ctaColor}66` }}
             >
               {isPlaying ? <Pause className="h-4 w-4 fill-current" /> : <Play className="ml-0.5 h-4 w-4 fill-current" />}
             </Button>
             <Button
               type="button"
               onClick={handleCall}
-              className="h-10 rounded-full px-5 text-sm font-bold text-white backdrop-blur-md bg-[#702082]/90 hover:bg-[#702082] transition-colors border border-white/30"
-              style={{ boxShadow: '0 8px 20px rgba(112, 32, 130, 0.4)', textShadow: '0 1px 2px rgba(0,0,0,0.2)' }}
+              className="h-10 rounded-full px-5 text-sm font-bold backdrop-blur-md transition-colors border border-white/30"
+              style={{ backgroundColor: ctaDarkColor, color: ctaTextColor, boxShadow: `0 8px 20px ${ctaColor}66`, textShadow: ctaTextColor === '#ffffff' ? '0 1px 2px rgba(0,0,0,0.2)' : 'none' }}
             >
               <Phone className="mr-2 h-4 w-4" />
               Call Now
@@ -576,11 +591,11 @@ export default function InteractiveLoanOffer() {
             <div
               style={{
                 fontSize: `${videoWidth * 0.11}px`,
-                color: "#ffffff",
+                color: ctaTextColor,
                 fontWeight: "800",
                 textAlign: "center",
                 letterSpacing: "-0.02em",
-                textShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                textShadow: ctaTextColor === "#ffffff" ? "0 4px 12px rgba(0,0,0,0.15)" : "none",
                 fontFamily: "figtreeregular, Inter, sans-serif",
               }}
             >
@@ -607,9 +622,11 @@ export default function InteractiveLoanOffer() {
               <div className="pulsing" style={{ border: `1px solid ${ctaColor}` }}></div>
               <button
                 type="button"
-                className="absolute inset-0 z-10 flex items-center justify-center rounded-full transition-all border-0 premium-btn-inner text-white"
+                className="absolute inset-0 z-10 flex items-center justify-center rounded-full transition-all border-0 premium-btn-inner"
                 style={{
                   background: `linear-gradient(135deg, ${ctaColor}, ${ctaDarkColor})`,
+                  color: ctaTextColor,
+                  textShadow: ctaTextColor === '#ffffff' ? '0 1px 3px rgba(0, 0, 0, 0.3)' : 'none',
                   fontSize: `${videoWidth * 0.042}px`,
                 }}
               >
@@ -804,9 +821,11 @@ export default function InteractiveLoanOffer() {
               <div className="pulsing" style={{ border: `1px solid ${ctaColor}` }}></div>
               <button
                 type="button"
-                className="absolute inset-0 z-10 flex items-center justify-center rounded-full transition-all border-0 premium-btn-inner text-white px-2"
+                className="absolute inset-0 z-10 flex items-center justify-center rounded-full transition-all border-0 premium-btn-inner px-2"
                 style={{
                   background: `linear-gradient(135deg, ${ctaColor}, ${ctaDarkColor})`,
+                  color: ctaTextColor,
+                  textShadow: ctaTextColor === '#ffffff' ? '0 1px 3px rgba(0, 0, 0, 0.3)' : 'none',
                   fontSize: `${videoWidth * 0.038}px`,
                 }}
               >
@@ -860,8 +879,8 @@ export default function InteractiveLoanOffer() {
               <Button
                 type="button"
                 onClick={handleCall}
-                className="relative mt-5 h-14 w-full rounded-full text-base font-black text-white shadow-xl border-0"
-                style={{ background: `linear-gradient(135deg, ${ctaColor}, ${ctaDarkColor})` }}
+                className="relative mt-5 h-14 w-full rounded-full text-base font-black shadow-xl border-0"
+                style={{ background: `linear-gradient(135deg, ${ctaColor}, ${ctaDarkColor})`, color: ctaTextColor }}
               >
                 <Phone className="mr-2 h-5 w-5 fill-current" />
                 Call {phoneNumber}
@@ -879,15 +898,15 @@ export default function InteractiveLoanOffer() {
             </div>
           </div>
         ) : null}
-
+ 
         {/* End Overlay buttons */}
         {hasEnded && !selectedRow ? (
           <div className="absolute inset-x-5 bottom-10 flex flex-col gap-3 animate-in fade-in zoom-in duration-300 z-20">
             <Button
               type="button"
               onClick={handleCall}
-              className="h-14 w-full rounded-full text-base font-bold text-white shadow-2xl ring-4 ring-white/20 border-0"
-              style={{ backgroundColor: ctaColor }}
+              className="h-14 w-full rounded-full text-base font-bold shadow-2xl ring-4 ring-white/20 border-0"
+              style={{ backgroundColor: ctaColor, color: ctaTextColor }}
             >
               <Phone className="mr-2 h-5 w-5 fill-current" />
               Call {phoneNumber}

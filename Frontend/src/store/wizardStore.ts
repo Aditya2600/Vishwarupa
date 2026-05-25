@@ -58,6 +58,12 @@ export interface WizardState {
   remotionTemplateKey: RemotionTemplateKey;
   loanReminderImagePaths: LoanReminderAssetPaths;
   loanReminderImageFileNames: Partial<Record<LoanReminderAssetKey, string>>;
+  salesImagePaths: Record<string, string>;
+  salesImageFileNames: Partial<Record<string, string>>;
+  emiImagePaths: Record<string, string>;
+  emiImageFileNames: Partial<Record<string, string>>;
+  interactiveBackgroundColor: string;
+  interactiveCtaColor: string;
   videoType: VideoType;
   videoVariety: "personalized" | "universal";
   avatarJobId: string;
@@ -114,6 +120,26 @@ const defaultState: WizardState = {
   remotionTemplateKey: "account_notice",
   loanReminderImagePaths: DEFAULT_LOAN_REMINDER_ASSET_PATHS,
   loanReminderImageFileNames: {},
+  salesImagePaths: {
+    scene1: "scene1.png",
+    scene2: "scene2.png",
+    scene3: "scene3.png",
+    scene4: "scene4.png",
+    scene5: "scene5.png",
+  },
+  salesImageFileNames: {},
+  emiImagePaths: {
+    whatsappPaynow: "paynow_whatsapp.png",
+    smsLink: "link_sms.png",
+    upiApps: "upi_app.png",
+    openappSearch: "open_app_search.png",
+    enterlan: "enter_lan.png",
+    paymentSuccess: "payment_success.png",
+    shopVisit: "shop_visit.png",
+  },
+  emiImageFileNames: {},
+  interactiveBackgroundColor: "#f5f7fb",
+  interactiveCtaColor: "#702082",
   videoType: "avatar",
   videoVariety: "universal",
   avatarJobId: "",
@@ -175,6 +201,26 @@ function restoreSavedState(savedState: Partial<WizardState>): WizardState {
       ...(savedState.loanReminderImagePaths ?? {}),
     },
     loanReminderImageFileNames: {},
+    salesImagePaths: {
+      scene1: "scene1.png",
+      scene2: "scene2.png",
+      scene3: "scene3.png",
+      scene4: "scene4.png",
+      scene5: "scene5.png",
+      ...(savedState.salesImagePaths ?? {}),
+    },
+    salesImageFileNames: {},
+    emiImagePaths: {
+      whatsappPaynow: "paynow_whatsapp.png",
+      smsLink: "link_sms.png",
+      upiApps: "upi_app.png",
+      openappSearch: "open_app_search.png",
+      enterlan: "enter_lan.png",
+      paymentSuccess: "payment_success.png",
+      shopVisit: "shop_visit.png",
+      ...(savedState.emiImagePaths ?? {}),
+    },
+    emiImageFileNames: {},
     videoType: savedVideoType,
   };
 

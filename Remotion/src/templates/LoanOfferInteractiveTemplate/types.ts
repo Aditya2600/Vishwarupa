@@ -24,5 +24,7 @@ export type LoanOfferInteractiveTemplateProps = {
   contactDetails?: string;
   loanOffer?: LoanOfferData;
   stepBoundaries?: number[];
+  interactiveBackgroundColor?: string;
+  interactiveCtaColor?: string;
 };
 

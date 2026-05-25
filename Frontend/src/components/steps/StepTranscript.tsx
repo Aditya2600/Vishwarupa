@@ -453,7 +453,8 @@ const handleDemoTab =
       templateKey === "loan_offer_interactive" ||
       templateKey === "loan_reminder" ||
       templateKey === "collection_reminder" ||
-      templateKey === "scene_loan_offer";
+      templateKey === "scene_loan_offer" ||
+      templateKey === "tvs_credit_emi";
     const nextVariety = isPersonalizedTemplate ? "personalized" : state.videoVariety;
     const nextTitlePrefix =
       templateKey === "payment_guidance"
@@ -571,7 +572,10 @@ return (
       </div>
     ) : null}
 
-    {!isHybrid ? (
+    {!isHybrid && 
+     state.remotionTemplateKey !== "loan_offer_interactive" && 
+     state.remotionTemplateKey !== "scene_loan_offer" &&
+     state.remotionTemplateKey !== "tvs_credit_emi" ? (
     <div className="mb-6 flex justify-center">
       <Tabs
         value={state.videoVariety}

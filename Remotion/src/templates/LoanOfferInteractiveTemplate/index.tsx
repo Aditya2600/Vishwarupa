@@ -58,6 +58,18 @@ const safeText = (value: unknown, fallback: string) => {
   return cleaned || fallback;
 };
 
+const isLightColor = (hex: string): boolean => {
+  if (!hex) return false;
+  const cleanHex = hex.replace("#", "");
+  if (cleanHex.length < 6) return false;
+  const r = parseInt(cleanHex.substring(0, 2), 16);
+  const g = parseInt(cleanHex.substring(2, 4), 16);
+  const b = parseInt(cleanHex.substring(4, 6), 16);
+  if (isNaN(r) || isNaN(g) || isNaN(b)) return false;
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+  return brightness > 145;
+};
+
 const toNumeric = (value: unknown) => {
   if (value === null || value === undefined) return null;
   const cleaned = String(value).replace(/[^\d.]/g, "");
@@ -124,11 +136,21 @@ const getSelectedRow = (offer: LoanOfferData) => {
   );
 };
 
-const Shell = ({ children }: { children: React.ReactNode }) => (
+const Shell = ({
+  children,
+  interactiveBackgroundColor,
+  interactiveCtaColor,
+}: {
+  children: React.ReactNode;
+  interactiveBackgroundColor?: string;
+  interactiveCtaColor?: string;
+}) => {
+  const ctaColor = interactiveCtaColor || "#702082";
+  const bg = interactiveBackgroundColor || "linear-gradient(180deg, #ffffff 0%, #f6eff8 50%, #eddcf2 100%)";
+  return (
   <AbsoluteFill
     style={{
-      background:
-        "linear-gradient(180deg, #ffffff 0%, #f6eff8 50%, #eddcf2 100%)",
+      background: bg,
       color: "#1a062f",
       fontFamily: FONT_FAMILY,
       overflow: "hidden",
@@ -147,7 +169,7 @@ const Shell = ({ children }: { children: React.ReactNode }) => (
             <path
               d="M 40 0 L 0 0 0 40"
               fill="none"
-              stroke="#702082"
+              stroke={ctaColor}
               strokeWidth="1.5"
             />
           </pattern>
@@ -166,7 +188,7 @@ const Shell = ({ children }: { children: React.ReactNode }) => (
         height: "40%",
         borderRadius: "50%",
         background:
-          "radial-gradient(circle, rgba(142, 43, 175, 0.22) 0%, transparent 70%)",
+          `radial-gradient(circle, ${ctaColor}38 0%, transparent 70%)`,
         filter: "blur(40px)",
       }}
     />
@@ -179,7 +201,7 @@ const Shell = ({ children }: { children: React.ReactNode }) => (
         height: "45%",
         borderRadius: "50%",
         background:
-          "radial-gradient(circle, rgba(74, 16, 92, 0.18) 0%, transparent 70%)",
+          `radial-gradient(circle, ${ctaColor}2d 0%, transparent 70%)`,
         filter: "blur(50px)",
       }}
     />
@@ -187,27 +209,35 @@ const Shell = ({ children }: { children: React.ReactNode }) => (
     <AbsoluteFill
       style={{
         background:
-          "radial-gradient(circle at 10% 8%, rgba(112, 32, 130, 0.12), transparent 34%), radial-gradient(circle at 90% 76%, rgba(74, 16, 92, 0.14), transparent 30%)",
+          `radial-gradient(circle at 10% 8%, ${ctaColor}1f, transparent 34%), radial-gradient(circle at 90% 76%, ${ctaColor}24, transparent 30%)`,
       }}
     />
     {children}
   </AbsoluteFill>
-);
+  );
+};
 
 const Intro = ({
+  customerName,
   clientName,
+  offer,
+  interactiveBackgroundColor,
+  interactiveCtaColor,
 }: {
   customerName: string;
   clientName: string;
   offer: LoanOfferData;
+  interactiveBackgroundColor?: string;
+  interactiveCtaColor?: string;
 }) => {
   const frame = useCurrentFrame();
   const introFade = Math.min(frame / 28, 1);
   const cardLift = Math.max(18 - frame * 0.7, 0);
   const loanLift = Math.max(28 - frame * 0.85, 0);
+  const ctaColor = interactiveCtaColor || "#702082";
 
   return (
-    <Shell>
+    <Shell interactiveBackgroundColor={interactiveBackgroundColor} interactiveCtaColor={interactiveCtaColor}>
       <div
         style={{
           padding: "110px 80px 0",
@@ -224,7 +254,7 @@ const Intro = ({
             width: 150,
             height: 150,
             borderRadius: "50%",
-            border: "2px solid rgba(112, 32, 130, 0.16)",
+            border: `2px solid ${ctaColor}29`,
             opacity: 0.75,
           }}
         />
@@ -237,7 +267,7 @@ const Intro = ({
             height: 82,
             borderRadius: "50%",
             background:
-              "linear-gradient(135deg, rgba(112, 32, 130, 0.12), rgba(168, 85, 247, 0.03))",
+              `linear-gradient(135deg, ${hexToRgba(ctaColor, 0.12)}, ${hexToRgba(ctaColor, 0.03 / 2)})`,
           }}
         />
         <div
@@ -250,9 +280,9 @@ const Intro = ({
             borderRadius: 28,
             transform: `rotate(${12 + frame * 0.05}deg)`,
             background:
-              "linear-gradient(135deg, rgba(255, 255, 255, 0.76), rgba(112, 32, 130, 0.08))",
-            border: "1px solid rgba(112, 32, 130, 0.12)",
-            boxShadow: "0 18px 38px rgba(74, 16, 92, 0.08)",
+              `linear-gradient(135deg, rgba(255, 255, 255, 0.76), ${hexToRgba(ctaColor, 0.08)})`,
+            border: `1px solid ${hexToRgba(ctaColor, 0.12)}`,
+            boxShadow: `0 18px 38px ${ctaColor}14`,
           }}
         />
         <div
@@ -264,7 +294,7 @@ const Intro = ({
             height: 190,
             borderRadius: "50%",
             background:
-              "radial-gradient(circle, rgba(168, 85, 247, 0.18) 0%, rgba(112, 32, 130, 0.05) 46%, transparent 70%)",
+              `radial-gradient(circle, ${hexToRgba(ctaColor, 0.18 / 2)} 0%, ${hexToRgba(ctaColor, 0.05)} 46%, transparent 70%)`,
             filter: "blur(2px)",
           }}
         />
@@ -276,9 +306,9 @@ const Intro = ({
             width: 5,
             height: 5,
             borderRadius: "50%",
-            background: "#a855f7",
+            background: `${ctaColor}cc`,
             boxShadow:
-              "120px -42px 0 rgba(112, 32, 130, 0.28), 250px 12px 0 rgba(168, 85, 247, 0.32), 420px -54px 0 rgba(112, 32, 130, 0.24), 625px 34px 0 rgba(168, 85, 247, 0.26)",
+              `120px -42px 0 ${hexToRgba(ctaColor, 0.28)}, 250px 12px 0 ${hexToRgba(ctaColor, 0.32 / 2)}, 420px -54px 0 ${hexToRgba(ctaColor, 0.24)}, 625px 34px 0 ${hexToRgba(ctaColor, 0.26 / 2)}`,
           }}
         />
 
@@ -288,11 +318,11 @@ const Intro = ({
             fontFamily: INTRO_BRAND_FONT,
             fontSize: 44,
             fontWeight: 900,
-            color: "#702082",
+            color: isLightColor(ctaColor) ? "#1a062f" : ctaColor,
             textAlign: "center",
             letterSpacing: "0.05em",
             textTransform: "uppercase",
-            textShadow: "0 4px 12px rgba(112, 32, 130, 0.05)",
+            textShadow: `0 4px 12px ${ctaColor}0d`,
             opacity: introFade,
             transform: `translateY(${Math.max(12 - frame * 0.55, 0)}px)`,
           }}
@@ -306,7 +336,7 @@ const Intro = ({
             height: 4,
             borderRadius: 99,
             background:
-              "linear-gradient(90deg, transparent, rgba(112, 32, 130, 0.55), transparent)",
+              `linear-gradient(90deg, transparent, ${ctaColor}8c, transparent)`,
             opacity: introFade,
           }}
         />
@@ -322,9 +352,9 @@ const Intro = ({
             borderRadius: 44,
             background:
               "linear-gradient(145deg, rgba(255, 255, 255, 0.96) 0%, rgba(255, 255, 255, 0.78) 56%, rgba(246, 239, 248, 0.82) 100%)",
-            border: "1px solid rgba(112, 32, 130, 0.12)",
+            border: `1px solid ${hexToRgba(ctaColor, 0.12)}`,
             boxShadow:
-              "0 28px 58px -14px rgba(74, 16, 92, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.92)",
+              `0 28px 58px -14px ${ctaColor}2d, inset 0 1px 0 rgba(255, 255, 255, 0.92)`,
             backdropFilter: "blur(20px)",
             padding: "40px 40px",
             display: "flex",
@@ -353,7 +383,9 @@ const Intro = ({
               width: 70,
               height: 70,
               borderRadius: "50%",
-              border: "1px solid rgba(112, 32, 130, 0.12)",
+              fontWeight: 800,
+              color: ctaColor,
+              border: `1px solid ${ctaColor}26`,
             }}
           />
           {/* Decorative Success SVG Badge */}
@@ -362,12 +394,12 @@ const Intro = ({
               width: 60,
               height: 60,
               borderRadius: "50%",
-              background: "linear-gradient(135deg, #a855f7 0%, #702082 100%)",
+              background: `linear-gradient(135deg, ${ctaColor}cc 0%, ${ctaColor} 100%)`,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               marginBottom: 16,
-              boxShadow: "0 10px 20px rgba(112, 32, 130, 0.25)",
+              boxShadow: `0 10px 20px ${hexToRgba(ctaColor, 0.25)}`,
               zIndex: 1,
             }}
           >
@@ -376,7 +408,7 @@ const Intro = ({
               height="28"
               viewBox="0 0 24 24"
               fill="none"
-              stroke="#ffffff"
+              stroke={isLightColor(ctaColor) ? "#000000" : "#ffffff"}
               strokeWidth="3"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -390,12 +422,14 @@ const Intro = ({
               fontFamily: INTRO_DISPLAY_FONT,
               fontSize: 48,
               fontWeight: 900,
-              background: "linear-gradient(135deg, #702082 0%, #4a105c 100%)",
+              background: isLightColor(ctaColor)
+                ? "linear-gradient(135deg, #1a062f 0%, #3b0e66 100%)"
+                : `linear-gradient(135deg, ${ctaColor} 0%, ${ctaColor}b3 100%)`,
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent",
               letterSpacing: "0.01em",
               zIndex: 1,
-              textShadow: "0 16px 36px rgba(112, 32, 130, 0.12)",
+              textShadow: `0 16px 36px ${hexToRgba(ctaColor, 0.12)}`,
             }}
           >
             Congratulations
@@ -412,11 +446,11 @@ const Intro = ({
             height: "24%",
             borderRadius: 44,
             background:
-              "linear-gradient(135deg, #3d0a4e 0%, #702082 60%, #8c25aa 100%)",
+              `linear-gradient(135deg, ${ctaColor}b3 0%, ${ctaColor} 60%, ${ctaColor}e6 100%)`,
             padding: "40px 40px",
             textAlign: "center",
             boxShadow:
-              "0 30px 60px rgba(74, 16, 92, 0.22), inset 0 1px 1px rgba(255, 255, 255, 0.2)",
+              `0 30px 60px ${ctaColor}38, inset 0 1px 1px rgba(255, 255, 255, 0.2)`,
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
@@ -465,12 +499,12 @@ const Intro = ({
               display: "inline-flex",
               padding: "8px 18px",
               borderRadius: 99,
-              background: "rgba(255, 255, 255, 0.1)",
-              border: "1px solid rgba(255, 255, 255, 0.15)",
+              background: isLightColor(ctaColor) ? "rgba(0, 0, 0, 0.08)" : "rgba(255, 255, 255, 0.1)",
+              border: isLightColor(ctaColor) ? "1px solid rgba(0, 0, 0, 0.15)" : "1px solid rgba(255, 255, 255, 0.15)",
               fontSize: 16,
               fontWeight: 800,
-              color: "#ebdcf0",
-              letterSpacing: "0.08em",
+              color: isLightColor(ctaColor) ? "#000000" : "#ffffff",
+              letterSpacing: "-0.02em",
               textTransform: "uppercase",
               marginBottom: 16,
               zIndex: 1,
@@ -484,8 +518,8 @@ const Intro = ({
               fontFamily: INTRO_BODY_FONT,
               fontSize: 28,
               fontWeight: 800,
-              color: "#ffffff",
-              opacity: 0.92,
+              color: isLightColor(ctaColor) ? "#000000" : "#ffffff",
+              opacity: isLightColor(ctaColor) ? 0.8 : 0.92,
               letterSpacing: "0.01em",
               zIndex: 1,
             }}
@@ -501,16 +535,21 @@ const Intro = ({
 const Selector = ({
   customerName,
   offer,
+  interactiveBackgroundColor,
+  interactiveCtaColor,
 }: {
   customerName: string;
   offer: LoanOfferData;
+  interactiveBackgroundColor?: string;
+  interactiveCtaColor?: string;
 }) => {
   const frame = useCurrentFrame();
   const entrance = Math.min(frame / 24, 1);
   const selected = getSelectedRow(offer);
+  const ctaColor = interactiveCtaColor || "#702082";
 
   return (
-    <Shell>
+    <Shell interactiveBackgroundColor={interactiveBackgroundColor} interactiveCtaColor={interactiveCtaColor}>
       <div
         style={{
           padding: "120px 80px 0",
@@ -527,7 +566,7 @@ const Selector = ({
             height: 210,
             borderRadius: "50%",
             background:
-              "radial-gradient(circle, rgba(168, 85, 247, 0.2), rgba(112, 32, 130, 0.05) 54%, transparent 72%)",
+              `radial-gradient(circle, ${hexToRgba(ctaColor, 0.2 / 2)}, ${hexToRgba(ctaColor, 0.05)} 54%, transparent 72%)`,
             transform: `scale(${0.9 + entrance * 0.1})`,
           }}
         />
@@ -541,9 +580,9 @@ const Selector = ({
             borderRadius: 30,
             transform: `rotate(${-14 + frame * 0.04}deg)`,
             background:
-              "linear-gradient(135deg, rgba(255, 255, 255, 0.82), rgba(112, 32, 130, 0.08))",
-            border: "1px solid rgba(112, 32, 130, 0.13)",
-            boxShadow: "0 20px 42px rgba(74, 16, 92, 0.08)",
+              `linear-gradient(135deg, rgba(255, 255, 255, 0.82), ${hexToRgba(ctaColor, 0.08)})`,
+            border: `1px solid ${hexToRgba(ctaColor, 0.13)}`,
+            boxShadow: `0 20px 42px ${ctaColor}14`,
           }}
         />
         {/* Title & Subtitle */}
@@ -551,13 +590,15 @@ const Selector = ({
           style={{
             fontSize: 48,
             fontWeight: 900,
-            background: "linear-gradient(135deg, #702082 0%, #4a105c 100%)",
+            background: isLightColor(ctaColor)
+              ? "linear-gradient(135deg, #1a062f 0%, #3b0e66 100%)"
+              : `linear-gradient(135deg, ${ctaColor} 0%, ${ctaColor}cc 100%)`,
             WebkitBackgroundClip: "text",
             WebkitTextFillColor: "transparent",
             letterSpacing: "-0.03em",
             opacity: entrance,
             transform: `translateY(${Math.max(16 - frame * 0.7, 0)}px)`,
-            filter: "drop-shadow(0px 4px 12px rgba(112, 32, 130, 0.2))",
+            filter: `drop-shadow(0px 4px 12px ${hexToRgba(ctaColor, 0.2)})`,
           }}
         >
           Choose your loan offer
@@ -600,15 +641,15 @@ const Selector = ({
             height: "5.2%",
             background: "#ffffff",
             borderRadius: 999,
-            border: "1px solid rgba(112, 32, 130, 0.15)",
+            border: `1px solid ${hexToRgba(ctaColor, 0.15)}`,
             boxShadow:
-              "0 14px 30px rgba(74, 16, 92, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.95)",
+              `0 14px 30px ${ctaColor}14, inset 0 1px 0 rgba(255, 255, 255, 0.95)`,
             display: "flex",
             alignItems: "center",
             paddingLeft: "6%",
             fontSize: 26,
             fontWeight: 800,
-            color: "#4a105c",
+            color: isLightColor(ctaColor) ? "#000000" : ctaColor,
             letterSpacing: "-0.01em",
           }}
         >
@@ -638,15 +679,15 @@ const Selector = ({
             height: "5.2%",
             background: "#ffffff",
             borderRadius: 999,
-            border: "1px solid rgba(112, 32, 130, 0.15)",
+            border: `1px solid ${hexToRgba(ctaColor, 0.15)}`,
             boxShadow:
-              "0 14px 30px rgba(74, 16, 92, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.95)",
+              `0 14px 30px ${ctaColor}14, inset 0 1px 0 rgba(255, 255, 255, 0.95)`,
             display: "flex",
             alignItems: "center",
             paddingLeft: "6%",
             fontSize: 26,
             fontWeight: 800,
-            color: "#4a105c",
+            color: isLightColor(ctaColor) ? "#000000" : ctaColor,
             letterSpacing: "-0.01em",
           }}
         >
@@ -663,9 +704,9 @@ const Selector = ({
             height: "24%",
             background: "rgba(255, 255, 255, 0.8)",
             borderRadius: 44,
-            border: "1px solid rgba(112, 32, 130, 0.12)",
+            border: `1px solid ${hexToRgba(ctaColor, 0.12)}`,
             boxShadow:
-              "0 24px 54px rgba(74, 16, 92, 0.11), inset 0 1px 0 rgba(255, 255, 255, 0.88)",
+              `0 24px 54px ${ctaColor}1c, inset 0 1px 0 rgba(255, 255, 255, 0.88)`,
             overflow: "hidden",
             backdropFilter: "blur(18px)",
           }}
@@ -678,7 +719,7 @@ const Selector = ({
               top: 0,
               bottom: 0,
               width: 12,
-              background: "linear-gradient(180deg, #702082 0%, #4a105c 100%)",
+              background: `linear-gradient(180deg, ${ctaColor} 0%, ${ctaColor}cc 100%)`,
             }}
           />
           <div
@@ -690,7 +731,7 @@ const Selector = ({
               height: 190,
               borderRadius: "50%",
               background:
-                "radial-gradient(circle, rgba(112, 32, 130, 0.1), transparent 66%)",
+                `radial-gradient(circle, ${hexToRgba(ctaColor, 0.1)}, transparent 66%)`,
             }}
           />
         </div>
@@ -703,7 +744,7 @@ const Selector = ({
             left: "15%",
             right: "15%",
             height: 1,
-            background: "rgba(112, 32, 130, 0.1)",
+            background: `${hexToRgba(ctaColor, 0.1)}`,
           }}
         />
         <div
@@ -713,7 +754,7 @@ const Selector = ({
             left: "15%",
             right: "15%",
             height: 1,
-            background: "rgba(112, 32, 130, 0.1)",
+            background: `${hexToRgba(ctaColor, 0.1)}`,
           }}
         />
 
@@ -770,17 +811,22 @@ const Selector = ({
 const Confirmed = ({
   offer,
   contactDetails,
+  interactiveBackgroundColor,
+  interactiveCtaColor,
 }: {
   offer: LoanOfferData;
   contactDetails: string;
+  interactiveBackgroundColor?: string;
+  interactiveCtaColor?: string;
 }) => {
   const frame = useCurrentFrame();
   const selected = getSelectedRow(offer);
   const phone = safeText(offer.cta_phone_number, contactDetails);
   const entrance = Math.min(frame / 24, 1);
+  const ctaColor = interactiveCtaColor || "#702082";
 
   return (
-    <Shell>
+    <Shell interactiveBackgroundColor={interactiveBackgroundColor} interactiveCtaColor={interactiveCtaColor}>
       <div
         style={{
           height: "100%",
@@ -821,9 +867,9 @@ const Confirmed = ({
             borderRadius: 50,
             background:
               "linear-gradient(145deg, rgba(255, 255, 255, 0.95), rgba(248, 250, 252, 0.78))",
-            border: "1px solid rgba(112, 32, 130, 0.12)",
+            border: `1px solid ${hexToRgba(ctaColor, 0.12)}`,
             boxShadow:
-              "0 34px 90px rgba(74, 16, 92, 0.17), inset 0 1px 0 rgba(255, 255, 255, 0.92)",
+              `0 34px 90px ${ctaColor}2b, inset 0 1px 0 rgba(255, 255, 255, 0.92)`,
             backdropFilter: "blur(20px)",
             padding: "60px 50px",
             textAlign: "center",
@@ -840,7 +886,7 @@ const Confirmed = ({
               position: "absolute",
               inset: 0,
               background:
-                "linear-gradient(120deg, rgba(34, 197, 94, 0.08), transparent 38%, rgba(112, 32, 130, 0.07))",
+                `linear-gradient(120deg, rgba(34, 197, 94, 0.08), transparent 38%, ${hexToRgba(ctaColor, 0.07)})`,
             }}
           />
           {/* Animated Green Checkmark Badge */}
@@ -876,7 +922,9 @@ const Confirmed = ({
             style={{
               fontSize: 44,
               fontWeight: 950,
-              background: "linear-gradient(135deg, #702082 0%, #4a105c 100%)",
+              background: isLightColor(ctaColor)
+                ? "linear-gradient(135deg, #1a062f 0%, #3b0e66 100%)"
+                : `linear-gradient(135deg, ${ctaColor} 0%, ${ctaColor}e6 100%)`,
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent",
               letterSpacing: "-0.02em",
@@ -904,12 +952,12 @@ const Confirmed = ({
               marginTop: 40,
               width: "100%",
               borderRadius: 28,
-              backgroundColor: "rgba(112, 32, 130, 0.05)",
-              border: "1px solid rgba(112, 32, 130, 0.1)",
+              backgroundColor: `${hexToRgba(ctaColor, 0.05)}`,
+              border: `1px solid ${hexToRgba(ctaColor, 0.1)}`,
               padding: "24px 24px",
               fontSize: 32,
               fontWeight: 900,
-              color: "#702082",
+              color: isLightColor(ctaColor) ? "#1a062f" : ctaColor,
               zIndex: 1,
             }}
           >
@@ -953,12 +1001,22 @@ const Confirmed = ({
   );
 };
 
+function hexToRgba(hex: string, opacity: number) {
+  const cleanHex = hex.replace("#", "");
+  const r = parseInt(cleanHex.substring(0, 2), 16);
+  const g = parseInt(cleanHex.substring(2, 4), 16);
+  const b = parseInt(cleanHex.substring(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+}
+
 export const LoanOfferInteractiveTemplate = ({
   customerName = "Customer",
   clientName = "Finance Partner",
   contactDetails = "1800-555-999",
   loanOffer = {},
   stepBoundaries = [324, 660],
+  interactiveBackgroundColor,
+  interactiveCtaColor,
 }: LoanOfferInteractiveTemplateProps) => {
   const frame = useCurrentFrame();
   const { durationInFrames, fps } = useVideoConfig();
@@ -987,6 +1045,8 @@ export const LoanOfferInteractiveTemplate = ({
         customerName={safeText(customerName, "Customer")}
         clientName={safeText(clientName, "Finance Partner")}
         offer={offer}
+        interactiveBackgroundColor={interactiveBackgroundColor}
+        interactiveCtaColor={interactiveCtaColor}
       />
     );
   }
@@ -996,6 +1056,8 @@ export const LoanOfferInteractiveTemplate = ({
       <Selector
         customerName={safeText(customerName, "Customer")}
         offer={offer}
+        interactiveBackgroundColor={interactiveBackgroundColor}
+        interactiveCtaColor={interactiveCtaColor}
       />
     );
   }
@@ -1004,6 +1066,8 @@ export const LoanOfferInteractiveTemplate = ({
     <Confirmed
       offer={offer}
       contactDetails={safeText(contactDetails, "1800-555-999")}
+      interactiveBackgroundColor={interactiveBackgroundColor}
+      interactiveCtaColor={interactiveCtaColor}
     />
   );
 };
