@@ -69,6 +69,17 @@ LOAN_REMINDER_DEFAULT_ASSETS = {
 }
 
 
+def _ensure_remotion_runtime_files(remotion_path: Path) -> None:
+    leads_path = remotion_path / "leads.json"
+    metadata_path = remotion_path / "public" / "metadata.json"
+
+    if not leads_path.exists():
+        leads_path.write_text("[]\n", encoding="utf-8")
+    if not metadata_path.exists():
+        metadata_path.parent.mkdir(parents=True, exist_ok=True)
+        metadata_path.write_text("{}\n", encoding="utf-8")
+
+
 def _prepare_tts_pronunciation(text: str, lan: str | None = None) -> str:
     # Keep the brand spelling in scripts/subtitles, but guide TTS to say "PhonePay".
     text = re.sub(r'\bPhonePe\b', 'PhonePay', text, flags=re.IGNORECASE)
@@ -696,6 +707,7 @@ class RemotionService:
 
     async def render_video(self, request: RemotionVideoRequest, video_id: str, scene_payload: dict[str, Any], render_payload: dict[str, Any]) -> str:
         logger.info("Render video started")
+        _ensure_remotion_runtime_files(self.remotion_path)
         leads_path = self.remotion_path / "leads.json"
         is_root_props_template = request.template_key in {"loan_reminder", "collection_reminder", "tvs_credit_emi"}
         is_loan_reminder = request.template_key == "loan_reminder"
