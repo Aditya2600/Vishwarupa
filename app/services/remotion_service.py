@@ -69,7 +69,7 @@ LOAN_REMINDER_DEFAULT_ASSETS = {
 }
 
 
-def _prepare_tts_pronunciation(text: str, lan: str = None) -> str:
+def _prepare_tts_pronunciation(text: str, lan: str | None = None) -> str:
     # Keep the brand spelling in scripts/subtitles, but guide TTS to say "PhonePay".
     text = re.sub(r'\bPhonePe\b', 'PhonePay', text, flags=re.IGNORECASE)
     
@@ -96,7 +96,7 @@ def _clean_scene_sales_script(text: str) -> str:
     return '\n'.join(line.strip() for line in text.splitlines() if line.strip())
 
 
-def _restore_display_spellings(text: str, lan: str = None) -> str:
+def _restore_display_spellings(text: str, lan: str | None = None) -> str:
     text = re.sub(r'\bPhonePay\b', 'PhonePe', text, flags=re.IGNORECASE)
     
     # Generic restore: collapse space-separated digits (2 or more) back into a single number
@@ -236,7 +236,7 @@ class RemotionService:
         audio_file = audio_dir / output_filename
         vtt_file = self.assets_path / f"{effective_video_id}.vtt"
         
-        voice_key = f"{request.language}-{request.voice_gender.capitalize()}"
+        voice_key = f"{request.language or 'Hindi'}-{voice_gender.capitalize()}"
         voice = VOICE_MAP.get(voice_key, VOICE_MAP.get("Hindi-Female"))
         
         is_universal = (request.video_variety or "personalized") == "universal"
@@ -323,7 +323,8 @@ class RemotionService:
         if MP3 is not None:
             try:
                 audio_meta = MP3(audio_file)
-                duration = audio_meta.info.length
+                if audio_meta.info is not None:
+                    duration = audio_meta.info.length
             except Exception as e:
                 logger.error(f"Failed to read audio duration using mutagen: {e}")
         
@@ -414,7 +415,7 @@ class RemotionService:
             'account': {'eyebrow': s['account_eyebrow'], 'headline': s['account_headline'], 'supporting': s['account_supporting'], 'badge': s['account_badge']},
             'context': {'eyebrow': s['context_eyebrow'], 'headline': s['context_headline'], 'body': s['context_body']},
             'amounts': {'eyebrow': s['amounts_eyebrow'], 'headline': s['amounts_headline'], 'body': s['amounts_body'], 'note': s['amounts_note']},
-            'action': {'eyebrow': s['action_eyebrow'], 'headline': s['action_headline'], 'body': s['action_body'] + (f' {contact}' if contact else ''), 'cta_label': s['action_cta_label'], 'cta_value': contact},
+            'action': {'eyebrow': s['action_eyebrow'], 'headline': s['action_headline'], 'body': str(s['action_body']) + (f' {contact}' if contact else ''), 'cta_label': s['action_cta_label'], 'cta_value': contact},
             'closing': {'eyebrow': s['closing_eyebrow'], 'headline': s['closing_headline'], 'body': s['closing_body']},
             'headline_text': s['headline'],
             'cta_text': s['action_body'],
@@ -429,7 +430,7 @@ class RemotionService:
         if request.template_key == 'loan_offer_interactive':
             return self.build_loan_offer_scene_payload(request)
 
-        product_content = self._product_content(request.product_type, request.language)
+        product_content = self._product_content(request.product_type or 'loan', request.language or 'English')
         
         i18n = {
             'English': {
@@ -504,7 +505,7 @@ class RemotionService:
             }
         }
 
-        t = i18n.get(request.language, i18n['English'])
+        t = i18n.get(request.language or 'English', i18n['English'])
         
         return {
             'opening': {'eyebrow': t['notice'], 'headline': t['headline'], 'subheadline': f'{request.client_name} | {t["account"]} {request.lan}'},
@@ -540,7 +541,7 @@ class RemotionService:
                 'context_eyebrow': 'पेमेंट लिंक मार्गदर्शन', 'context_headline': 'इन आसान चरणों का पालन करें', 'amount_headline': 'दर्ज करने की राशि', 'amount_note': 'भुगतान पुष्टि से पहले विवरण जांचें।', 'action_headline': 'PhonePe खोलें और भुगतान करें', 'cta_label': 'सहायता नंबर', 'closing_headline': 'भुगतान सहायता उपलब्ध है',
             },
         }
-        t = payment_i18n.get(request.language, payment_i18n['English'])
+        t = payment_i18n.get(request.language or 'English', payment_i18n['English'])
         headline = t['headline']
         body = t['body']
         contact_body = t['contact_body']
@@ -580,7 +581,7 @@ class RemotionService:
                 'ui': {'formalNotice': 'बकाया नोटिस', 'accountStatus': 'खाता विवरण', 'financialHighlights': 'देय विवरण', 'immediateNextStep': 'संपर्क जानकारी', 'resolutionStillPossible': 'भुगतान विकल्प', 'customerLabel': 'ग्राहक', 'clientLabel': 'बैंक', 'productLabel': 'उत्पाद', 'outstandingLabel': 'बकाया राशि', 'finalSummary': 'सारांश', 'contactLabel': 'संपर्क'},
             }
         }
-        t = overdue_i18n.get(request.language, overdue_i18n['English'])
+        t = overdue_i18n.get(request.language or 'English', overdue_i18n['English'])
         
         return {
             'opening': {'eyebrow': t['ui']['formalNotice'], 'headline': t['headline'], 'subheadline': f'{client} | Card {lan}'},

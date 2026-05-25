@@ -113,12 +113,13 @@ def _media_duration_seconds(probe: dict[str, Any]) -> float:
             candidates.append(stream.get("duration"))
 
     for candidate in candidates:
-        try:
-            duration = float(candidate)
-        except (TypeError, ValueError):
-            continue
-        if duration > 0:
-            return duration
+        if candidate is not None:
+            try:
+                duration = float(candidate)
+            except (TypeError, ValueError):
+                continue
+            if duration > 0:
+                return duration
 
     raise HybridRenderError("media duration could not be determined or is zero")
 
