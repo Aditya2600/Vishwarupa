@@ -2512,6 +2512,14 @@ export const TemplateVideo = ({leadId}) => {
           lan={lead.lan}
           contactDetails={lead.contact_details}
           stepBoundaries={stepBoundaries}
+          emiImagePaths={lead.emi_image_paths || lead.emiImagePaths}
+          whatsappPaynow={lead.whatsappPaynow}
+          smsLink={lead.smsLink}
+          upiApps={lead.upiApps}
+          openappSearch={lead.openappSearch}
+          enterlan={lead.enterlan}
+          paymentSuccess={lead.paymentSuccess}
+          shopVisit={lead.shopVisit}
         />
         <LogoOverlay logo={logoBranding} forceAll={true} />
         {subtitleBranding.enabled ? (
@@ -2569,7 +2577,7 @@ export const TemplateVideo = ({leadId}) => {
     ];
 
     return (
-      <AbsoluteFill style={{backgroundColor: '#ffffff', fontFamily: FONT_FAMILY, overflow: 'hidden'}}>
+      <AbsoluteFill style={{backgroundColor: lead.interactive_background_color || lead.interactiveBackgroundColor || '#ffffff', fontFamily: FONT_FAMILY, overflow: 'hidden'}}>
         {audioSrc ? <Audio src={audioSrc} /> : null}
         <LoanOfferInteractiveTemplate
           customerName={lead.customer_name}
@@ -2577,6 +2585,8 @@ export const TemplateVideo = ({leadId}) => {
           contactDetails={lead.contact_details}
           loanOffer={lead.loan_offer}
           stepBoundaries={stepBoundaries}
+          interactiveBackgroundColor={lead.interactive_background_color || lead.interactiveBackgroundColor}
+          interactiveCtaColor={lead.interactive_cta_color || lead.interactiveCtaColor}
         />
         <LogoOverlay logo={logoBranding} forceAll={true} />
       </AbsoluteFill>

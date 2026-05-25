@@ -136,14 +136,45 @@ const TextOnlyScene = ({
   );
 };
 
+const resolveImage = (
+  sceneImage: string | undefined,
+  props: TVSCreditEMITemplateProps
+) => {
+  if (!sceneImage) return '';
+  
+  let key: string | null = null;
+  if (sceneImage === 'paynow_whatsapp.png') key = 'whatsappPaynow';
+  else if (sceneImage === 'link_sms.png') key = 'smsLink';
+  else if (sceneImage === 'upi_app.png') key = 'upiApps';
+  else if (sceneImage === 'open_app_search.png') key = 'openappSearch';
+  else if (sceneImage === 'enter_lan.png') key = 'enterlan';
+  else if (sceneImage === 'payment_success.png') key = 'paymentSuccess';
+  else if (sceneImage === 'shop_visit.png') key = 'shopVisit';
+
+  if (key) {
+    const customPath = props[key as keyof TVSCreditEMITemplateProps] || props.emiImagePaths?.[key];
+    if (customPath && typeof customPath === 'string') {
+      const cleanPath = customPath.startsWith('/') ? customPath.substring(1) : customPath;
+      if (cleanPath.startsWith('assets/')) {
+        return cleanPath;
+      }
+      return `assets/${cleanPath}`;
+    }
+  }
+
+  return `assets/${sceneImage}`;
+};
+
 const FullscreenImageScene = ({
   scene,
   localFrame,
   duration,
+  props,
 }: {
   scene: TVSCreditEMIScene;
   localFrame: number;
   duration: number;
+  props: TVSCreditEMITemplateProps;
 }) => {
   const opacity = interpolate(localFrame, [0, 15], [0, 1], {
     extrapolateLeft: 'clamp',
@@ -152,11 +183,13 @@ const FullscreenImageScene = ({
 
   if (!scene.image) return null;
 
+  const imageSrc = resolveImage(scene.image, props);
+
   return (
     <Shell>
       <AbsoluteFill style={{opacity}}>
         <Img
-          src={staticFile(`assets/${scene.image}`)}
+          src={staticFile(imageSrc)}
           style={{
             position: 'absolute',
             inset: 0,
@@ -215,7 +248,7 @@ const FullscreenImageScene = ({
               }}
             >
               <Img
-                src={staticFile(`assets/${scene.image}`)}
+                src={staticFile(imageSrc)}
                 style={{
                   position: 'absolute',
                   inset: 0,
@@ -255,11 +288,13 @@ const SceneWrapper = ({
   startFrame,
   duration,
   values,
+  props,
 }: {
   scene: TVSCreditEMIScene;
   startFrame: number;
   duration: number;
   values: Record<string, string>;
+  props: TVSCreditEMITemplateProps;
 }) => {
   const frame = useCurrentFrame();
   const localFrame = frame - startFrame;
@@ -273,28 +308,31 @@ const SceneWrapper = ({
       {['intro', 'text-only', 'final'].includes(scene.kind) ? (
         <TextOnlyScene scene={scene} values={values} localFrame={localFrame} duration={duration} />
       ) : (
-        <FullscreenImageScene scene={scene} localFrame={localFrame} duration={duration} />
+        <FullscreenImageScene scene={scene} localFrame={localFrame} duration={duration} props={props} />
       )}
     </div>
   );
 };
 
-export const TVSCreditEMITemplate = ({
-  enableNarration = false,
-  narrationAudioPath,
-  customerName = 'Valued Customer',
-  productType = 'Two Wheeler Loan',
-  clientName = 'TVS Credit',
-  tos = '0.00',
-  lan = 'TVS000123456',
-  contactDetails = '1800 123 4567',
-  stepBoundaries = [],
-  logoUrl,
-  logoPosition = 'top-right',
-  logoOpacity = 100,
-  language = 'English',
-}: TVSCreditEMITemplateProps) => {
+export const TVSCreditEMITemplate = (props: TVSCreditEMITemplateProps) => {
+  const {
+    enableNarration = false,
+    narrationAudioPath,
+    customerName = 'Valued Customer',
+    productType = 'Two Wheeler Loan',
+    clientName = 'TVS Credit',
+    tos = '0.00',
+    lan = 'TVS000123456',
+    contactDetails = '1800 123 4567',
+    stepBoundaries = [],
+    logoUrl,
+    logoPosition = 'top-right',
+    logoOpacity = 100,
+    language = 'English',
+  } = props;
   const {durationInFrames} = useVideoConfig();
+  const frame = useCurrentFrame();
+  const normalizedLogoPosition = logoPosition.toLowerCase().replace(/\s+/g, '-');
 
   const values = {
     customerName: safeText(customerName, 'Valued Customer'),
@@ -309,7 +347,7 @@ export const TVSCreditEMITemplate = ({
 
   const getSceneStart = (index: number): number => {
     if (index === 0) return 0;
-    // Fallback if stepBoundaries were passed (not used currently)
+    // Use VTT-derived step boundary if provided (primary path for precise audio sync)
     const boundary = stepBoundaries[index - 1];
     if (boundary != null && boundary > 0) return Math.min(boundary, durationInFrames - 1);
     
@@ -330,26 +368,24 @@ export const TVSCreditEMITemplate = ({
     return Math.max(1, end - start);
   };
 
+  const activeSceneIndex = TVS_CREDIT_EMI_SCENES.findIndex((_, index) => {
+    const start = getSceneStart(index);
+    const end = start + getSceneDuration(index);
+    return frame >= start && frame < end;
+  });
+  const activeScene = activeSceneIndex >= 0 ? TVS_CREDIT_EMI_SCENES[activeSceneIndex] : null;
+  const isFullscreenImageScene = activeScene?.kind === 'fullscreen-image';
+  const isLogoTop = normalizedLogoPosition.includes('top');
+  const isLogoBottom = normalizedLogoPosition.includes('bottom');
+  const isLogoLeft = normalizedLogoPosition.includes('left');
+  const isLogoRight = normalizedLogoPosition.includes('right');
+  const logoInset = isFullscreenImageScene ? 24 : 60;
+  const logoHeight = isFullscreenImageScene ? 72 : 120;
+
   return (
     <AbsoluteFill style={{backgroundColor: '#ffffff'}}>
       {enableNarration && narrationAudioPath && (
         <Audio src={staticFile(narrationAudioPath)} />
-      )}
-      {logoUrl && (
-        <Img
-          src={logoUrl.startsWith('http') ? logoUrl : staticFile(logoUrl)}
-          style={{
-            position: 'absolute',
-            top: logoPosition.includes('top') ? 60 : undefined,
-            bottom: logoPosition.includes('bottom') ? 60 : undefined,
-            left: logoPosition.includes('left') ? 60 : undefined,
-            right: logoPosition.includes('right') ? 60 : undefined,
-            height: 120,
-            opacity: logoOpacity / 100,
-            zIndex: 100,
-            objectFit: 'contain',
-          }}
-        />
       )}
 
       {TVS_CREDIT_EMI_SCENES.map((scene, index) => (
@@ -359,8 +395,31 @@ export const TVSCreditEMITemplate = ({
           startFrame={getSceneStart(index)}
           duration={getSceneDuration(index)}
           values={values}
+          props={props}
         />
       ))}
+
+      {logoUrl && (
+        <Img
+          src={logoUrl.startsWith('http') ? logoUrl : staticFile(logoUrl)}
+          style={{
+            position: 'absolute',
+            top: isLogoTop ? logoInset : undefined,
+            bottom: isLogoBottom ? logoInset : undefined,
+            left: isLogoLeft ? logoInset : undefined,
+            right: isLogoRight ? logoInset : undefined,
+            height: logoHeight,
+            maxWidth: isFullscreenImageScene ? 180 : 260,
+            opacity: logoOpacity / 100,
+            zIndex: 100,
+            objectFit: 'contain',
+            backgroundColor: isFullscreenImageScene ? 'rgba(255, 255, 255, 0.88)' : undefined,
+            borderRadius: isFullscreenImageScene ? 12 : undefined,
+            padding: isFullscreenImageScene ? 8 : undefined,
+            boxShadow: isFullscreenImageScene ? '0 8px 24px rgba(15, 23, 42, 0.16)' : undefined,
+          }}
+        />
+      )}
     </AbsoluteFill>
   );
 };

@@ -147,6 +147,12 @@ class RemotionVideoRequest(DirectVideoRequest):
     loan_reminder_image_paths: dict[str, str] | None = None
     loan_reminder_image_filenames: dict[str, str] | None = None
     loan_reminder_image_bytes: dict[str, bytes] | None = None
+    sales_image_paths: dict[str, str] | None = None
+    sales_image_filenames: dict[str, str] | None = None
+    sales_image_bytes: dict[str, bytes] | None = None
+    emi_image_paths: dict[str, str] | None = None
+    emi_image_filenames: dict[str, str] | None = None
+    emi_image_bytes: dict[str, bytes] | None = None
     payment_url: str | None = None
     days_overdue: int | None = None
     primary_color: str | None = "#003366"
@@ -168,6 +174,8 @@ class RemotionVideoRequest(DirectVideoRequest):
     emi_calculation48: str | float | int | None = None
     emi_calculation60: str | float | int | None = None
     cta_phone_number: str | None = None
+    interactive_background_color: str | None = None
+    interactive_cta_color: str | None = None
 
     @field_validator('tos', 'loan_amount', 'contact_details', 'product_type', mode='before')
     @classmethod

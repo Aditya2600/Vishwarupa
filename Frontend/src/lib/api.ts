@@ -97,6 +97,8 @@ export interface HybridRemotionAvatarPipResponse {
   emi_calculation42?: string;
   emi_calculation48?: string;
   emi_calculation60?: string;
+  interactive_background_color?: string;
+  interactive_cta_color?: string;
   cta_phone_number?: string;
 }
 
@@ -141,6 +143,8 @@ export interface InteractiveLoanOffer {
   secondary_color: string;
   loan_offer: Record<string, string | number | null>;
   subtitles?: Array<{ text: string; start: number; end: number }>;
+  interactive_background_color?: string;
+  interactive_cta_color?: string;
 }
 
 export interface InteractiveLoanReminder {
@@ -171,8 +175,14 @@ export interface RemotionVideoPayload extends DirectVideoPayload {
   logoFile?: File | null;
   loanReminderImagePaths?: LoanReminderAssetPaths;
   loanReminderImageFiles?: Partial<Record<LoanReminderAssetKey, File | null>>;
+  salesImagePaths?: Record<string, string>;
+  salesImageFiles?: Record<string, File | null>;
+  emiImagePaths?: Record<string, string>;
+  emiImageFiles?: Record<string, File | null>;
   voice_gender?: "male" | "female";
   video_variety?: "personalized" | "universal";
+  interactive_background_color?: string;
+  interactive_cta_color?: string;
 }
 
 export interface StylizeVideoPayload {
@@ -246,6 +256,9 @@ const INDIAN_NAME_HINTS = [
   "ankit",
   "arjun",
   "aryan",
+  "dev",
+  "kumar",
+  "advocate",
   "diya",
   "dhwani",
   "gagan",
@@ -1285,6 +1298,26 @@ export async function generateRemotionVideo(payload: RemotionVideoPayload): Prom
       }
     });
   }
+  if (payload.salesImagePaths) {
+    formData.set("sales_image_paths", JSON.stringify(payload.salesImagePaths));
+  }
+  if (payload.salesImageFiles) {
+    Object.entries(payload.salesImageFiles).forEach(([key, file]) => {
+      if (file) {
+        formData.set(`sales_image_${key}`, file);
+      }
+    });
+  }
+  if (payload.emiImagePaths) {
+    formData.set("emi_image_paths", JSON.stringify(payload.emiImagePaths));
+  }
+  if (payload.emiImageFiles) {
+    Object.entries(payload.emiImageFiles).forEach(([key, file]) => {
+      if (file) {
+        formData.set(`emi_image_${key}`, file);
+      }
+    });
+  }
   [
     "max_loan_amount",
     "max_tenure",
@@ -1303,6 +1336,8 @@ export async function generateRemotionVideo(payload: RemotionVideoPayload): Prom
     "emi_calculation48",
     "emi_calculation60",
     "cta_phone_number",
+    "interactive_background_color",
+    "interactive_cta_color",
   ].forEach((key) => {
     const value = payload[key as keyof RemotionVideoPayload];
     if (typeof value === "string" && value.trim()) {
@@ -1382,6 +1417,9 @@ export interface CampaignLeadPayload {
   phoneNumber: string;
   uniqueId: string;
   variables?: Record<string, string>;
+  loan_reminder_image_bytes?: Record<string, string>;
+  interactive_background_color?: string;
+  interactive_cta_color?: string;
 }
 
 export interface PushCampaignLeadsPayload {

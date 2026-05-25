@@ -27,4 +27,12 @@ export type TVSCreditEMITemplateProps = {
   logoUrl?: string;
   logoPosition?: string;
   logoOpacity?: number;
+  emiImagePaths?: Record<string, string>;
+  whatsappPaynow?: string;
+  smsLink?: string;
+  upiApps?: string;
+  openappSearch?: string;
+  enterlan?: string;
+  paymentSuccess?: string;
+  shopVisit?: string;
 };

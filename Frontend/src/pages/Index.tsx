@@ -176,7 +176,7 @@ function mapHybridResponseToVideoResult(result: HybridRemotionAvatarPipResponse,
     status: result.success ? "completed" : "failed",
     video_url: result.final_video_url,
     thumbnail_url: null,
-    title: `Hybrid Avatar PIP - ${customerName || "Customer"}`,
+    title: `VisionDesk - ${customerName || "Customer"}`,
     raw_response: { ...result },
     saved_to: result.final_video_path,
     video_path: result.final_video_path,
@@ -188,6 +188,8 @@ const Index = () => {
   const navigate = useNavigate();
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [loanReminderImageFiles, setLoanReminderImageFiles] = useState<Partial<Record<LoanReminderAssetKey, File | null>>>({});
+  const [salesImageFiles, setSalesImageFiles] = useState<Record<string, File | null>>({});
+  const [emiImageFiles, setEmiImageFiles] = useState<Record<string, File | null>>({});
   const [showLogoWarning, setShowLogoWarning] = useState(false);
   const continueWithoutLogoRef = useRef(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -332,7 +334,7 @@ const Index = () => {
         generationStatus: "completed",
         generationError: "",
       });
-      toast.success("Hybrid Avatar PIP generated successfully.");
+      toast.success("VisionDesk generated successfully.");
       goToStep(5);
     },
     onError: (error) => {
@@ -422,7 +424,21 @@ const Index = () => {
       update({
         videoType: nextMode,
         ...(nextMode === "hybrid_remotion_avatar_pip" ? { videoVariety: "personalized" as const, aspectRatio: "9:16", aspectMode: "portrait_9_16" as const } : {}),
-        ...(requestedMode === "remotion" && requestedTemplate ? { remotionTemplateKey: requestedTemplate as any } : {}),
+        ...(requestedMode === "remotion" && requestedTemplate
+          ? {
+              remotionTemplateKey: requestedTemplate as any,
+              videoVariety: (requestedTemplate === "payment_guidance" ||
+                requestedTemplate === "payment_link_guidance" ||
+                requestedTemplate === "overdue_template" ||
+                requestedTemplate === "loan_offer_interactive" ||
+                requestedTemplate === "loan_reminder" ||
+                requestedTemplate === "collection_reminder" ||
+                requestedTemplate === "scene_loan_offer" ||
+                requestedTemplate === "tvs_credit_emi")
+                  ? ("personalized" as const)
+                  : state.videoVariety,
+            }
+          : {}),
       });
 
       // 3. Silently scrub '?fresh=1' and '&template=...' from the URL so it doesn't trigger again on normal re-renders
@@ -658,6 +674,8 @@ const Index = () => {
     stylizeVideoMutation.reset();
     setLogoFile(null);
     setLoanReminderImageFiles({});
+    setSalesImageFiles({});
+    setEmiImageFiles({});
     continueWithoutLogoRef.current = false;
 
     if (requestedFreshDraft) {
@@ -695,9 +713,23 @@ const Index = () => {
         ...(requestedMode === "hybrid_remotion_avatar_pip" ? { videoVariety: "personalized" as const, aspectRatio: "9:16", aspectMode: "portrait_9_16" as const } : {}),
         ...preservedAvatar,
         ...preservedVoice,
-        ...(requestedMode === "remotion" ? { remotionTemplateKey: templateKey as any } : {}),
+        ...(requestedMode === "remotion"
+          ? {
+              remotionTemplateKey: templateKey as any,
+              videoVariety: (templateKey === "payment_guidance" ||
+                templateKey === "payment_link_guidance" ||
+                templateKey === "overdue_template" ||
+                templateKey === "loan_offer_interactive" ||
+                templateKey === "loan_reminder" ||
+                templateKey === "collection_reminder" ||
+                templateKey === "scene_loan_offer" ||
+                templateKey === "tvs_credit_emi")
+                  ? ("personalized" as const)
+                  : state.videoVariety,
+            }
+          : {}),
         ...(requestedMode === "remotion" &&
-        (templateKey === "loan_reminder" || templateKey === "collection_reminder" || templateKey === "scene_loan_offer")
+        (templateKey === "loan_reminder" || templateKey === "collection_reminder" || templateKey === "scene_loan_offer" || templateKey === "tvs_credit_emi")
           ? {
               aspectRatio: "9:16",
             }
@@ -741,6 +773,8 @@ const Index = () => {
     stylizeVideoMutation.reset();
     setLogoFile(null);
     setLoanReminderImageFiles({});
+    setSalesImageFiles({});
+    setEmiImageFiles({});
     continueWithoutLogoRef.current = false;
     reset();
     toast.success("New video draft started!");
@@ -1033,8 +1067,13 @@ const Index = () => {
               month_60_loan_amount: state.loanAmount.trim() || undefined,
               emi_calculation60: state.tos.trim() || undefined,
               cta_phone_number: state.contactDetails.trim() || undefined,
+              interactive_background_color: state.interactiveBackgroundColor,
+              interactive_cta_color: state.interactiveCtaColor,
             }
-          : {}),
+          : {
+              interactive_background_color: state.interactiveBackgroundColor,
+              interactive_cta_color: state.interactiveCtaColor,
+            }),
         video_variety: state.videoVariety,
         subtitleColor: state.subtitleColor,
         subtitlePosition: state.subtitlePosition,
@@ -1049,6 +1088,34 @@ const Index = () => {
             ...state.loanReminderImagePaths,
           },
           loanReminderImageFiles,
+        }
+        : {}),
+      ...(state.remotionTemplateKey === "scene_loan_offer"
+        ? {
+          salesImagePaths: {
+            scene1: "scene1.png",
+            scene2: "scene2.png",
+            scene3: "scene3.png",
+            scene4: "scene4.png",
+            scene5: "scene5.png",
+            ...state.salesImagePaths,
+          },
+          salesImageFiles,
+        }
+        : {}),
+      ...(state.remotionTemplateKey === "tvs_credit_emi"
+        ? {
+          emiImagePaths: {
+            whatsappPaynow: "paynow_whatsapp.png",
+            smsLink: "link_sms.png",
+            upiApps: "upi_app.png",
+            openappSearch: "open_app_search.png",
+            enterlan: "enter_lan.png",
+            paymentSuccess: "payment_success.png",
+            shopVisit: "shop_visit.png",
+            ...state.emiImagePaths,
+          },
+          emiImageFiles,
         }
         : {}),
       });
@@ -1174,6 +1241,12 @@ const Index = () => {
               onLogoSelected={setLogoFile}
               onLoanReminderImageSelected={(key, file) => {
                 setLoanReminderImageFiles((prev) => ({...prev, [key]: file}));
+              }}
+              onSalesImageSelected={(key, file) => {
+                setSalesImageFiles((prev) => ({...prev, [key]: file}));
+              }}
+              onEmiImageSelected={(key, file) => {
+                setEmiImageFiles((prev) => ({...prev, [key]: file}));
               }}
             />
           );

@@ -50,7 +50,7 @@ async def migrate_avatars():
             "is_premium": False
         },
         {
-            "avatar_id": "871e5a926b6449e38e1d776f461e783c",
+            "avatar_id": "b55e2ddc1ff145839b27e25be19e4e59",
             "avatar_name": "Advocate Dev Kumar",
             "gender": "male",
             "preview_image_url": "https://resource2.heygen.ai/best_frame_selection/candidates/9174a7e0f3da4a4190b0f1fa5a063280.jpg",

@@ -68,6 +68,41 @@ LOAN_REMINDER_DEFAULT_ASSETS = {
     "financialBurden": "piggy_bank_arrow_transparent.png",
 }
 
+SALES_TEMPLATE_DEFAULT_ASSETS = {
+    "scene1": "scene1.png",
+    "scene2": "scene2.png",
+    "scene3": "scene3.png",
+    "scene4": "scene4.png",
+    "scene5": "scene5.png",
+}
+
+EMI_TEMPLATE_DEFAULT_ASSETS = {
+    "whatsappPaynow": "paynow_whatsapp.png",
+    "smsLink": "link_sms.png",
+    "upiApps": "upi_app.png",
+    "openappSearch": "open_app_search.png",
+    "enterlan": "enter_lan.png",
+    "paymentSuccess": "payment_success.png",
+    "shopVisit": "shop_visit.png",
+}
+
+EMI_TEMPLATE_ASSET_ALIASES = {
+    "whatsapp_pay_now.png": "paynow_whatsapp.png",
+    "whatsapp_pay_now": "paynow_whatsapp.png",
+    "sms_link.png": "link_sms.png",
+    "sms link.png": "link_sms.png",
+    "upi_apps.png": "upi_app.png",
+    "upi apps.png": "upi_app.png",
+    "openapp_and serach tvs credit.png": "open_app_search.png",
+    "openapp_and_search_tvs_credit.png": "open_app_search.png",
+    "open_app_and_search.png": "open_app_search.png",
+    "enterlan.png": "enter_lan.png",
+    "payment sucess.png": "payment_success.png",
+    "payment_success_image.png": "payment_success.png",
+    "payment_success_image": "payment_success.png",
+    "shopvisit.png": "shop_visit.png",
+}
+
 
 def _ensure_remotion_runtime_files(remotion_path: Path) -> None:
     leads_path = remotion_path / "leads.json"
@@ -135,6 +170,19 @@ class RemotionService:
         stem = Path(filename or "asset.png").name
         return re.sub(r"[^A-Za-z0-9._-]+", "-", stem).strip("-") or "asset.png"
 
+    def _normalize_emi_asset_path(self, value: str) -> str:
+        clean_value = str(value or "").strip()
+        if not clean_value:
+            return clean_value
+
+        clean_path = clean_value.replace("\\", "/")
+        prefix = ""
+        if "/" in clean_path:
+            prefix = clean_path.rsplit("/", 1)[0] + "/"
+        filename = Path(clean_path).name
+        normalized_filename = EMI_TEMPLATE_ASSET_ALIASES.get(filename.lower(), filename)
+        return f"{prefix}{normalized_filename}" if prefix else normalized_filename
+
     async def _persist_loan_reminder_assets(self, request: RemotionVideoRequest, video_id: str) -> dict[str, str]:
         assets = {
             **LOAN_REMINDER_DEFAULT_ASSETS,
@@ -156,6 +204,51 @@ class RemotionService:
 
         if request.logo_filename and "logo" not in upload_bytes:
             assets["logo"] = f"assets/{request.logo_filename}"
+
+        return assets
+
+    async def _persist_sales_template_assets(self, request: RemotionVideoRequest, video_id: str) -> dict[str, str]:
+        assets = {
+            **SALES_TEMPLATE_DEFAULT_ASSETS,
+            **(request.sales_image_paths or {}),
+        }
+
+        upload_bytes = request.sales_image_bytes or {}
+        upload_names = request.sales_image_filenames or {}
+        if upload_bytes:
+            target_dir = self.assets_path / "generated" / "sales-template" / video_id
+            target_dir.mkdir(parents=True, exist_ok=True)
+            for key, content in upload_bytes.items():
+                if key not in SALES_TEMPLATE_DEFAULT_ASSETS or not content:
+                    continue
+                safe_name = self._safe_asset_filename(upload_names.get(key) or f"{key}.png")
+                target_name = f"{key}-{safe_name}"
+                (target_dir / target_name).write_bytes(content)
+                assets[key] = f"assets/generated/sales-template/{video_id}/{target_name}"
+
+        return assets
+
+    async def _persist_emi_template_assets(self, request: RemotionVideoRequest, video_id: str) -> dict[str, str]:
+        assets = {
+            **EMI_TEMPLATE_DEFAULT_ASSETS,
+            **{
+                key: self._normalize_emi_asset_path(value)
+                for key, value in (request.emi_image_paths or {}).items()
+            },
+        }
+
+        upload_bytes = request.emi_image_bytes or {}
+        upload_names = request.emi_image_filenames or {}
+        if upload_bytes:
+            target_dir = self.assets_path / "generated" / "emi-template" / video_id
+            target_dir.mkdir(parents=True, exist_ok=True)
+            for key, content in upload_bytes.items():
+                if key not in EMI_TEMPLATE_DEFAULT_ASSETS or not content:
+                    continue
+                safe_name = self._safe_asset_filename(upload_names.get(key) or f"{key}.png")
+                target_name = f"{key}-{safe_name}"
+                (target_dir / target_name).write_bytes(content)
+                assets[key] = f"assets/generated/emi-template/{video_id}/{target_name}"
 
         return assets
 
@@ -689,7 +782,9 @@ class RemotionService:
                 },
                 "primary_color": request.primary_color or "#003366",
                 "secondary_color": request.secondary_color or "#FF9900"
-            }
+            },
+            "interactiveBackgroundColor": request.interactive_background_color,
+            "interactiveCtaColor": request.interactive_cta_color
         }
 
     def _time_to_seconds(self, value: str) -> float:
@@ -704,6 +799,121 @@ class RemotionService:
         for start, end, text in self.vtt_pattern.findall(content):
             subs.append({'text': ' '.join(text.split()), 'start': self._time_to_seconds(start), 'end': self._time_to_seconds(end)})
         return subs
+
+    def compute_emi_step_boundaries(
+        self,
+        subtitles: list[dict[str, Any]],
+        audio_duration: float,
+        fps: int = 30,
+        language: str = "English",
+    ) -> list[int]:
+        """
+        Compute per-scene frame start boundaries for the EMI template by searching VTT
+        subtitle text for scene-anchor keywords.  Returns a list of 11 frame numbers
+        (one per scene transition: scene-0 always starts at frame 0, so we return
+        boundaries[0..10] = start-frames of scenes 1..11).
+
+        The 12 EMI scenes in order are:
+          0  intro            – customer greeting + account statement
+          1  method1-text     – "Method 1" announcement
+          2  whatsapp-image   – WhatsApp Pay-Now screenshot
+          3  sms-image        – SMS link screenshot
+          4  method2-text     – "Method 2" announcement
+          5  upi-image        – open PhonePe / Google Pay
+          6  openapp-image    – search / repayment step
+          7  enterlan-image   – enter LAN + UPI PIN
+          8  success-image    – payment success confirmation
+          9  method3-text     – "Method 3" announcement
+         10  shop-image       – visit EMI collection shop
+         11  final            – contact details / closing
+        """
+        is_hindi = language.lower() in ("hindi", "hi")
+
+        # Anchor phrases per scene index (0-indexed). We search for the FIRST subtitle
+        # whose normalised text contains any of these fragments (case-insensitive).
+        # Pairs are: (scene_index, [anchor_phrases])
+        # Scenes 0 starts at frame 0 by definition, so we only need anchors for 1..11.
+        ANCHORS_EN = [
+            (1,  ["method 1", "payment link", "method one"]),
+            (2,  ["whatsapp", "pay now button", "secure link"]),
+            (3,  ["sms", "via sms", "link shared"]),
+            (4,  ["method 2", "method two", "upi", "payment app"]),
+            (5,  ["phonepe", "google pay", "open phonepe"]),
+            (6,  ["repayment", "go to repayment", "search for"]),
+            (7,  ["enter lan", "lan and complete", "upi pin"]),
+            (8,  ["successful payment", "payment confirmation", "wait for"]),
+            (9,  ["method 3", "method three", "emi collection", "collection shop"]),
+            (10, ["visit", "nearest emi", "deposit your emi", "shop"]),
+            (11, ["contact", "contact details", "immediately", "avoid charges"]),
+        ]
+        ANCHORS_HI = [
+            (1,  ["method 1", "पेमेंट लिंक", "भुगतान लिंक"]),
+            (2,  ["व्हाट्सएप", "whatsapp", "सुरक्षित लिंक"]),
+            (3,  ["sms", "एसएमएस"]),
+            (4,  ["method 2", "upi", "phonepe", "google pay", "पेमेंट ऐप"]),
+            (5,  ["phonepe", "google pay", "ऐप खोलें"]),
+            (6,  ["repayment", "पुनर्भुगतान", "खोजें"]),
+            (7,  ["अपना lan दर्ज", "lan दर्ज", "लैन दर्ज", "दर्ज करें"]),
+            (8,  ["upi पिन का उपयोग", "upi pin", "भुगतान पूरा", "सफल भुगतान", "पुष्टि", "confirmation"]),
+            (9,  ["method 3", "emi collection", "कलेक्शन शॉप"]),
+            (10, ["नजदीकी", "शॉप", "जमा करने"]),
+            (11, ["संपर्क", "contact", "अतिरिक्त शुल्क"]),
+        ]
+        anchors = ANCHORS_HI if is_hindi else ANCHORS_EN
+
+        def find_scene_start_time(anchor_phrases: list[str], search_after_sec: float = 0.0) -> float | None:
+            """Return the estimated start time of the first subtitle matching any anchor."""
+            for sub in subtitles:
+                if sub['end'] < search_after_sec:
+                    continue
+                sub_lower = sub['text'].lower()
+                for phrase in anchor_phrases:
+                    phrase_lower = phrase.lower()
+                    phrase_index = sub_lower.find(phrase_lower)
+                    if phrase_index == -1:
+                        continue
+                    subtitle_duration = max(0.0, float(sub['end']) - float(sub['start']))
+                    text_duration_offset = 0.0
+                    if subtitle_duration > 0 and len(sub_lower) > 0:
+                        text_duration_offset = (phrase_index / len(sub_lower)) * subtitle_duration
+                    estimated_start = float(sub['start']) + text_duration_offset
+                    if estimated_start >= search_after_sec:
+                        return estimated_start
+            return None
+
+        # Build scene-start times in seconds; default to proportional fallback
+        # Fallback relative durations (en / hi) mirrored from scenes.ts
+        FALLBACK_RATIOS = {
+            'en': [0.286, 0.043, 0.055, 0.059, 0.055, 0.070, 0.070, 0.047, 0.051, 0.058, 0.058, 0.149],
+            'hi': [0.265, 0.050, 0.056, 0.075, 0.057, 0.086, 0.087, 0.052, 0.046, 0.055, 0.056, 0.115],
+        }
+        lang_key = 'hi' if is_hindi else 'en'
+        ratios = FALLBACK_RATIOS[lang_key]
+        cumulative = 0.0
+        fallback_times = []
+        for r in ratios:
+            fallback_times.append(cumulative * audio_duration)
+            cumulative += r
+
+        # Resolve VTT anchors; fall back to ratio-derived time when not found.
+        # We search forward from the previous scene's detected start so that the
+        # same keyword appearing in multiple scenes is matched in the right order.
+        scene_start_times: list[float] = [0.0]  # scene 0 always at t=0
+        for scene_idx, phrases in anchors:
+            # Search strictly after the previous scene started
+            search_from = scene_start_times[-1]
+            vtt_time = find_scene_start_time(phrases, search_after_sec=search_from)
+            if vtt_time is None:
+                vtt_time = fallback_times[scene_idx]
+            # Enforce monotonic ordering with a small minimum gap
+            if vtt_time <= scene_start_times[-1]:
+                vtt_time = scene_start_times[-1] + 0.3
+            scene_start_times.append(vtt_time)
+
+        # Convert to frame numbers (skip index 0 since scene 0 = frame 0)
+        boundaries = [max(1, round(t * fps)) for t in scene_start_times[1:]]
+        logger.info(f"EMI step boundaries (frames @ {fps}fps): {boundaries}")
+        return boundaries
 
     async def render_video(self, request: RemotionVideoRequest, video_id: str, scene_payload: dict[str, Any], render_payload: dict[str, Any]) -> str:
         logger.info("Render video started")
@@ -733,17 +943,18 @@ class RemotionService:
             
             npx = "npx.cmd" if os.name == 'nt' else "npx"
             if request.template_key == "loan_reminder":
-                c = f'{npx} --yes remotion render src/Root.tsx LoanReminderVideo "{output_path}" --props="{str(props_path).replace(os.sep, "/")}" --overwrite'
+                c = f'{npx} remotion render src/Root.tsx LoanReminderVideo "{output_path}" --props="{str(props_path).replace(os.sep, "/")}" --overwrite'
             elif request.template_key == "collection_reminder":
-                c = f'{npx} --yes remotion render src/Root.tsx CollectionReminderVideo "{output_path}" --props="{str(props_path).replace(os.sep, "/")}" --overwrite'
+                c = f'{npx} remotion render src/Root.tsx CollectionReminderVideo "{output_path}" --props="{str(props_path).replace(os.sep, "/")}" --overwrite'
             elif request.template_key == "tvs_credit_emi":
-                c = f'{npx} --yes remotion render src/index.jsx TVSCreditEMITemplate "{output_path}" --props="{str(props_path).replace(os.sep, "/")}" --overwrite'
+                c = f'{npx} remotion render src/index.jsx TVSCreditEMITemplate "{output_path}" --props="{str(props_path).replace(os.sep, "/")}" --overwrite'
             elif is_scene_loan_offer:
-                c = f'{npx} --yes remotion render src/index.jsx SceneLoanOfferVideo "{output_path}" --props="{str(props_path).replace(os.sep, "/")}" --overwrite'
+                c = f'{npx} remotion render src/index.jsx SceneLoanOfferVideo "{output_path}" --props="{str(props_path).replace(os.sep, "/")}" --overwrite'
             else:
-                c = f'{npx} --yes remotion render src/index.jsx main "{output_path}" --props="{str(props_path).replace(os.sep, "/")}" --overwrite'
-            if settings.remotion_browser_executable:
-                c += f' --browser-executable="{settings.remotion_browser_executable}"'
+                c = f'{npx} remotion render src/index.jsx main "{output_path}" --props="{str(props_path).replace(os.sep, "/")}" --overwrite'
+            browser_exe = settings.remotion_browser_executable or os.environ.get("REMOTION_BROWSER_EXECUTABLE")
+            if browser_exe:
+                c += f' --browser-executable="{browser_exe}"'
             
             # Pure file handle without tempfile locking mechanics
             out_file = self.remotion_path / f"out_{uuid.uuid4().hex}.log"
@@ -807,6 +1018,7 @@ class RemotionService:
         if request.template_key == "scene_loan_offer":
             audio_duration = float(tts.get("duration") or 30)
             subtitles = self.parse_vtt(tts["vtt_path"])
+            sales_assets = await self._persist_sales_template_assets(request, tts["video_id"])
             render_p = {
                 "voiceoverAudioSrc": tts["audio_path"].lstrip("/") if tts.get("audio_path") else None,
                 "audioPlaybackRate": 1,
@@ -814,6 +1026,12 @@ class RemotionService:
                 "subtitles": subtitles,
                 "customer_name": "" if is_universal else request.customer_name,
                 "loan_amount": "" if is_universal else (request.max_loan_amount or request.loan_amount),
+                "salesImagePaths": sales_assets,
+                "scene1": sales_assets.get("scene1"),
+                "scene2": sales_assets.get("scene2"),
+                "scene3": sales_assets.get("scene3"),
+                "scene4": sales_assets.get("scene4"),
+                "scene5": sales_assets.get("scene5"),
             }
             video_url = await self.render_video(request, tts["video_id"], {}, render_p)
             return {
@@ -827,6 +1045,16 @@ class RemotionService:
 
         if request.template_key == "tvs_credit_emi":
             audio_duration = float(tts.get("duration") or 30)
+            emi_assets = await self._persist_emi_template_assets(request, tts["video_id"])
+            # Parse subtitles from VTT to compute exact per-scene frame boundaries
+            subtitles = self.parse_vtt(tts["vtt_path"])
+            fps = 30
+            step_boundaries = self.compute_emi_step_boundaries(
+                subtitles=subtitles,
+                audio_duration=audio_duration,
+                fps=fps,
+                language=request.language or "English",
+            )
             render_p = {
                 "enableNarration": True,
                 "narrationAudioPath": tts["audio_path"].lstrip("/") if tts.get("audio_path") else None,
@@ -836,11 +1064,20 @@ class RemotionService:
                 "tos": str(request.tos or "0"),
                 "lan": request.lan or "1234",
                 "contactDetails": request.contact_details or "1800-123-4567",
-                "durationInFrames": max(900, int(audio_duration * 30) + 15),
+                "durationInFrames": max(900, int(audio_duration * fps) + 15),
                 "language": request.language,
                 "logoUrl": f"assets/{request.logo_filename}" if request.logo_filename else None,
                 "logoPosition": request.logo_position or "Top Right",
                 "logoOpacity": request.logo_opacity if request.logo_opacity is not None else 80,
+                "stepBoundaries": step_boundaries,
+                "emiImagePaths": emi_assets,
+                "whatsappPaynow": emi_assets.get("whatsappPaynow"),
+                "smsLink": emi_assets.get("smsLink"),
+                "upiApps": emi_assets.get("upiApps"),
+                "openappSearch": emi_assets.get("openappSearch"),
+                "enterlan": emi_assets.get("enterlan"),
+                "paymentSuccess": emi_assets.get("paymentSuccess"),
+                "shopVisit": emi_assets.get("shopVisit"),
             }
             video_url = await self.render_video(request, tts["video_id"], {}, render_p)
             return {
@@ -882,7 +1119,7 @@ class RemotionService:
         if is_universal:
             scene = self.build_universal_scene_payload(request)
         else:
-            scene = self.build_scene_payload(request, request.tos or "0", request.loan_amount or "", "elevated")
+            scene = self.build_scene_payload(request, str(request.tos or "0"), str(request.loan_amount or ""), "elevated")
         render_p = self.build_render_payload(request, tts['video_id'], tts['text'], tts['audio_path'], tts['vtt_path'], scene)
         video_url = await self.render_video(request, tts['video_id'], scene, render_p)
         return {

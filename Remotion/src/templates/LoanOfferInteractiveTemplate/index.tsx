@@ -12,6 +12,18 @@ const safeText = (value: unknown, fallback: string) => {
   return cleaned || fallback;
 };
 
+const isLightColor = (hex: string): boolean => {
+  if (!hex) return false;
+  const cleanHex = hex.replace("#", "");
+  if (cleanHex.length < 6) return false;
+  const r = parseInt(cleanHex.substring(0, 2), 16);
+  const g = parseInt(cleanHex.substring(2, 4), 16);
+  const b = parseInt(cleanHex.substring(4, 6), 16);
+  if (isNaN(r) || isNaN(g) || isNaN(b)) return false;
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+  return brightness > 145;
+};
+
 const toNumeric = (value: unknown) => {
   if (value === null || value === undefined) return null;
   const cleaned = String(value).replace(/[^\d.]/g, "");
@@ -942,6 +954,8 @@ export const LoanOfferInteractiveTemplate = ({
   contactDetails = "1800-555-999",
   loanOffer = {},
   stepBoundaries = [324, 660],
+  interactiveBackgroundColor,
+  interactiveCtaColor,
 }: LoanOfferInteractiveTemplateProps) => {
   const frame = useCurrentFrame();
   const { durationInFrames, fps } = useVideoConfig();

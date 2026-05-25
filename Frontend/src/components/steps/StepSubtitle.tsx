@@ -1,10 +1,31 @@
-import { ChangeEvent, useId, useRef } from "react";
+import { ChangeEvent, useId, useRef, useEffect } from "react";
 import { AlertCircle, ImagePlus, Upload, X } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { WizardState } from "@/store/wizardStore";
 import { Button } from "@/components/ui/button";
 import { DEFAULT_LOAN_REMINDER_ASSET_PATHS, LOAN_REMINDER_ASSET_SLOTS, type LoanReminderAssetKey } from "@/lib/templates";
+
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { HexColorPicker } from "react-colorful";
+
+const CustomColorPicker = ({ value, onChange, className }: { value: string, onChange: (val: string) => void, className?: string }) => {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          className={`h-9 w-16 p-1 rounded border border-border cursor-pointer bg-background overflow-hidden ${className || ""}`}
+          aria-label="Pick a color"
+        >
+          <div className="w-full h-full rounded-sm" style={{ backgroundColor: value }} />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-3" align="start">
+        <HexColorPicker color={value} onChange={onChange} />
+      </PopoverContent>
+    </Popover>
+  );
+};
 
 const RESET_GENERATION_STATE = {
   generatedVideo: null,
@@ -27,11 +48,32 @@ const COLORS = [
 const POSITIONS = ["Top", "Center", "Bottom"];
 const LOGO_POSITIONS = ["Top Left", "Top Right", "Bottom Left", "Bottom Right"];
 
+const SALES_IMAGE_SLOTS = [
+  { key: "scene1", label: "Scene 1 Image (Intro)", defaultPath: "scene1.png" },
+  { key: "scene2", label: "Scene 2 Image (Offer)", defaultPath: "scene2.png" },
+  { key: "scene3", label: "Scene 3 Image (Benefits)", defaultPath: "scene3.png" },
+  { key: "scene4", label: "Scene 4 Image (Process)", defaultPath: "scene4.png" },
+  { key: "scene5", label: "Scene 5 Image (Closing)", defaultPath: "scene5.png" },
+];
+
+const EMI_IMAGE_SLOTS = [
+  { key: "whatsappPaynow", label: "Scene 1: WhatsApp Pay Now", defaultPath: "paynow_whatsapp.png" },
+  { key: "smsLink", label: "Scene 2: SMS Link", defaultPath: "link_sms.png" },
+  { key: "upiApps", label: "Scene 3: UPI Apps", defaultPath: "upi_app.png" },
+  { key: "openappSearch", label: "Scene 4: Search App", defaultPath: "open_app_search.png" },
+  { key: "enterlan", label: "Scene 5: Enter LAN", defaultPath: "enter_lan.png" },
+  { key: "paymentSuccess", label: "Scene 6: Payment Success", defaultPath: "payment_success.png" },
+  { key: "shopVisit", label: "Scene 7: Shop Visit", defaultPath: "shop_visit.png" },
+];
+
+
 interface StepSubtitleProps {
   state: WizardState;
   update: (partial: Partial<WizardState>) => void;
   onLogoSelected: (file: File | null) => void;
   onLoanReminderImageSelected?: (key: LoanReminderAssetKey, file: File | null) => void;
+  onSalesImageSelected?: (key: string, file: File | null) => void;
+  onEmiImageSelected?: (key: string, file: File | null) => void;
 }
 
 function getPreviewPosition(position: string): string {
@@ -58,7 +100,14 @@ function getLogoPreviewPosition(position: string): string {
   }
 }
 
-export function StepSubtitle({ state, update, onLogoSelected, onLoanReminderImageSelected }: StepSubtitleProps) {
+export function StepSubtitle({
+  state,
+  update,
+  onLogoSelected,
+  onLoanReminderImageSelected,
+  onSalesImageSelected,
+  onEmiImageSelected,
+}: StepSubtitleProps) {
   const fileInputId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const showAvatarLogoAlert = false; // Intentionally disabled per user request
@@ -114,6 +163,70 @@ export function StepSubtitle({ state, update, onLogoSelected, onLoanReminderImag
     });
   };
 
+  const handleSalesImageChange = (
+    key: string,
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0] ?? null;
+    onSalesImageSelected?.(key, file);
+    update({
+      salesImageFileNames: {
+        ...state.salesImageFileNames,
+        [key]: file?.name ?? undefined,
+      },
+      ...RESET_GENERATION_STATE,
+    });
+    event.target.value = "";
+  };
+
+  const resetSalesImage = (key: string) => {
+    onSalesImageSelected?.(key, null);
+    const nextFileNames = {...state.salesImageFileNames};
+    delete nextFileNames[key];
+    update({
+      salesImagePaths: {
+        ...state.salesImagePaths,
+        [key]: key + ".png",
+      },
+      salesImageFileNames: nextFileNames,
+      ...RESET_GENERATION_STATE,
+    });
+  };
+
+  const handleEmiImageChange = (
+    key: string,
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0] ?? null;
+    onEmiImageSelected?.(key, file);
+    update({
+      emiImageFileNames: {
+        ...state.emiImageFileNames,
+        [key]: file?.name ?? undefined,
+      },
+      ...RESET_GENERATION_STATE,
+    });
+    event.target.value = "";
+  };
+
+  const resetEmiImage = (key: string) => {
+    onEmiImageSelected?.(key, null);
+    const nextFileNames = {...state.emiImageFileNames};
+    delete nextFileNames[key];
+    
+    const slot = EMI_IMAGE_SLOTS.find((s) => s.key === key);
+    const defaultPath = slot ? slot.defaultPath : `${key}.png`;
+    
+    update({
+      emiImagePaths: {
+        ...state.emiImagePaths,
+        [key]: defaultPath,
+      },
+      emiImageFileNames: nextFileNames,
+      ...RESET_GENERATION_STATE,
+    });
+  };
+
   const subtitlePreviewClass =
     state.subtitleColor === "White"
       ? "text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]"
@@ -135,7 +248,14 @@ export function StepSubtitle({ state, update, onLogoSelected, onLoanReminderImag
     <div className="grid grid-cols-2 gap-8 max-w-5xl mt-6">
       {/* Left – preview + subtitle controls */}
       <div className="space-y-6">
-        <div className="rounded-xl bg-background border border-border aspect-video flex justify-center p-6 relative overflow-hidden">
+        <div 
+          className="rounded-xl border border-border aspect-video flex justify-center p-6 relative overflow-hidden transition-colors"
+          style={{ 
+            backgroundColor: state.remotionTemplateKey === "loan_offer_interactive" 
+              ? (state.interactiveBackgroundColor || "#f5f7fb")
+              : "hsl(var(--background))" 
+          }}
+        >
           <div className="absolute inset-0 bg-gradient-to-b from-transparent to-background/60" />
           {state.logoFileName ? (
             <div
@@ -327,6 +447,156 @@ export function StepSubtitle({ state, update, onLogoSelected, onLoanReminderImag
                   </div>
                 );
               })}
+            </div>
+          </div>
+        ) : null}
+        {state.remotionTemplateKey === "scene_loan_offer" ? (
+          <div className="rounded-xl border border-border bg-card p-4">
+            <div className="mb-4">
+              <p className="text-sm font-semibold text-foreground">Sales Template Images (Optional)</p>
+              <p className="text-xs text-muted-foreground">
+                Leave blank to keep the default video images, or upload custom overrides.
+              </p>
+            </div>
+            <div className="space-y-3">
+              {SALES_IMAGE_SLOTS.map((slot) => {
+                const fileName = state.salesImageFileNames[slot.key];
+                const path = state.salesImagePaths[slot.key] ?? slot.defaultPath;
+                const inputId = `${fileInputId}-${slot.key}`;
+
+                return (
+                  <div key={slot.key} className="rounded-lg border border-border/70 bg-secondary/40 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground">{slot.label}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {fileName ? `Upload: ${fileName}` : `Default: ${path}`}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <label
+                          htmlFor={inputId}
+                          className="cursor-pointer rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface-hover"
+                        >
+                          Upload
+                        </label>
+                        <input
+                          id={inputId}
+                          type="file"
+                          accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+                          className="sr-only"
+                          onChange={(event) => handleSalesImageChange(slot.key, event)}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => resetSalesImage(slot.key)}
+                          aria-label={`Reset ${slot.label}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+        {state.remotionTemplateKey === "tvs_credit_emi" ? (
+          <div className="rounded-xl border border-border bg-card p-4">
+            <div className="mb-4">
+              <p className="text-sm font-semibold text-foreground">EMI Payment Images (Optional)</p>
+              <p className="text-xs text-muted-foreground">
+                Leave blank to keep the default video images, or upload custom overrides.
+              </p>
+            </div>
+            <div className="space-y-3">
+              {EMI_IMAGE_SLOTS.map((slot) => {
+                const fileName = state.emiImageFileNames[slot.key];
+                const path = state.emiImagePaths[slot.key] ?? slot.defaultPath;
+                const inputId = `${fileInputId}-${slot.key}`;
+
+                return (
+                  <div key={slot.key} className="rounded-lg border border-border/70 bg-secondary/40 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground">{slot.label}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {fileName ? `Upload: ${fileName}` : `Default: ${path}`}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <label
+                          htmlFor={inputId}
+                          className="cursor-pointer rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface-hover"
+                        >
+                          Upload
+                        </label>
+                        <input
+                          id={inputId}
+                          type="file"
+                          accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+                          className="sr-only"
+                          onChange={(event) => handleEmiImageChange(slot.key, event)}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => resetEmiImage(slot.key)}
+                          aria-label={`Reset ${slot.label}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+        {state.remotionTemplateKey === "loan_offer_interactive" ? (
+          <div className="rounded-xl border border-border bg-card p-4 mt-6">
+            <div className="mb-4">
+              <p className="text-sm font-semibold text-foreground">Interactive UI Colors</p>
+              <p className="text-xs text-muted-foreground">
+                Customize the background and CTA button colors for the interactive page.
+              </p>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Background Color</label>
+                <div className="flex gap-3">
+                  <CustomColorPicker
+                    value={state.interactiveBackgroundColor || "#f5f7fb"}
+                    onChange={(val) => update({ interactiveBackgroundColor: val, ...RESET_GENERATION_STATE })}
+                  />
+                  <input
+                    type="text"
+                    value={state.interactiveBackgroundColor || "#f5f7fb"}
+                    onChange={(e) => update({ interactiveBackgroundColor: e.target.value, ...RESET_GENERATION_STATE })}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">CTA Button Color</label>
+                <div className="flex gap-3">
+                  <CustomColorPicker
+                    value={state.interactiveCtaColor || "#702082"}
+                    onChange={(val) => update({ interactiveCtaColor: val, ...RESET_GENERATION_STATE })}
+                  />
+                  <input
+                    type="text"
+                    value={state.interactiveCtaColor || "#702082"}
+                    onChange={(e) => update({ interactiveCtaColor: e.target.value, ...RESET_GENERATION_STATE })}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         ) : null}

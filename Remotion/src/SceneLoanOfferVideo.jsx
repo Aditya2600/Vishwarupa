@@ -12,14 +12,6 @@ import {
 
 export const SCENE_LOAN_OFFER_DURATION = 30 * 30;
 
-const scenes = [
-  { src: 'scene1.png', start: 0, end: 3, tone: 'dark' },
-  { src: 'scene2.png', start: 3, end: 6, tone: 'bright' },
-  { src: 'scene3.png', start: 6, end: 10, tone: 'dark' },
-  { src: 'scene4.png', start: 10, end: 23, tone: 'bright' },
-  { src: 'scene5.png', start: 23, end: 30, tone: 'neon' },
-];
-
 const fallbackCaptions = [
   { start: 0, end: 3, text: 'पैसों की परेशानी से जूझ रहे हैं? अब चिंता छोड़िए।' },
   { start: 3, end: 6, text: 'बधाई हो! आपके लिए एक खास प्री-अप्रूव्ड लोन ऑफर तैयार है।' },
@@ -44,10 +36,6 @@ const getActiveCaption = (time, captionTrack) =>
   [...captionTrack].reverse().find((caption) => time >= caption.start) ||
   captionTrack[0];
 
-const getActiveScene = (time) =>
-  scenes.find((scene) => time >= scene.start && time < scene.end) ||
-  scenes[scenes.length - 1];
-
 const chipStyle = {
   alignItems: 'center',
   borderRadius: 999,
@@ -63,8 +51,12 @@ export const SceneLoanOfferVideo = ({
   voiceoverAudioSrc = null,
   subtitles = null,
   audioPlaybackRate = 1,
+  interactiveBackgroundColor,
+  interactiveCtaColor,
   ...props
 }) => {
+  const ctaColor = interactiveCtaColor || '#10b981'; // default to green if none provided
+  const bgColor = interactiveBackgroundColor || '#05070b'; // default to dark if none provided
   const name = props.customer_name || props.customerName || props.lead?.customer_name || props.lead?.customerName || "Customer";
   const amount = props.max_loan_amount || props.loan_amount || props.loanAmount || props.lead?.loan_offer?.max_loan_amount || "1,00,000";
   const frame = useCurrentFrame();
@@ -72,6 +64,25 @@ export const SceneLoanOfferVideo = ({
   const time = formatSeconds(frame, fps);
   const captionTrack = Array.isArray(subtitles) && subtitles.length > 0 ? subtitles : fallbackCaptions;
   const totalDuration = durationInFrames / fps;
+
+  const img1 = props.scene1 || props.salesImagePaths?.scene1 || 'scene1.png';
+  const img2 = props.scene2 || props.salesImagePaths?.scene2 || 'scene2.png';
+  const img3 = props.scene3 || props.salesImagePaths?.scene3 || 'scene3.png';
+  const img4 = props.scene4 || props.salesImagePaths?.scene4 || 'scene4.png';
+  const img5 = props.scene5 || props.salesImagePaths?.scene5 || 'scene5.png';
+
+  const scenes = [
+    { src: img1, start: 0, end: 3, tone: 'dark' },
+    { src: img2, start: 3, end: 6, tone: 'bright' },
+    { src: img3, start: 6, end: 10, tone: 'dark' },
+    { src: img4, start: 10, end: 23, tone: 'bright' },
+    { src: img5, start: 23, end: 30, tone: 'neon' },
+  ];
+
+  const getActiveScene = (t) =>
+    scenes.find((s) => t >= s.start && t < s.end) ||
+    scenes[scenes.length - 1];
+
   const scene = getActiveScene(time);
   const caption = getActiveCaption(time, captionTrack);
   const sceneFrame = frame - scene.start * fps;
@@ -96,7 +107,7 @@ export const SceneLoanOfferVideo = ({
   return (
     <AbsoluteFill
       style={{
-        background: '#05070b',
+        background: bgColor,
         color: '#ffffff',
         fontFamily:
           'Noto Sans Devanagari, Mukta, Hind, Avenir Next, SF Pro Display, Arial, sans-serif',
@@ -136,8 +147,8 @@ export const SceneLoanOfferVideo = ({
         style={{
           background:
             scene.tone === 'neon'
-              ? 'linear-gradient(180deg, rgba(0,0,0,0.26) 0%, rgba(0,0,0,0.02) 42%, rgba(0,0,0,0.68) 100%)'
-              : 'linear-gradient(180deg, rgba(0,0,0,0.52) 0%, rgba(0,0,0,0.04) 42%, rgba(0,0,0,0.74) 100%)',
+              ? `linear-gradient(180deg, rgba(0,0,0,0.26) 0%, rgba(0,0,0,0.02) 42%, ${bgColor} 100%)`
+              : `linear-gradient(180deg, rgba(0,0,0,0.52) 0%, rgba(0,0,0,0.04) 42%, ${bgColor} 100%)`,
           opacity: fade,
         }}
       />
@@ -239,7 +250,7 @@ export const SceneLoanOfferVideo = ({
           style={{
             width: `${progress}%`,
             height: '100%',
-            background: 'linear-gradient(90deg, #0fbf5d 0%, #ffe241 55%, #ffffff 100%)',
+            background: `linear-gradient(90deg, ${ctaColor} 0%, #ffe241 55%, #ffffff 100%)`,
           }}
         />
       </div>
