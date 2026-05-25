@@ -79,7 +79,7 @@ EMI_TEMPLATE_DEFAULT_ASSETS = {
     "upiApps": "upi_app.png",
     "openappSearch": "open_app_search.png",
     "enterlan": "enter_lan.png",
-    "paymentSuccess": "payment_success_image.png",
+    "paymentSuccess": "payment_success.png",
     "shopVisit": "shop_visit.png",
 }
 
@@ -94,8 +94,7 @@ EMI_TEMPLATE_ASSET_ALIASES = {
     "openapp_and_search_tvs_credit.png": "open_app_search.png",
     "open_app_and_search.png": "open_app_search.png",
     "enterlan.png": "enter_lan.png",
-    "payment sucess.png": "payment_success_image.png",
-    "payment_success.png": "payment_success_image.png",
+    "payment sucess.png": "payment_success.png",
     "shopvisit.png": "shop_visit.png",
 }
 

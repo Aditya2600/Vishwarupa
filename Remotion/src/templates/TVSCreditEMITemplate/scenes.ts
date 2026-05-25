@@ -62,7 +62,7 @@ export const TVS_CREDIT_EMI_SCENES: TVSCreditEMIScene[] = [
   {
     kind: 'fullscreen-image',
     method: 2,
-    image: 'payment_success_image.png',
+    image: 'payment_success.png',
     caption: 'Wait for successful payment confirmation',
     relativeDuration: { en: 0.051, hi: 0.046 },
   },

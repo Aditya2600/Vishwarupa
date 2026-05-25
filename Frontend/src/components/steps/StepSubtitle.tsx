@@ -62,7 +62,7 @@ const EMI_IMAGE_SLOTS = [
   { key: "upiApps", label: "Scene 3: UPI Apps", defaultPath: "upi_app.png" },
   { key: "openappSearch", label: "Scene 4: Search App", defaultPath: "open_app_search.png" },
   { key: "enterlan", label: "Scene 5: Enter LAN", defaultPath: "enter_lan.png" },
-  { key: "paymentSuccess", label: "Scene 6: Payment Success", defaultPath: "payment_success_image.png" },
+  { key: "paymentSuccess", label: "Scene 6: Payment Success", defaultPath: "payment_success.png" },
   { key: "shopVisit", label: "Scene 7: Shop Visit", defaultPath: "shop_visit.png" },
 ];
 
