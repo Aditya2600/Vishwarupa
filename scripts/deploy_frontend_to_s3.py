@@ -14,8 +14,10 @@ from __future__ import annotations
 
 import argparse
 import mimetypes
+import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -74,6 +76,53 @@ def _iter_dist_files(dist_dir: Path) -> list[Path]:
     return sorted(files)
 
 
+def _route_keys(route: str) -> list[str]:
+    cleaned = route.strip().lstrip("/")
+    if not cleaned:
+        return []
+
+    cleaned = cleaned.rstrip("/")
+    if cleaned.endswith("/index.html"):
+        cleaned = cleaned[: -len("/index.html")].rstrip("/")
+    elif cleaned == "index.html":
+        cleaned = ""
+
+    if not cleaned:
+        return ["index.html"]
+
+    return [cleaned, f"{cleaned}/index.html"]
+
+
+def _upload_file(
+    *,
+    s3: Any,
+    local_path: Path,
+    bucket: str,
+    key: str,
+    headers: UploadHeaders,
+    public_read: bool,
+    dry_run: bool,
+) -> None:
+    extra_args: dict[str, str] = {
+        "ContentType": headers.content_type,
+        "CacheControl": headers.cache_control,
+    }
+    if public_read:
+        extra_args["ACL"] = "public-read"
+
+    if dry_run:
+        print(f"DRYRUN upload s3://{bucket}/{key} ({headers.content_type})")
+        return
+
+    s3.upload_file(
+        Filename=str(local_path),
+        Bucket=bucket,
+        Key=key,
+        ExtraArgs=extra_args,
+    )
+    print(f"Uploaded s3://{bucket}/{key}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Upload Frontend/dist to S3.")
     parser.add_argument("--bucket", required=True, help="Target S3 bucket name.")
@@ -97,12 +146,44 @@ def main() -> int:
         action="store_true",
         help="Print what would upload, but don't upload.",
     )
+    parser.add_argument(
+        "--spa-route",
+        action="append",
+        default=[],
+        help=(
+            "Upload dist index.html to this SPA route key as well. "
+            "Example: --spa-route loan-offer/VIDEO_ID. Can be passed multiple times."
+        ),
+    )
+    parser.add_argument(
+        "--loan-offer-id",
+        action="append",
+        default=[],
+        help=(
+            "Shortcut for --spa-route loan-offer/ID. Useful for publishing a single "
+            "interactive loan offer URL."
+        ),
+    )
+    parser.add_argument(
+        "--html-only",
+        action="store_true",
+        help="Upload only index.html plus requested SPA route HTML keys, not hashed assets.",
+    )
 
     args = parser.parse_args()
 
     dist_dir = Path(args.dist_dir).resolve()
     if not dist_dir.exists() or not dist_dir.is_dir():
         raise SystemExit(f"dist dir not found: {dist_dir}")
+
+    env_path = Path(__file__).resolve().parents[1] / ".env"
+    try:
+        from dotenv import load_dotenv  # type: ignore
+
+        load_dotenv(env_path)
+    except ModuleNotFoundError:
+        if env_path.exists():
+            print("python-dotenv is not installed; continuing with shell environment variables.")
 
     # Lazy import so users get a clearer error if boto3 isn't installed.
     try:
@@ -119,40 +200,62 @@ def main() -> int:
     # Make sure mimetypes has a reasonable default DB, especially on minimal images.
     mimetypes.init()
 
-    s3 = boto3.client("s3")
+    s3 = boto3.client("s3", region_name=os.getenv("AWS_REGION") or None)
     files = _iter_dist_files(dist_dir)
     if not files:
         raise SystemExit(f"no files found in: {dist_dir}")
 
+    index_path = dist_dir / "index.html"
+    if not index_path.exists():
+        raise SystemExit(f"index.html not found in: {dist_dir}")
+
+    spa_routes = list(args.spa_route or [])
+    spa_routes.extend(f"loan-offer/{loan_offer_id}" for loan_offer_id in args.loan_offer_id or [])
+    route_keys: list[str] = []
+    seen_route_keys: set[str] = set()
+    for route in spa_routes:
+        for route_key in _route_keys(route):
+            if route_key not in seen_route_keys:
+                seen_route_keys.add(route_key)
+                route_keys.append(route_key)
+
+    if args.html_only and not route_keys:
+        raise SystemExit("--html-only requires at least one --spa-route or --loan-offer-id")
+
     print(f"Bucket: {args.bucket}")
     print(f"Prefix: {prefix or '(root)'}")
     print(f"Dist:   {dist_dir}")
-    print(f"Files:  {len(files)}")
+    print(f"Files:  {1 if args.html_only else len(files)}")
+    if route_keys:
+        print(f"SPA route HTML keys: {len(route_keys)}")
 
-    for local_path in files:
+    upload_files = [index_path] if args.html_only else files
+    for local_path in upload_files:
         rel = local_path.relative_to(dist_dir)
         rel_posix = rel.as_posix()
         key = f"{prefix}{rel_posix}"
         headers = _guess_headers(local_path, rel_posix)
-
-        extra_args: dict[str, str] = {
-            "ContentType": headers.content_type,
-            "CacheControl": headers.cache_control,
-        }
-        if args.public_read:
-            extra_args["ACL"] = "public-read"
-
-        if args.dry_run:
-            print(f"DRYRUN upload s3://{args.bucket}/{key} ({headers.content_type})")
-            continue
-
-        s3.upload_file(
-            Filename=str(local_path),
-            Bucket=args.bucket,
-            Key=key,
-            ExtraArgs=extra_args,
+        _upload_file(
+            s3=s3,
+            local_path=local_path,
+            bucket=args.bucket,
+            key=key,
+            headers=headers,
+            public_read=args.public_read,
+            dry_run=args.dry_run,
         )
-        print(f"Uploaded s3://{args.bucket}/{key}")
+
+    route_headers = _guess_headers(index_path, "index.html")
+    for route_key in route_keys:
+        _upload_file(
+            s3=s3,
+            local_path=index_path,
+            bucket=args.bucket,
+            key=f"{prefix}{route_key}",
+            headers=route_headers,
+            public_read=args.public_read,
+            dry_run=args.dry_run,
+        )
 
     return 0
 

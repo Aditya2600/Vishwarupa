@@ -11,6 +11,7 @@ import {
 } from './LoanReminderVideo';
 import {collectionReminderData} from './data/collectionReminderData';
 import {sampleCustomer} from './data/sampleCustomer';
+import {LoanOfferInteractiveTemplate} from './templates/LoanOfferInteractiveTemplate';
 
 const Root = () => {
   return (
@@ -32,6 +33,14 @@ const Root = () => {
         width={1080}
         height={1920}
         defaultProps={collectionReminderData}
+      />
+      <Composition
+        id="LoanOfferInteractiveTemplate"
+        component={LoanOfferInteractiveTemplate}
+        durationInFrames={900}
+        fps={30}
+        width={1080}
+        height={1920}
       />
     </>
   );

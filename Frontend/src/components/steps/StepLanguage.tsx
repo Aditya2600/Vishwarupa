@@ -75,15 +75,6 @@ export function StepLanguage({
               >
                 Text to Video
               </button>
-              <button
-                onClick={() => onVideoTypeChange("hybrid_remotion_avatar_pip")}
-                className={`px-6 py-2 rounded-lg text-sm font-semibold transition-all ${videoType === "hybrid_remotion_avatar_pip"
-                    ? "bg-primary text-primary-foreground shadow-lg"
-                    : "text-muted-foreground hover:text-foreground"
-                  }`}
-              >
-                Hybrid Avatar PIP
-              </button>
             </div>
           </div>
 

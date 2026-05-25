@@ -2579,14 +2579,6 @@ export const TemplateVideo = ({leadId}) => {
           stepBoundaries={stepBoundaries}
         />
         <LogoOverlay logo={logoBranding} forceAll={true} />
-        {subtitleBranding.enabled ? (
-          <SubtitlePanel
-            subtitle={currentSubtitle}
-            subtitleProgress={subtitleProgress}
-            branding={{...subtitleBranding, color: 'Black'}}
-            fallbackText={safeString(lead.cta_text, 'Choose your loan offer.')}
-          />
-        ) : null}
       </AbsoluteFill>
     );
   }

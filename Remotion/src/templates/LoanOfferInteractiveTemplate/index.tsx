@@ -1,5 +1,5 @@
 import React from "react";
-import { AbsoluteFill, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, Img, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import type { LoanOfferData, LoanOfferInteractiveTemplateProps } from "./types";
 
 const FONT_FAMILY =
@@ -104,176 +104,775 @@ const resolveSceneBoundaries = (
 };
 
 // -- UI Shell --
-const Shell = ({ children, hideGrid = false }: { children: React.ReactNode, hideGrid?: boolean }) => (
+const Shell = ({
+  children,
+  hideGrid = false,
+}: {
+  children: React.ReactNode;
+  hideGrid?: boolean;
+}) => (
   <AbsoluteFill
     style={{
-      backgroundColor: "#f5eefc",
+      background:
+        "radial-gradient(circle at 50% 10%, #ffffff 0%, #f5edff 38%, #dfccff 100%)",
       color: "#1a062f",
       fontFamily: FONT_FAMILY,
       overflow: "hidden",
     }}
   >
-    {!hideGrid && (
-      <div style={{ position: "absolute", inset: 0, opacity: 0.15 }}>
+    {!hideGrid ? (
+      <div style={{ position: "absolute", inset: 0, opacity: 0.28 }}>
         <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
           <defs>
-            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#d5bdf2" strokeWidth="1" />
+            <pattern
+              id="premium-grid"
+              width="42"
+              height="42"
+              patternUnits="userSpaceOnUse"
+            >
+              <path
+                d="M 42 0 L 0 0 0 42"
+                fill="none"
+                stroke="#cdb8ee"
+                strokeWidth="1"
+              />
             </pattern>
           </defs>
-          <rect width="100%" height="100%" fill="url(#grid)" />
+          <rect width="100%" height="100%" fill="url(#premium-grid)" />
         </svg>
       </div>
-    )}
+    ) : null}
+
     <div
       style={{
         position: "absolute",
-        top: "-10%", left: "-20%", width: "80%", height: "40%",
+        top: -260,
+        left: -220,
+        width: 760,
+        height: 760,
         borderRadius: "50%",
-        background: "radial-gradient(circle, rgba(142, 43, 175, 0.1) 0%, transparent 70%)",
-        filter: "blur(40px)",
+        background:
+          "radial-gradient(circle, rgba(168, 85, 247, 0.20), transparent 65%)",
+        filter: "blur(35px)",
       }}
     />
+
     <div
       style={{
         position: "absolute",
-        bottom: "10%", right: "-25%", width: "90%", height: "45%",
+        bottom: -220,
+        right: -260,
+        width: 820,
+        height: 820,
         borderRadius: "50%",
-        background: "radial-gradient(circle, rgba(74, 16, 92, 0.08) 0%, transparent 70%)",
-        filter: "blur(50px)",
+        background:
+          "radial-gradient(circle, rgba(76, 29, 149, 0.22), transparent 65%)",
+        filter: "blur(45px)",
       }}
     />
+
     {children}
   </AbsoluteFill>
 );
 
-// -- Confetti Decoration --
+const StatusBar = () => (
+  <div
+    style={{
+      position: "absolute",
+      top: 38,
+      left: 92,
+      right: 92,
+      height: 42,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      color: "#0b0b12",
+      fontSize: 31,
+      fontWeight: 700,
+      zIndex: 5,
+    }}
+  >
+    <div>9:41</div>
+
+    <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 4 }}>
+        {[12, 17, 22, 28].map((h) => (
+          <div
+            key={h}
+            style={{
+              width: 6,
+              height: h,
+              borderRadius: 3,
+              backgroundColor: "#0b0b12",
+            }}
+          />
+        ))}
+      </div>
+
+      <svg width="30" height="24" viewBox="0 0 30 24" fill="none">
+        <path
+          d="M3 8.5C9.5 3 20.5 3 27 8.5"
+          stroke="#0b0b12"
+          strokeWidth="3"
+          strokeLinecap="round"
+        />
+        <path
+          d="M8 13.5C12 10.5 18 10.5 22 13.5"
+          stroke="#0b0b12"
+          strokeWidth="3"
+          strokeLinecap="round"
+        />
+        <path
+          d="M13.5 18.5C14.5 18 15.5 18 16.5 18.5"
+          stroke="#0b0b12"
+          strokeWidth="4"
+          strokeLinecap="round"
+        />
+      </svg>
+
+      <div
+        style={{
+          width: 36,
+          height: 18,
+          border: "3px solid #0b0b12",
+          borderRadius: 5,
+          position: "relative",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            right: -7,
+            top: 4,
+            width: 4,
+            height: 8,
+            backgroundColor: "#0b0b12",
+            borderRadius: 2,
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: 3,
+            top: 3,
+            width: 26,
+            height: 8,
+            backgroundColor: "#0b0b12",
+            borderRadius: 2,
+          }}
+        />
+      </div>
+    </div>
+  </div>
+);
+
+const PremiumLogo = () => (
+  <Img
+    src={staticFile("assets/TVS_Credit_logo.png")}
+    style={{
+      width: 450,
+      height: "auto",
+      objectFit: "contain",
+      filter: "drop-shadow(0 14px 30px rgba(76, 29, 149, 0.12))",
+    }}
+  />
+);
+
+const Sparkle = ({
+  x,
+  y,
+  size,
+  delay = 0,
+  color = "#a855f7",
+}: {
+  x: string;
+  y: string;
+  size: number;
+  delay?: number;
+  color?: string;
+}) => {
+  const frame = useCurrentFrame();
+  const localFrame = frame - delay;
+
+  const appear = clamp(localFrame / 18, 0, 1);
+  const pulse = 0.75 + 0.25 * Math.sin(localFrame * 0.35);
+  const scale = 0.35 + appear * pulse;
+  const opacity = localFrame < 0 ? 0 : appear * pulse;
+
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      style={{
+        position: "absolute",
+        left: x,
+        top: y,
+        opacity,
+        transform: `translate(-50%, -50%) scale(${scale}) rotate(${localFrame * 2.5}deg)`,
+        filter: `drop-shadow(0 0 ${size * 0.45}px ${color})`,
+      }}
+    >
+      <path
+        d="M12 2l2.6 7.4L22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6L12 2z"
+        fill={color}
+      />
+    </svg>
+  );
+};
+
+const ConfettiStrip = ({
+  x,
+  y,
+  width,
+  color,
+  rotate,
+  delay = 0,
+}: {
+  x: string;
+  y: string;
+  width: number;
+  color: string;
+  rotate: number;
+  delay?: number;
+}) => {
+  const frame = useCurrentFrame();
+  const localFrame = frame - delay;
+
+  const appear = clamp(localFrame / 14, 0, 1);
+  const floatY = Math.sin(localFrame * 0.12) * 5;
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: x,
+        top: y,
+        width,
+        height: 8,
+        borderRadius: 999,
+        backgroundColor: color,
+        opacity: localFrame < 0 ? 0 : appear * 0.85,
+        transform: `translate(-50%, calc(-50% + ${floatY}px)) rotate(${rotate}deg)`,
+      }}
+    />
+  );
+};
+
+const PartyEmoji = ({
+  x,
+  y,
+  delay = 0,
+}: {
+  x: string;
+  y: string;
+  delay?: number;
+}) => {
+  const frame = useCurrentFrame();
+  const localFrame = frame - delay;
+
+  const appear = clamp(localFrame / 16, 0, 1);
+  const floatY = Math.sin(localFrame * 0.15) * 8;
+  const rotate = Math.sin(localFrame * 0.18) * 10;
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: x,
+        top: y,
+        fontSize: 38,
+        opacity: localFrame < 0 ? 0 : appear,
+        transform: `translate(-50%, calc(-50% + ${floatY}px)) rotate(${rotate}deg) scale(${0.75 + appear * 0.25})`,
+      }}
+    >
+      🎉
+    </div>
+  );
+};
+
+// -- Confetti / Sparkle Decoration --
 const Confetti = ({ opacity }: { opacity: number }) => (
-  <div style={{ position: 'absolute', inset: 0, opacity, pointerEvents: 'none' }}>
-    {/* Just a few mock confetti shapes based on images */}
-    <div style={{ position: 'absolute', top: '15%', left: '20%', width: 10, height: 10, backgroundColor: '#a855f7', transform: 'rotate(25deg)' }} />
-    <div style={{ position: 'absolute', top: '25%', left: '80%', width: 8, height: 8, backgroundColor: '#22c55e', borderRadius: '50%' }} />
-    <div style={{ position: 'absolute', top: '10%', left: '70%', width: 12, height: 6, backgroundColor: '#facc15', transform: 'rotate(-45deg)' }} />
-    <div style={{ position: 'absolute', top: '30%', left: '10%', width: 6, height: 6, backgroundColor: '#3b82f6', borderRadius: '50%' }} />
-    <div style={{ position: 'absolute', top: '40%', right: '15%', width: 10, height: 10, backgroundColor: '#a855f7', transform: 'rotate(60deg)' }} />
+  <div
+    style={{
+      position: "absolute",
+      inset: 0,
+      opacity,
+      pointerEvents: "none",
+      zIndex: 2,
+    }}
+  >
+    <Sparkle x="18%" y="19%" size={18} delay={2} color="#8b5cf6" />
+    <Sparkle x="82%" y="20%" size={16} delay={8} color="#22c55e" />
+    <Sparkle x="26%" y="33%" size={14} delay={12} color="#60a5fa" />
+    <Sparkle x="74%" y="33%" size={14} delay={16} color="#facc15" />
+    <Sparkle x="50%" y="41%" size={26} delay={20} color="#a855f7" />
+
+    <ConfettiStrip x="28%" y="21%" width={22} color="#a78bfa" rotate={-35} delay={4} />
+    <ConfettiStrip x="72%" y="22%" width={22} color="#6ee7b7" rotate={35} delay={7} />
+    <ConfettiStrip x="22%" y="29%" width={18} color="#60a5fa" rotate={15} delay={10} />
+    <ConfettiStrip x="78%" y="29%" width={20} color="#8b5cf6" rotate={-20} delay={13} />
+
+    <PartyEmoji x="15%" y="24%" delay={10} />
+    <PartyEmoji x="85%" y="24%" delay={14} />
+  </div>
+);
+
+const FeatureIcon = ({ type }: { type: "bolt" | "shield" | "percent" }) => {
+  if (type === "bolt") {
+    return (
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+        <path d="M13 2L4 14h7l-1 8 10-13h-7l0-7z" fill="#5b21b6" />
+      </svg>
+    );
+  }
+
+  if (type === "shield") {
+    return (
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6l7-3z"
+          fill="#5b21b6"
+        />
+        <path
+          d="M8.5 12.2l2.2 2.2 4.8-5"
+          stroke="#fff"
+          strokeWidth="2.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        color: "#5b21b6",
+        fontSize: 38,
+        fontWeight: 900,
+        lineHeight: 1,
+      }}
+    >
+      %
+    </div>
+  );
+};
+
+const FeatureItem = ({
+  type,
+  line1,
+  line2,
+}: {
+  type: "bolt" | "shield" | "percent";
+  line1: string;
+  line2: string;
+}) => (
+  <div
+    style={{
+      flex: 1,
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+    }}
+  >
+    <div
+      style={{
+        width: 82,
+        height: 82,
+        borderRadius: "50%",
+        background:
+          "linear-gradient(180deg, rgba(255,255,255,0.95), rgba(240,230,255,0.95))",
+        border: "2px solid rgba(255,255,255,0.95)",
+        boxShadow: "0 10px 25px rgba(91, 33, 182, 0.12)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        marginBottom: 16,
+      }}
+    >
+      <FeatureIcon type={type} />
+    </div>
+
+    <div
+      style={{
+        fontSize: 24,
+        fontWeight: 500,
+        lineHeight: 1.22,
+        textAlign: "center",
+        color: "#21183c",
+      }}
+    >
+      {line1}
+      <br />
+      {line2}
+    </div>
   </div>
 );
 
 // -- Scene 1: Intro --
-const Intro = ({ offer, customerName }: { offer: LoanOfferData; customerName?: string }) => {
+const Intro = ({
+  offer,
+  customerName,
+}: {
+  offer: LoanOfferData;
+  customerName?: string;
+}) => {
   const frame = useCurrentFrame();
-  const introFade = Math.min(frame / 20, 1);
-  const cardLift = Math.max(20 - frame * 0.8, 0);
+
+  const entrance = clamp(frame / 24, 0, 1);
+  const lift = (1 - entrance) * 34;
+
+  const amountText = formatIndian(
+    offer.max_loan_amount || getSelectedRow(offer).amount || "500000",
+  ).replace(/^₹/, "₹ ");
 
   return (
     <Shell>
-      <div style={{ padding: "80px 40px 0", height: "100%", position: "relative", display: "flex", flexDirection: "column", alignItems: "center" }}>
+      <StatusBar />
 
-        {/* Header Logo Area */}
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 40, opacity: introFade, transform: `translateY(${Math.max(10 - frame * 0.5, 0)}px)` }}>
-          <div style={{ width: 48, height: 48, background: 'linear-gradient(135deg, #a855f7, #702082)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 900, fontSize: 24, marginRight: 16 }}>
-            FP
+      <div
+        style={{
+          position: "absolute",
+          top: 142,
+          left: 0,
+          right: 0,
+          display: "flex",
+          justifyContent: "center",
+          opacity: entrance,
+          transform: `translateY(${lift}px)`,
+        }}
+      >
+        <PremiumLogo />
+      </div>
+
+      <div
+        style={{
+          position: "absolute",
+          top: 282,
+          left: 72,
+          right: 72,
+          height: 1255,
+          borderRadius: 52,
+          background:
+            "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,255,255,0.88))",
+          boxShadow:
+            "0 32px 80px rgba(76, 29, 149, 0.13), inset 0 1px 0 rgba(255,255,255,0.9)",
+          border: "1px solid rgba(255,255,255,0.85)",
+          overflow: "hidden",
+          opacity: entrance,
+          transform: `translateY(${lift}px)`,
+        }}
+      >
+        <Confetti opacity={entrance} />
+
+        <div
+          style={{
+            position: "absolute",
+            top: 88,
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: 154,
+            height: 154,
+            borderRadius: "50%",
+            background: "rgba(34, 197, 94, 0.12)",
+            boxShadow: "0 0 0 22px rgba(34, 197, 94, 0.07)",
+          }}
+        />
+
+        <div
+          style={{
+            position: "absolute",
+            top: 108,
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: 114,
+            height: 114,
+            borderRadius: "50%",
+            background: "linear-gradient(135deg, #76e59c 0%, #16a34a 100%)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow:
+              "0 18px 38px rgba(22, 163, 74, 0.35), inset 0 2px 8px rgba(255,255,255,0.35)",
+          }}
+        >
+          <svg width="58" height="58" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M5 12.3l4.2 4.2L19 6.8"
+              stroke="#fff"
+              strokeWidth="3.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </div>
+
+        <div
+          style={{
+            position: "absolute",
+            top: 320,
+            left: 40,
+            right: 40,
+            textAlign: "center",
+            fontFamily: SERIF_FONT,
+            fontSize: 78,
+            fontWeight: 800,
+            lineHeight: 1.05,
+            color: "#16073d",
+            letterSpacing: -1.8,
+          }}
+        >
+          Congratulations!
+        </div>
+
+        <div
+          style={{
+            position: "absolute",
+            top: 430,
+            left: 0,
+            right: 0,
+            textAlign: "center",
+            fontSize: 34,
+            color: "#33334d",
+            fontWeight: 500,
+          }}
+        >
+          Your loan has been pre-approved
+        </div>
+
+        <div
+          style={{
+            position: "absolute",
+            top: 515,
+            left: 140,
+            right: 140,
+            height: 1,
+            background:
+              "linear-gradient(90deg, transparent, rgba(91, 33, 182, 0.22), transparent)",
+          }}
+        />
+
+        <div
+          style={{
+            position: "absolute",
+            top: 496,
+            left: "50%",
+            transform: "translateX(-50%) rotate(45deg)",
+            width: 28,
+            height: 28,
+            backgroundColor: "#a855f7",
+            boxShadow: "0 0 30px rgba(168, 85, 247, 0.35)",
+          }}
+        />
+
+        <div
+          style={{
+            position: "absolute",
+            top: 570,
+            left: 120,
+            right: 120,
+            textAlign: "center",
+            fontSize: 28,
+            lineHeight: 1.38,
+            color: "#4b4b63",
+            fontWeight: 400,
+          }}
+        >
+          We're excited to help you take the next step
+          <br />
+          towards your financial goals.
+        </div>
+
+        <div
+          style={{
+            position: "absolute",
+            top: 710,
+            left: 48,
+            right: 48,
+            height: 355,
+            borderRadius: 38,
+            background:
+              "linear-gradient(135deg, #8b5cf6 0%, #5b21b6 46%, #3b0b8f 100%)",
+            boxShadow:
+              "0 28px 56px rgba(76, 29, 149, 0.35), inset 0 1px 0 rgba(255,255,255,0.22)",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              opacity: 0.22,
+              background:
+                "radial-gradient(circle at 92% 15%, transparent 0 120px, rgba(255,255,255,0.45) 122px, transparent 124px)",
+            }}
+          />
+
+          <svg
+            style={{ position: "absolute", left: 0, bottom: 0, opacity: 0.25 }}
+            width="520"
+            height="140"
+            viewBox="0 0 520 140"
+            fill="none"
+          >
+            {Array.from({ length: 8 }).map((_, i) => (
+              <path
+                key={i}
+                d={`M0 ${100 + i * 7} C 130 ${40 + i * 8}, 230 ${
+                  170 - i * 7
+                }, 520 ${70 + i * 4}`}
+                stroke="white"
+                strokeWidth="1.2"
+              />
+            ))}
+          </svg>
+
+          <div
+            style={{
+              position: "absolute",
+              top: 42,
+              left: "50%",
+              transform: "translateX(-50%)",
+              padding: "12px 40px",
+              borderRadius: 999,
+              border: "1px solid rgba(255,255,255,0.28)",
+              backgroundColor: "rgba(255,255,255,0.10)",
+              color: "#f5efff",
+              fontSize: 25,
+              fontWeight: 600,
+              letterSpacing: 0.2,
+            }}
+          >
+            Pre-approved Limit
           </div>
-          <div>
-            <div style={{ fontSize: 28, fontWeight: 800, color: '#1a062f' }}>Finance Partner</div>
-            <div style={{ fontSize: 16, color: '#702082', fontWeight: 500 }}>Your Dreams, Our Commitment</div>
+
+          <div
+            style={{
+              position: "absolute",
+              top: 128,
+              left: 0,
+              right: 0,
+              textAlign: "center",
+              fontFamily: SERIF_FONT,
+              fontSize: 92,
+              fontWeight: 800,
+              letterSpacing: -1,
+              color: "#ffffff",
+              lineHeight: 1,
+              textShadow: "0 4px 18px rgba(0,0,0,0.18)",
+            }}
+          >
+            {amountText}
+          </div>
+
+          <div
+            style={{
+              position: "absolute",
+              bottom: 50,
+              left: 0,
+              right: 0,
+              textAlign: "center",
+              color: "#efe8ff",
+              fontSize: 30,
+              fontWeight: 400,
+            }}
+          >
+            Pre-approved loan amount
           </div>
         </div>
 
-        {/* Main Card */}
-        <div style={{
-          width: '100%',
-          backgroundColor: 'rgba(255, 255, 255, 0.95)',
-          borderRadius: 40,
-          padding: '50px 40px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          boxShadow: '0 20px 50px rgba(112, 32, 130, 0.08)',
-          border: '1px solid rgba(255,255,255,0.8)',
-          backdropFilter: 'blur(10px)',
-          opacity: introFade,
-          transform: `translateY(${cardLift}px)`,
-          position: 'relative'
-        }}>
+        <div
+          style={{
+            position: "absolute",
+            left: 72,
+            right: 72,
+            bottom: 58,
+            display: "flex",
+            alignItems: "center",
+          }}
+        >
+          <FeatureItem type="bolt" line1="Quick" line2="Disbursal" />
 
-          <Confetti opacity={introFade} />
+          <div
+            style={{
+              width: 1,
+              height: 112,
+              backgroundColor: "rgba(76, 29, 149, 0.16)",
+            }}
+          />
 
-          {/* Green Check */}
-          <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'linear-gradient(135deg, #4ade80, #16a34a)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 10px 20px rgba(22, 163, 74, 0.2)', marginBottom: 24, zIndex: 1 }}>
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-          </div>
+          <FeatureItem type="shield" line1="Secure &" line2="Trusted" />
 
-          <div style={{ fontFamily: SERIF_FONT, fontSize: 56, fontWeight: 700, color: '#1e1b4b', marginBottom: 12, zIndex: 1 }}>
-            Congratulations{customerName ? `, ${customerName.split(' ')[0]}` : ''}!
-          </div>
+          <div
+            style={{
+              width: 1,
+              height: 112,
+              backgroundColor: "rgba(76, 29, 149, 0.16)",
+            }}
+          />
 
-          <div style={{ fontSize: 24, color: '#4b5563', fontWeight: 500, marginBottom: 30, zIndex: 1 }}>
-            Your loan has been pre-approved
-          </div>
-
-          {/* Sparkle Icon */}
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: 30 }}><path d="M12 2l2.4 7.6 7.6 2.4-7.6 2.4-2.4 7.6-2.4-7.6-7.6-2.4 7.6-2.4z" /></svg>
-
-          <div style={{ fontSize: 20, color: '#6b7280', textAlign: 'center', lineHeight: 1.5, marginBottom: 40, maxWidth: '80%', zIndex: 1 }}>
-            We're excited to help you take the next step towards your financial goals.
-          </div>
-
-          {/* Purple Gradient Limit Card */}
-          <div style={{
-            width: '100%',
-            background: 'linear-gradient(135deg, #7c3aed 0%, #4c1d95 100%)',
-            borderRadius: 24,
-            padding: '30px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            marginBottom: 40,
-            boxShadow: '0 15px 30px rgba(76, 29, 149, 0.3)',
-            position: 'relative',
-            overflow: 'hidden'
-          }}>
-            <div style={{ position: 'absolute', top: -50, right: -50, width: 200, height: 200, border: '2px solid rgba(255,255,255,0.1)', borderRadius: '50%' }} />
-            <div style={{ position: 'absolute', bottom: -50, left: -50, width: 150, height: 150, border: '2px solid rgba(255,255,255,0.1)', borderRadius: '50%' }} />
-
-            <div style={{ background: 'rgba(255,255,255,0.15)', borderRadius: 99, padding: '8px 20px', fontSize: 16, color: '#e9d5ff', fontWeight: 600, marginBottom: 16, border: '1px solid rgba(255,255,255,0.2)' }}>
-              Pre-approved Limit
-            </div>
-            <div style={{ fontFamily: SERIF_FONT, fontSize: 72, color: '#ffffff', fontWeight: 700, marginBottom: 8, zIndex: 1 }}>
-              {formatIndian(offer.max_loan_amount || '500000')}
-            </div>
-            <div style={{ fontSize: 18, color: '#ddd6fe', fontWeight: 500, zIndex: 1 }}>
-              Pre-approved loan amount
-            </div>
-          </div>
-
-          {/* Features Row */}
-          <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', zIndex: 1 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
-              <div style={{ width: 40, height: 40, borderRadius: '50%', backgroundColor: '#f3e8ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7c3aed', marginBottom: 12 }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-              </div>
-              <div style={{ fontSize: 15, color: '#4b5563', fontWeight: 600, textAlign: 'center' }}>Quick<br />Disbursal</div>
-            </div>
-            <div style={{ width: 1, backgroundColor: '#e5e7eb', height: 60, alignSelf: 'center' }} />
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
-              <div style={{ width: 40, height: 40, borderRadius: '50%', backgroundColor: '#f3e8ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7c3aed', marginBottom: 12 }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
-              </div>
-              <div style={{ fontSize: 15, color: '#4b5563', fontWeight: 600, textAlign: 'center' }}>Secure &<br />Trusted</div>
-            </div>
-            <div style={{ width: 1, backgroundColor: '#e5e7eb', height: 60, alignSelf: 'center' }} />
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
-              <div style={{ width: 40, height: 40, borderRadius: '50%', backgroundColor: '#f3e8ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7c3aed', marginBottom: 12 }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="5" x2="5" y2="19"></line><circle cx="6.5" cy="6.5" r="2.5"></circle><circle cx="17.5" cy="17.5" r="2.5"></circle></svg>
-              </div>
-              <div style={{ fontSize: 15, color: '#4b5563', fontWeight: 600, textAlign: 'center' }}>Competitive<br />Interest Rates</div>
-            </div>
-          </div>
+          <FeatureItem
+            type="percent"
+            line1="Competitive"
+            line2="Interest Rates"
+          />
         </div>
+      </div>
 
+      <div
+        style={{
+          position: "absolute",
+          left: 82,
+          right: 82,
+          bottom: 110,
+          height: 104,
+          borderRadius: 32,
+          background:
+            "linear-gradient(135deg, #8b5cf6 0%, #6d28d9 45%, #4c1d95 100%)",
+          color: "#fff",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 36,
+          fontWeight: 800,
+          letterSpacing: 0.3,
+          boxShadow:
+            "0 20px 42px rgba(76, 29, 149, 0.32), inset 0 1px 0 rgba(255,255,255,0.25)",
+          opacity: entrance,
+          transform: `translateY(${lift}px)`,
+        }}
+      >
+        Continue
 
+        <div
+          style={{
+            position: "absolute",
+            right: 46,
+            top: "50%",
+            transform: "translateY(-50%)",
+            fontSize: 52,
+            fontWeight: 300,
+          }}
+        >
+          -&gt;
+        </div>
+      </div>
 
+      <div
+        style={{
+          position: "absolute",
+          bottom: 56,
+          left: 0,
+          right: 0,
+          textAlign: "center",
+          fontSize: 25,
+          color: "#5b21b6",
+          fontWeight: 400,
+          opacity: entrance,
+        }}
+      >
+        Learn more about your offer
       </div>
     </Shell>
   );

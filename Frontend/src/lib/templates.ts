@@ -321,14 +321,14 @@ export const OVERDUE_TEMPLATES: Record<string, TemplateValue> = {
 };
 
 export const LOAN_OFFER_INTERACTIVE_TEMPLATES: Record<string, TemplateValue> = {
-  English: `Congratulations {{ customer_name }}. You have a pre-approved loan offer from {{ client_name }} up to {{ loan_amount }}. Please tap Avail Now to view details.
+  English: `Congratulations {{ customer_name }}. You have a pre-approved loan offer from {{ client_name }} up to {{ loan_amount }}. Please tap Continue to view details.
 Now, choose your preferred loan amount and tenure, and tap Confirm Loan Offer to submit.
 Thank you. Your offer is confirmed, and our team will contact you shortly to complete the next steps. For help, you can call us now.`,
   Hindi: {
-    male: `बधाई हो {{ customer_name }}। {{ client_name }} की ओर से आपके लिए {{ loan_amount }} तक का प्री-अप्रूव्ड लोन ऑफर उपलब्ध है। विवरण देखने के लिए कृपया अवील नाओ पर टैप करें।
+    male: `बधाई हो {{ customer_name }}। {{ client_name }} की ओर से आपके लिए {{ loan_amount }} तक का प्री-अप्रूव्ड लोन ऑफर उपलब्ध है। विवरण देखने के लिए कृपया Continue पर टैप करें।
 अब, अपनी पसंद की लोन राशि और अवधि चुनें, और सबमिट करने के लिए कन्फर्म लोन ऑफर पर टैप करें।
 धन्यवाद। आपका ऑफर कन्फर्म हो गया है, और हमारी टीम अगले कदम पूरे करने के लिए जल्द ही आपसे संपर्क करेगी। सहायता के लिए आप अभी हमें कॉल कर सकते हैं।`,
-    female: `बधाई हो {{ customer_name }}। {{ client_name }} की ओर से आपके लिए {{ loan_amount }} तक का प्री-अप्रूव्ड लोन ऑफर उपलब्ध है। विवरण देखने के लिए कृपया अवील नाओ पर टैप करें।
+    female: `बधाई हो {{ customer_name }}। {{ client_name }} की ओर से आपके लिए {{ loan_amount }} तक का प्री-अप्रूव्ड लोन ऑफर उपलब्ध है। विवरण देखने के लिए कृपया Continue पर टैप करें।
 अब, अपनी पसंद की लोन राशि और अवधि चुनें, और सबमिट करने के लिए कन्फर्म लोन ऑफर पर टैप करें।
 धन्यवाद। आपका ऑफर कन्फर्म हो गया है, और हमारी टीम अगले कदम पूरे करने के लिए जल्द ही आपसे संपर्क करेगी। सहायता के लिए आप अभी हमें कॉल कर सकते हैं।`,
   },
@@ -367,7 +367,7 @@ export const REMOTION_TEMPLATE_OPTIONS: Array<{ key: RemotionTemplateKey; name: 
   {
     key: "loan_offer_interactive",
     name: "Interactive Loan Offer",
-    description: "Brand-editable loan offer with Avail Now, amount/tenure selection, EMI summary, and confirm CTA.",
+    description: "Brand-editable loan offer with Continue, amount/tenure selection, EMI summary, and confirm CTA.",
   },
   {
     key: "scene_loan_offer",
@@ -378,6 +378,11 @@ export const REMOTION_TEMPLATE_OPTIONS: Array<{ key: RemotionTemplateKey; name: 
     key: "loan_reminder",
     name: "Loan Reminder",
     description: "Portrait loan reminder with scene-wise captions and configurable brand imagery.",
+  },
+  {
+    key: "collection_reminder",
+    name: "Collection Reminder",
+    description: "Personalized collection reminder video with repayment details and contact CTA.",
   },
   {
     key: "tvs_credit_emi",

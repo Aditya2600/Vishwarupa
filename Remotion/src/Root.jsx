@@ -13,7 +13,6 @@ import {
 import {collectionReminderData} from './data/collectionReminderData';
 import {
   FPS,
-  LOAN_OFFER_INTERACTIVE_DURATION,
   getDurationInFrames,
   getLeadDimensions,
   leads,
@@ -62,8 +61,8 @@ export const RemotionRoot = () => {
       <Composition
         id="LoanOfferInteractiveTemplate"
         component={LoanOfferInteractiveTemplate}
-        durationInFrames={LOAN_OFFER_INTERACTIVE_DURATION}
-        fps={FPS}
+        durationInFrames={900}
+        fps={30}
         width={1080}
         height={1920}
       />

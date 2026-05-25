@@ -264,9 +264,14 @@ export default function InteractiveLoanOffer() {
 
   const brandColor = safeText(data?.primary_color, "#053666");
   const accentColor = safeText(data?.secondary_color, "#0f7734");
-  const ctaColor = "#702082";
-  const ctaDarkColor = "#4a105c";
   const phoneNumber = safeText(data?.loan_offer?.cta_phone_number, safeText(data?.contact_details, "1800-555-999"));
+  const shouldShowTopControls =
+    hasStarted &&
+    !hasEnded &&
+    !confirmed &&
+    !showAvail &&
+    !showSelector &&
+    !showSelectorsOverlay;
 
   const playFromStart = async () => {
     const video = videoRef.current;
@@ -350,103 +355,9 @@ export default function InteractiveLoanOffer() {
       style={{
         "--brand": brandColor,
         "--accent": accentColor,
-        "--pulse-bg": brandColor,
       } as CSSProperties}
     >
       <style>{`
-        .button-pulse {
-          position: absolute;
-          z-index: 20;
-          cursor: pointer;
-          transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), filter 0.3s ease;
-        }
-        .button-pulse:hover {
-          transform: translate(-50%, -50%) scale(1.04) !important;
-          filter: brightness(1.08);
-        }
-        .button-pulse:active {
-          transform: translate(-50%, -50%) scale(0.98) !important;
-        }
-        .button-pulse .button__wrapper {
-          position: relative;
-          width: 100%;
-          height: 100%;
-          cursor: pointer;
-        }
-        .pulsing {
-          width: 99%;
-          height: 99%;
-          border-radius: 90px;
-          z-index: 1;
-          position: relative;
-        }
-        .pulsing:before,
-        .pulsing:after {
-          content: "";
-          position: absolute;
-          width: 100%;
-          height: 100%;
-          border: inherit;
-          top: 0;
-          left: 0;
-          z-index: 0;
-          background: var(--pulse-bg, #053666);
-          border-radius: inherit;
-          animation: pulsing-wave 2.5s linear infinite;
-        }
-        .pulsing:after {
-          animation: pulsing-wave-alt 2.5s linear infinite;
-        }
-        @keyframes pulsing-wave {
-          0% {
-            opacity: 1;
-            transform: scaleY(1) scaleX(1);
-          }
-          20% {
-            opacity: 0.5;
-          }
-          70% {
-            opacity: 0.2;
-            transform: scaleY(1.8) scaleX(1.4);
-          }
-          80% {
-            opacity: 0;
-            transform: scaleY(1.8) scaleX(1.4);
-          }
-          90% {
-            opacity: 0;
-            transform: scaleY(1) scaleX(1);
-          }
-        }
-        @keyframes pulsing-wave-alt {
-          0% {
-            opacity: 1;
-            transform: scaleY(1) scaleX(1);
-          }
-          20% {
-            opacity: 0.5;
-          }
-          70% {
-            opacity: 0.2;
-            transform: scaleY(1.3) scaleX(1.15);
-          }
-          80% {
-            opacity: 0;
-            transform: scaleY(1.3) scaleX(1.15);
-          }
-          90% {
-            opacity: 0;
-            transform: scaleY(1) scaleX(1);
-          }
-        }
-        .premium-btn-inner {
-          border: 1px solid rgba(255, 255, 255, 0.3) !important;
-          box-shadow: inset 0 1px 1.5px rgba(255, 255, 255, 0.4), 0 12px 30px rgba(112, 32, 130, 0.5), 0 0 15px rgba(112, 32, 130, 0.4) !important;
-          font-weight: 900 !important;
-          text-transform: uppercase !important;
-          letter-spacing: 0.08em !important;
-          text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-        }
         .premium-select {
           border: 1px solid rgba(112, 32, 130, 0.18) !important;
           box-shadow: 0 4px 12px rgba(112, 32, 130, 0.05), inset 0 2px 4px rgba(0, 0, 0, 0.01) !important;
@@ -485,6 +396,31 @@ export default function InteractiveLoanOffer() {
           }}
         />
 
+        {import.meta.env.DEV ? (
+          <button
+            type="button"
+            onClick={() => {
+              const video = videoRef.current;
+              if (!video) return;
+              video.style.opacity = video.style.opacity === "0.15" ? "1" : "0.15";
+            }}
+            style={{
+              position: "absolute",
+              left: 8,
+              bottom: 8,
+              zIndex: 999,
+              fontSize: 10,
+              padding: "4px 6px",
+              borderRadius: 6,
+              background: "rgba(0,0,0,0.5)",
+              color: "#fff",
+              border: "none",
+            }}
+          >
+            debug fade video
+          </button>
+        ) : null}
+
         {/* Play Overlay before start */}
         {!hasStarted ? (
           <button
@@ -500,7 +436,7 @@ export default function InteractiveLoanOffer() {
         ) : null}
 
         {/* Floating Top Controls */}
-        {hasStarted && !hasEnded && !confirmed && !showSelector && !showSelectorsOverlay ? (
+        {shouldShowTopControls ? (
           <div className="absolute right-4 top-4 z-10 flex gap-2">
             <Button
               type="button"
@@ -515,48 +451,28 @@ export default function InteractiveLoanOffer() {
 
 
 
-        {/* Continue Button Overlay (Avail Now) */}
+        {/* Invisible click target over the Remotion-rendered Continue CTA */}
         {showAvail ? (
-          <div
+          <button
+            type="button"
+            aria-label="Continue to view loan offer"
+            onClick={() => void handleAvailNow()}
             style={{
               position: "absolute",
-              bottom: "10%",
-              left: 0,
-              right: 0,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
+              left: "7.5%",
+              right: "7.5%",
+              bottom: "5.7%",
+              height: "5.5%",
               zIndex: 30,
-              pointerEvents: "none", // Let clicks pass through except on the button itself
+              border: "none",
+              padding: 0,
+              margin: 0,
+              background: "transparent",
+              opacity: 0,
+              cursor: "pointer",
+              pointerEvents: "auto",
             }}
-          >
-            <div
-              onClick={() => void handleAvailNow()}
-              style={{
-                width: "60%",
-                maxWidth: 250,
-                padding: "8px 0",
-                background: "linear-gradient(135deg, #7c3aed 0%, #4c1d95 100%)",
-                borderRadius: 79,
-                color: "#fff",
-                fontSize: 17,
-                fontWeight: 700,
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                boxShadow: "0 12px 24px rgba(76, 29, 149, 0.25)",
-                cursor: "pointer",
-                pointerEvents: "auto",
-                animation: "popIn 0.5s ease-out forwards",
-              }}
-            >
-              Continue
-              <svg style={{ marginLeft: 12 }} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-            </div>
-            <div style={{ marginTop: 16, fontSize: 12, color: "#6b7280", fontWeight: 500, pointerEvents: "none", animation: "fadeIn 0.5s ease-out 0.3s forwards", opacity: 0 }}>
-              Learn more about your offer
-            </div>
-          </div>
+          />
         ) : null}
 
         {/* Interactive Selector UI (HTML Overlay) */}

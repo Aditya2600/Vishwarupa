@@ -11,7 +11,10 @@ from pathlib import Path
 from typing import Any, Optional
 
 import jinja2
-from mutagen.mp3 import MP3
+try:
+    from mutagen.mp3 import MP3
+except ImportError:
+    MP3 = None
 
 from app.config import settings
 from app.models import RemotionVideoRequest
@@ -316,13 +319,36 @@ class RemotionService:
                 except Exception:
                     pass
             
-        audio_meta = MP3(audio_file)
+        duration = 0.0
+        if MP3 is not None:
+            try:
+                audio_meta = MP3(audio_file)
+                duration = audio_meta.info.length
+            except Exception as e:
+                logger.error(f"Failed to read audio duration using mutagen: {e}")
+        
+        # Fallback to ffprobe if mutagen is missing or fails
+        if duration == 0.0:
+            try:
+                cmd = [
+                    "ffprobe", 
+                    "-v", "quiet", 
+                    "-print_format", "json", 
+                    "-show_format", 
+                    str(audio_file)
+                ]
+                res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                data = json.loads(res.stdout)
+                duration = float(data.get("format", {}).get("duration", 0.0))
+            except Exception as e:
+                logger.error(f"Fallback ffprobe duration check failed: {e}")
+
         return {
             "video_id": video_id,
             "audio_path": f"/audio/{video_id}.mp3",
             "full_audio_path": str(audio_file),
             "vtt_path": vtt_file,
-            "duration": audio_meta.info.length,
+            "duration": duration,
             "text": script_text
         }
 

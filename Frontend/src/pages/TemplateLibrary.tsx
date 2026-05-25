@@ -52,6 +52,12 @@ export default function TemplateLibrary() {
             <Video className="h-6 w-6" />
           </div>
         );
+      case "collection_reminder":
+        return (
+          <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500/20 to-rose-500/20 text-amber-400 border border-amber-500/10">
+            <AlertTriangle className="h-6 w-6" />
+          </div>
+        );
       case "hybrid_avatar_pip":
         return (
           <div className="p-3 rounded-xl bg-gradient-to-br from-rose-500/20 to-orange-500/20 text-rose-400 border border-rose-500/10">
