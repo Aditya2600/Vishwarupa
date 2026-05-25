@@ -587,13 +587,13 @@ export default function InteractiveLoanOffer() {
 
         {/* Interactive Selector UI (HTML Overlay) */}
         {(showSelector || showSelectorsOverlay) && !confirmed && selectedRow ? (
-          <div style={{ position: 'absolute', top: '15%', left: 0, right: 0, bottom: 0, backgroundColor: '#f5eefc', padding: '0 5%', pointerEvents: 'auto', display: 'flex', flexDirection: 'column', gap: 12, zIndex: 20 }}>
+          <div style={{ position: 'absolute', top: '15%', left: 0, right: 0, bottom: 0, backgroundColor, padding: '0 5%', pointerEvents: 'auto', display: 'flex', flexDirection: 'column', gap: 12, zIndex: 20 }}>
 
             {/* Controls Card */}
-            <div style={{ width: '100%', backgroundColor: '#fff', borderRadius: 24, padding: '16px', boxShadow: '0 8px 30px rgba(112, 32, 130, 0.05)' }}>
+            <div style={{ width: '100%', backgroundColor: '#fff', borderRadius: 24, padding: '16px', boxShadow: `0 8px 30px ${ctaColor}0d` }}>
               {/* Amount Section Header */}
               <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20 }}>
-                <div style={{ width: 32, height: 32, backgroundColor: '#f3e8ff', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7c3aed', marginRight: 12 }}>
+                <div style={{ width: 32, height: 32, backgroundColor: `${ctaColor}1a`, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: ctaColor, marginRight: 12 }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"></path><path d="M4 6v12c0 1.1.9 2 2 2h14v-4"></path><path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z"></path></svg>
                 </div>
                 <div style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>Loan Amount</div>
@@ -619,11 +619,11 @@ export default function InteractiveLoanOffer() {
                   const thumbLeft = `calc(${pct}% + ${10 - (pct / 100) * 20}px)`;
                   return (
                     <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-                      <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pct}%`, backgroundColor: '#7c3aed', borderRadius: 8 }} />
-                      <div style={{ position: 'absolute', left: thumbLeft, top: -6, width: 20, height: 20, backgroundColor: '#fff', borderRadius: '50%', border: '5px solid #7c3aed', transform: 'translateX(-50%)', boxShadow: '0 2px 8px rgba(124, 58, 237, 0.3)' }} />
-                      <div style={{ position: 'absolute', left: thumbLeft, top: -45, background: 'linear-gradient(135deg, #9333ea, #6d28d9)', color: '#fff', padding: '6px 14px', borderRadius: 10, fontSize: 14, fontWeight: 700, transform: 'translateX(-50%)', boxShadow: '0 4px 12px rgba(124, 58, 237, 0.3)', whiteSpace: 'nowrap' }}>
+                      <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pct}%`, backgroundColor: ctaColor, borderRadius: 8 }} />
+                      <div style={{ position: 'absolute', left: thumbLeft, top: -6, width: 20, height: 20, backgroundColor: '#fff', borderRadius: '50%', border: `5px solid ${ctaColor}`, transform: 'translateX(-50%)', boxShadow: `0 2px 8px ${ctaColor}4d` }} />
+                      <div style={{ position: 'absolute', left: thumbLeft, top: -45, background: `linear-gradient(135deg, ${ctaColor}, ${ctaDarkColor})`, color: ctaTextColor, padding: '6px 14px', borderRadius: 10, fontSize: 14, fontWeight: 700, transform: 'translateX(-50%)', boxShadow: `0 4px 12px ${ctaColor}4d`, whiteSpace: 'nowrap' }}>
                         {formatAmount(selectedAmount)}
-                        <div style={{ position: 'absolute', bottom: -4, left: '50%', transform: 'translateX(-50%) rotate(45deg)', width: 8, height: 8, backgroundColor: '#7c3aed' }} />
+                        <div style={{ position: 'absolute', bottom: -4, left: '50%', transform: 'translateX(-50%) rotate(45deg)', width: 8, height: 8, backgroundColor: ctaColor }} />
                       </div>
                     </div>
                   );
@@ -640,7 +640,7 @@ export default function InteractiveLoanOffer() {
 
               {/* Tenure Section Header */}
               <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
-                <div style={{ width: 32, height: 32, backgroundColor: '#f3e8ff', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7c3aed', marginRight: 12 }}>
+                <div style={{ width: 32, height: 32, backgroundColor: `${ctaColor}1a`, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: ctaColor, marginRight: 12 }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
                 </div>
                 <div style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>Tenure <span style={{ fontWeight: 400, color: '#6b7280', fontSize: 13 }}>(in Months)</span></div>
@@ -662,13 +662,13 @@ export default function InteractiveLoanOffer() {
                         padding: '10px 0',
                         borderRadius: 10,
                         border: isSelected ? 'none' : '1px solid #e5e7eb',
-                        background: isSelected ? 'linear-gradient(135deg, #9333ea, #6d28d9)' : '#fff',
-                        color: isSelected ? '#fff' : '#4b5563',
+                        background: isSelected ? `linear-gradient(135deg, ${ctaColor}, ${ctaDarkColor})` : '#fff',
+                        color: isSelected ? ctaTextColor : '#4b5563',
                         display: 'flex',
                         flexDirection: 'column',
                         alignItems: 'center',
                         cursor: isAvailable ? 'pointer' : 'not-allowed',
-                        boxShadow: isSelected ? '0 4px 12px rgba(124, 58, 237, 0.2)' : 'none',
+                        boxShadow: isSelected ? `0 4px 12px ${ctaColor}33` : 'none',
                         opacity: isAvailable || isSelected ? 1 : 0.4
                       }}
                     >
@@ -681,9 +681,9 @@ export default function InteractiveLoanOffer() {
             </div>
 
             {/* Summary Card */}
-            <div style={{ width: '100%', backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 24, padding: '16px', border: '1px solid rgba(255,255,255,1)', boxShadow: '0 8px 30px rgba(112, 32, 130, 0.05)', backdropFilter: 'blur(10px)' }}>
+            <div style={{ width: '100%', backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 24, padding: '16px', border: '1px solid rgba(255,255,255,1)', boxShadow: `0 8px 30px ${ctaColor}0d`, backdropFilter: 'blur(10px)' }}>
               <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
-                <div style={{ width: 28, height: 28, backgroundColor: '#f3e8ff', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7c3aed', marginRight: 10 }}>
+                <div style={{ width: 28, height: 28, backgroundColor: `${ctaColor}1a`, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: ctaColor, marginRight: 10 }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"></path><path d="M16 14h-6"></path><path d="M12 18H8"></path><path d="M16 10h-2"></path><path d="M8 10h.01"></path></svg>
                 </div>
                 <div style={{ fontSize: 16, fontWeight: 800, color: '#111827' }}>Loan Summary</div>
@@ -698,7 +698,7 @@ export default function InteractiveLoanOffer() {
                 <div style={{ fontWeight: 600, color: '#111827' }}>{selectedTenure} Months</div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#7c3aed' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: ctaColor }}>
                 <div style={{ display: 'flex', alignItems: 'center', fontSize: 14, fontWeight: 700 }}><svg style={{ marginRight: 6 }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="18" y="3" width="4" height="18"></rect><rect x="10" y="8" width="4" height="13"></rect><rect x="2" y="13" width="4" height="8"></rect></svg> Monthly EMI</div>
                 <div style={{ fontSize: 22, fontWeight: 800 }}>{formatAmount(selectedRow.emi)}</div>
               </div>
@@ -707,7 +707,7 @@ export default function InteractiveLoanOffer() {
             {/* Action Button */}
             <div
               onClick={() => void handleConfirm()}
-              style={{ marginTop: 'auto', marginBottom: '6%', width: '100%', padding: '16px 0', background: 'linear-gradient(135deg, #7c3aed 0%, #4c1d95 100%)', borderRadius: 20, color: '#fff', fontSize: 18, fontWeight: 700, display: 'flex', justifyContent: 'center', alignItems: 'center', boxShadow: '0 8px 20px rgba(76, 29, 149, 0.25)', cursor: 'pointer' }}
+              style={{ marginTop: 'auto', marginBottom: '6%', width: '100%', padding: '16px 0', background: `linear-gradient(135deg, ${ctaColor} 0%, ${ctaDarkColor} 100%)`, borderRadius: 20, color: ctaTextColor, fontSize: 18, fontWeight: 700, display: 'flex', justifyContent: 'center', alignItems: 'center', boxShadow: `0 8px 20px ${ctaColor}40`, cursor: 'pointer' }}
             >
               Proceed
               <svg style={{ marginLeft: 8 }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
@@ -718,8 +718,8 @@ export default function InteractiveLoanOffer() {
 
         {/* Dynamic Confirmed Screen Overlay */}
         {confirmed && selectedRow ? (
-          <div style={{ position: 'absolute', inset: 0, zIndex: 40, backgroundColor: '#f5eefc', display: 'flex', flexDirection: 'column', padding: '20px 16px', overflowY: 'hidden' }}>
-            <div style={{ width: '100%', backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 28, padding: '20px 16px', boxShadow: '0 12px 30px rgba(112, 32, 130, 0.05)', border: '1px solid rgba(255,255,255,0.8)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div style={{ position: 'absolute', inset: 0, zIndex: 40, backgroundColor, display: 'flex', flexDirection: 'column', padding: '20px 16px', overflowY: 'hidden' }}>
+            <div style={{ width: '100%', backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 28, padding: '20px 16px', boxShadow: `0 12px 30px ${ctaColor}0d`, border: '1px solid rgba(255,255,255,0.8)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
 
               {/* Green Check */}
               <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'linear-gradient(135deg, #4ade80, #16a34a)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 20px rgba(22, 163, 74, 0.3)', marginBottom: 12 }}>
@@ -734,25 +734,25 @@ export default function InteractiveLoanOffer() {
               </div>
 
               {/* Details Box (Glassmorphism 3-column) */}
-              <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', padding: '12px 6px', backgroundColor: '#f8f5ff', borderRadius: 16, border: '1px solid #e9d5ff', marginBottom: 20 }}>
+              <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', padding: '12px 6px', backgroundColor: `${ctaColor}0d`, borderRadius: 16, border: `1px solid ${ctaColor}33`, marginBottom: 20 }}>
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <div style={{ width: 28, height: 28, borderRadius: '50%', backgroundColor: '#e9d5ff', color: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 4 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', backgroundColor: `${ctaColor}26`, color: ctaColor, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 4 }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"></path><path d="M4 6v12c0 1.1.9 2 2 2h14v-4"></path><path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z"></path></svg>
                   </div>
                   <div style={{ fontSize: 16, fontWeight: 800, color: '#1e1b4b', marginBottom: 2 }}>{formatAmount(selectedRow.amount)}</div>
                   <div style={{ fontSize: 10, color: '#6b7280', fontWeight: 500 }}>Loan Amount</div>
                 </div>
-                <div style={{ width: 1, backgroundColor: '#d8b4fe' }} />
+                <div style={{ width: 1, backgroundColor: `${ctaColor}33` }} />
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <div style={{ width: 28, height: 28, borderRadius: '50%', backgroundColor: '#e9d5ff', color: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 4 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', backgroundColor: `${ctaColor}26`, color: ctaColor, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 4 }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
                   </div>
                   <div style={{ fontSize: 16, fontWeight: 800, color: '#1e1b4b', marginBottom: 2 }}>{selectedRow.tenure}</div>
                   <div style={{ fontSize: 10, color: '#6b7280', fontWeight: 500 }}>Months</div>
                 </div>
-                <div style={{ width: 1, backgroundColor: '#d8b4fe' }} />
+                <div style={{ width: 1, backgroundColor: `${ctaColor}33` }} />
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <div style={{ width: 28, height: 28, borderRadius: '50%', backgroundColor: '#e9d5ff', color: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 4 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', backgroundColor: `${ctaColor}26`, color: ctaColor, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 4 }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="18" y="3" width="4" height="18"></rect><rect x="10" y="8" width="4" height="13"></rect><rect x="2" y="13" width="4" height="8"></rect></svg>
                   </div>
                   <div style={{ fontSize: 16, fontWeight: 800, color: '#1e1b4b', marginBottom: 2 }}>{formatAmount(selectedRow.emi)}<span style={{ fontSize: 11, color: '#6b7280', fontWeight: 500 }}>/mo</span></div>
@@ -766,7 +766,7 @@ export default function InteractiveLoanOffer() {
 
                 <div style={{ position: 'relative', paddingLeft: 24 }}>
                   {/* Vertical Line */}
-                  <div style={{ position: 'absolute', left: 7, top: 10, bottom: 20, width: 2, backgroundColor: '#d8b4fe' }} />
+                  <div style={{ position: 'absolute', left: 7, top: 10, bottom: 20, width: 2, backgroundColor: `${ctaColor}33` }} />
 
                   {/* Steps */}
                   {[
@@ -790,7 +790,7 @@ export default function InteractiveLoanOffer() {
                       <div style={{ position: 'absolute', left: -24, top: 4, width: 16, height: 16, borderRadius: '50%', backgroundColor: '#fff', border: '2px solid #22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#22c55e', zIndex: 1 }}>
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
                       </div>
-                      <div style={{ width: 28, height: 28, backgroundColor: '#f5eefc', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7c3aed', marginRight: 12, flexShrink: 0 }}>
+                      <div style={{ width: 28, height: 28, backgroundColor: `${ctaColor}1a`, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: ctaColor, marginRight: 12, flexShrink: 0 }}>
                         {step.icon}
                       </div>
                       <div>
@@ -803,7 +803,7 @@ export default function InteractiveLoanOffer() {
               </div>
 
               {/* Action Buttons */}
-              <div onClick={handleCall} style={{ width: '100%', padding: '12px 0', background: 'linear-gradient(135deg, #22c55e 0%, #15803d 100%)', borderRadius: 12, color: '#fff', fontSize: 16, fontWeight: 700, display: 'flex', justifyContent: 'center', alignItems: 'center', boxShadow: '0 8px 16px rgba(34, 197, 94, 0.2)', cursor: 'pointer' }}>
+              <div onClick={handleCall} style={{ width: '100%', padding: '12px 0', background: `linear-gradient(135deg, ${ctaColor} 0%, ${ctaDarkColor} 100%)`, borderRadius: 12, color: ctaTextColor, fontSize: 16, fontWeight: 700, display: 'flex', justifyContent: 'center', alignItems: 'center', boxShadow: `0 8px 16px ${ctaColor}40`, cursor: 'pointer' }}>
                 <svg style={{ marginRight: 8 }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
                 Call {phoneNumber}
                 <svg style={{ marginLeft: 8 }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>

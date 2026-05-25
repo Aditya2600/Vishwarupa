@@ -119,73 +119,98 @@ const resolveSceneBoundaries = (
 const Shell = ({
   children,
   hideGrid = false,
+  interactiveBackgroundColor,
+  interactiveCtaColor,
 }: {
   children: React.ReactNode;
   hideGrid?: boolean;
-}) => (
-  <AbsoluteFill
-    style={{
-      background:
-        "radial-gradient(circle at 50% 10%, #ffffff 0%, #f5edff 38%, #dfccff 100%)",
-      color: "#1a062f",
-      fontFamily: FONT_FAMILY,
-      overflow: "hidden",
-    }}
-  >
-    {!hideGrid ? (
-      <div style={{ position: "absolute", inset: 0, opacity: 0.28 }}>
-        <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <pattern
-              id="premium-grid"
-              width="42"
-              height="42"
-              patternUnits="userSpaceOnUse"
-            >
-              <path
-                d="M 42 0 L 0 0 0 42"
-                fill="none"
-                stroke="#cdb8ee"
-                strokeWidth="1"
-              />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#premium-grid)" />
-        </svg>
-      </div>
-    ) : null}
+  interactiveBackgroundColor?: string;
+  interactiveCtaColor?: string;
+}) => {
+  const bgStyle = interactiveBackgroundColor
+    ? (interactiveBackgroundColor.startsWith("#")
+        ? `radial-gradient(circle at 50% 10%, #ffffff 0%, ${interactiveBackgroundColor}4d 40%, ${interactiveBackgroundColor} 100%)`
+        : interactiveBackgroundColor)
+    : "radial-gradient(circle at 50% 10%, #ffffff 0%, #f5edff 38%, #dfccff 100%)";
 
-    <div
+  const textColor = (interactiveBackgroundColor && !isLightColor(interactiveBackgroundColor))
+    ? "#ffffff"
+    : "#1a062f";
+
+  const glow1 = interactiveCtaColor
+    ? `radial-gradient(circle, ${interactiveCtaColor}33, transparent 65%)`
+    : "radial-gradient(circle, rgba(168, 85, 247, 0.20), transparent 65%)";
+
+  const glow2 = interactiveCtaColor
+    ? `radial-gradient(circle, ${interactiveCtaColor}3b, transparent 65%)`
+    : "radial-gradient(circle, rgba(76, 29, 149, 0.22), transparent 65%)";
+
+  const gridStroke = interactiveCtaColor
+    ? `${interactiveCtaColor}50`
+    : "#cdb8ee";
+
+  return (
+    <AbsoluteFill
       style={{
-        position: "absolute",
-        top: -260,
-        left: -220,
-        width: 760,
-        height: 760,
-        borderRadius: "50%",
-        background:
-          "radial-gradient(circle, rgba(168, 85, 247, 0.20), transparent 65%)",
-        filter: "blur(35px)",
+        background: bgStyle,
+        color: textColor,
+        fontFamily: FONT_FAMILY,
+        overflow: "hidden",
       }}
-    />
+    >
+      {!hideGrid ? (
+        <div style={{ position: "absolute", inset: 0, opacity: 0.28 }}>
+          <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <pattern
+                id="premium-grid"
+                width="42"
+                height="42"
+                patternUnits="userSpaceOnUse"
+              >
+                <path
+                  d="M 42 0 L 0 0 0 42"
+                  fill="none"
+                  stroke={gridStroke}
+                  strokeWidth="1"
+                />
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#premium-grid)" />
+          </svg>
+        </div>
+      ) : null}
 
-    <div
-      style={{
-        position: "absolute",
-        bottom: -220,
-        right: -260,
-        width: 820,
-        height: 820,
-        borderRadius: "50%",
-        background:
-          "radial-gradient(circle, rgba(76, 29, 149, 0.22), transparent 65%)",
-        filter: "blur(45px)",
-      }}
-    />
+      <div
+        style={{
+          position: "absolute",
+          top: -260,
+          left: -220,
+          width: 760,
+          height: 760,
+          borderRadius: "50%",
+          background: glow1,
+          filter: "blur(35px)",
+        }}
+      />
 
-    {children}
-  </AbsoluteFill>
-);
+      <div
+        style={{
+          position: "absolute",
+          bottom: -220,
+          right: -260,
+          width: 820,
+          height: 820,
+          borderRadius: "50%",
+          background: glow2,
+          filter: "blur(45px)",
+        }}
+      />
+
+      {children}
+    </AbsoluteFill>
+  );
+};
 
 const StatusBar = () => (
   <div
@@ -430,11 +455,12 @@ const Confetti = ({ opacity }: { opacity: number }) => (
   </div>
 );
 
-const FeatureIcon = ({ type }: { type: "bolt" | "shield" | "percent" }) => {
+const FeatureIcon = ({ type, interactiveCtaColor }: { type: "bolt" | "shield" | "percent"; interactiveCtaColor?: string }) => {
+  const iconColor = interactiveCtaColor || "#5b21b6";
   if (type === "bolt") {
     return (
       <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
-        <path d="M13 2L4 14h7l-1 8 10-13h-7l0-7z" fill="#5b21b6" />
+        <path d="M13 2L4 14h7l-1 8 10-13h-7l0-7z" fill={iconColor} />
       </svg>
     );
   }
@@ -444,7 +470,7 @@ const FeatureIcon = ({ type }: { type: "bolt" | "shield" | "percent" }) => {
       <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
         <path
           d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6l7-3z"
-          fill="#5b21b6"
+          fill={iconColor}
         />
         <path
           d="M8.5 12.2l2.2 2.2 4.8-5"
@@ -460,7 +486,7 @@ const FeatureIcon = ({ type }: { type: "bolt" | "shield" | "percent" }) => {
   return (
     <div
       style={{
-        color: "#5b21b6",
+        color: iconColor,
         fontSize: 38,
         fontWeight: 900,
         lineHeight: 1,
@@ -475,10 +501,12 @@ const FeatureItem = ({
   type,
   line1,
   line2,
+  interactiveCtaColor,
 }: {
   type: "bolt" | "shield" | "percent";
   line1: string;
   line2: string;
+  interactiveCtaColor?: string;
 }) => (
   <div
     style={{
@@ -496,14 +524,16 @@ const FeatureItem = ({
         background:
           "linear-gradient(180deg, rgba(255,255,255,0.95), rgba(240,230,255,0.95))",
         border: "2px solid rgba(255,255,255,0.95)",
-        boxShadow: "0 10px 25px rgba(91, 33, 182, 0.12)",
+        boxShadow: interactiveCtaColor
+          ? `0 10px 25px ${interactiveCtaColor}1f`
+          : "0 10px 25px rgba(91, 33, 182, 0.12)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         marginBottom: 16,
       }}
     >
-      <FeatureIcon type={type} />
+      <FeatureIcon type={type} interactiveCtaColor={interactiveCtaColor} />
     </div>
 
     <div
@@ -526,9 +556,13 @@ const FeatureItem = ({
 const Intro = ({
   offer,
   customerName,
+  interactiveBackgroundColor,
+  interactiveCtaColor,
 }: {
   offer: LoanOfferData;
   customerName?: string;
+  interactiveBackgroundColor?: string;
+  interactiveCtaColor?: string;
 }) => {
   const frame = useCurrentFrame();
 
@@ -539,8 +573,12 @@ const Intro = ({
     offer.max_loan_amount || getSelectedRow(offer).amount || "500000",
   ).replace(/^₹/, "₹ ");
 
+  const isLightCta = interactiveCtaColor ? isLightColor(interactiveCtaColor) : false;
+  const cardTextColor = isLightCta ? "#1a062f" : "#ffffff";
+  const cardSubTextColor = isLightCta ? "#33334d" : "#efe8ff";
+
   return (
-    <Shell>
+    <Shell interactiveBackgroundColor={interactiveBackgroundColor} interactiveCtaColor={interactiveCtaColor}>
       <StatusBar />
 
       <div
@@ -660,8 +698,9 @@ const Intro = ({
             left: 140,
             right: 140,
             height: 1,
-            background:
-              "linear-gradient(90deg, transparent, rgba(91, 33, 182, 0.22), transparent)",
+            background: interactiveCtaColor
+              ? `linear-gradient(90deg, transparent, ${interactiveCtaColor}3d, transparent)`
+              : "linear-gradient(90deg, transparent, rgba(91, 33, 182, 0.22), transparent)",
           }}
         />
 
@@ -673,8 +712,8 @@ const Intro = ({
             transform: "translateX(-50%) rotate(45deg)",
             width: 28,
             height: 28,
-            backgroundColor: "#a855f7",
-            boxShadow: "0 0 30px rgba(168, 85, 247, 0.35)",
+            backgroundColor: interactiveCtaColor || "#a855f7",
+            boxShadow: `0 0 30px ${interactiveCtaColor || "#a855f7"}59`,
           }}
         />
 
@@ -704,10 +743,12 @@ const Intro = ({
             right: 48,
             height: 355,
             borderRadius: 38,
-            background:
-              "linear-gradient(135deg, #8b5cf6 0%, #5b21b6 46%, #3b0b8f 100%)",
-            boxShadow:
-              "0 28px 56px rgba(76, 29, 149, 0.35), inset 0 1px 0 rgba(255,255,255,0.22)",
+            background: interactiveCtaColor
+              ? `linear-gradient(135deg, ${interactiveCtaColor} 0%, ${interactiveCtaColor}bf 100%)`
+              : "linear-gradient(135deg, #8b5cf6 0%, #5b21b6 46%, #3b0b8f 100%)",
+            boxShadow: interactiveCtaColor
+              ? `0 28px 56px ${interactiveCtaColor}59, inset 0 1px 0 rgba(255,255,255,0.22)`
+              : "0 28px 56px rgba(76, 29, 149, 0.35), inset 0 1px 0 rgba(255,255,255,0.22)",
             overflow: "hidden",
           }}
         >
@@ -748,9 +789,9 @@ const Intro = ({
               transform: "translateX(-50%)",
               padding: "12px 40px",
               borderRadius: 999,
-              border: "1px solid rgba(255,255,255,0.28)",
-              backgroundColor: "rgba(255,255,255,0.10)",
-              color: "#f5efff",
+              border: isLightCta ? "1px solid rgba(26,6,47,0.15)" : "1px solid rgba(255,255,255,0.28)",
+              backgroundColor: isLightCta ? "rgba(26,6,47,0.05)" : "rgba(255,255,255,0.10)",
+              color: cardTextColor,
               fontSize: 25,
               fontWeight: 600,
               letterSpacing: 0.2,
@@ -770,9 +811,9 @@ const Intro = ({
               fontSize: 92,
               fontWeight: 800,
               letterSpacing: -1,
-              color: "#ffffff",
+              color: cardTextColor,
               lineHeight: 1,
-              textShadow: "0 4px 18px rgba(0,0,0,0.18)",
+              textShadow: isLightCta ? "none" : "0 4px 18px rgba(0,0,0,0.18)",
             }}
           >
             {amountText}
@@ -785,7 +826,7 @@ const Intro = ({
               left: 0,
               right: 0,
               textAlign: "center",
-              color: "#efe8ff",
+              color: cardSubTextColor,
               fontSize: 30,
               fontWeight: 400,
             }}
@@ -804,23 +845,23 @@ const Intro = ({
             alignItems: "center",
           }}
         >
-          <FeatureItem type="bolt" line1="Quick" line2="Disbursal" />
+          <FeatureItem type="bolt" line1="Quick" line2="Disbursal" interactiveCtaColor={interactiveCtaColor} />
 
           <div
             style={{
               width: 1,
               height: 112,
-              backgroundColor: "rgba(76, 29, 149, 0.16)",
+              backgroundColor: interactiveCtaColor ? `${interactiveCtaColor}29` : "rgba(76, 29, 149, 0.16)",
             }}
           />
 
-          <FeatureItem type="shield" line1="Secure &" line2="Trusted" />
+          <FeatureItem type="shield" line1="Secure &" line2="Trusted" interactiveCtaColor={interactiveCtaColor} />
 
           <div
             style={{
               width: 1,
               height: 112,
-              backgroundColor: "rgba(76, 29, 149, 0.16)",
+              backgroundColor: interactiveCtaColor ? `${interactiveCtaColor}29` : "rgba(76, 29, 149, 0.16)",
             }}
           />
 
@@ -828,6 +869,7 @@ const Intro = ({
             type="percent"
             line1="Competitive"
             line2="Interest Rates"
+            interactiveCtaColor={interactiveCtaColor}
           />
         </div>
       </div>
@@ -840,17 +882,19 @@ const Intro = ({
           bottom: 110,
           height: 104,
           borderRadius: 32,
-          background:
-            "linear-gradient(135deg, #8b5cf6 0%, #6d28d9 45%, #4c1d95 100%)",
-          color: "#fff",
+          background: interactiveCtaColor
+            ? `linear-gradient(135deg, ${interactiveCtaColor} 0%, ${interactiveCtaColor}bf 100%)`
+            : "linear-gradient(135deg, #8b5cf6 0%, #6d28d9 45%, #4c1d95 100%)",
+          color: isLightCta ? "#1a062f" : "#fff",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           fontSize: 36,
           fontWeight: 800,
           letterSpacing: 0.3,
-          boxShadow:
-            "0 20px 42px rgba(76, 29, 149, 0.32), inset 0 1px 0 rgba(255,255,255,0.25)",
+          boxShadow: interactiveCtaColor
+            ? `0 20px 42px ${interactiveCtaColor}59, inset 0 1px 0 rgba(255,255,255,0.25)`
+            : "0 20px 42px rgba(76, 29, 149, 0.32), inset 0 1px 0 rgba(255,255,255,0.25)",
           opacity: entrance,
           transform: `translateY(${lift}px)`,
         }}
@@ -879,7 +923,7 @@ const Intro = ({
           right: 0,
           textAlign: "center",
           fontSize: 25,
-          color: "#5b21b6",
+          color: interactiveCtaColor || "#5b21b6",
           fontWeight: 400,
           opacity: entrance,
         }}
@@ -891,13 +935,21 @@ const Intro = ({
 };
 
 // -- Scene 2: Selector --
-const Selector = ({ offer }: { offer: LoanOfferData }) => {
+const Selector = ({
+  offer,
+  interactiveBackgroundColor,
+  interactiveCtaColor,
+}: {
+  offer: LoanOfferData;
+  interactiveBackgroundColor?: string;
+  interactiveCtaColor?: string;
+}) => {
   const frame = useCurrentFrame();
   const entrance = Math.min(frame / 20, 1);
   const selected = getSelectedRow(offer);
 
   return (
-    <Shell>
+    <Shell interactiveBackgroundColor={interactiveBackgroundColor} interactiveCtaColor={interactiveCtaColor}>
       <div style={{ padding: "60px 40px", height: "100%", display: "flex", flexDirection: "column", position: "relative" }}>
 
         {/* Top Header */}
@@ -907,17 +959,17 @@ const Selector = ({ offer }: { offer: LoanOfferData }) => {
           {/* Mock 3D Wallet Graphic */}
           <div style={{ position: 'relative', width: 220, height: 220, right: -20, top: -20 }}>
             {/* Soft background glow */}
-            <div style={{ position: 'absolute', inset: 20, background: '#a855f7', filter: 'blur(30px)', opacity: 0.3 }} />
+            <div style={{ position: 'absolute', inset: 20, background: interactiveCtaColor || '#a855f7', filter: 'blur(30px)', opacity: 0.3 }} />
             {/* Wallet body */}
-            <div style={{ position: 'absolute', top: 60, right: 20, width: 160, height: 120, background: 'linear-gradient(135deg, #a855f7, #7c3aed)', borderRadius: 24, transform: 'rotate(-5deg)', boxShadow: '0 20px 40px rgba(124,58,237,0.3)', border: '2px solid #c084fc' }} />
+            <div style={{ position: 'absolute', top: 60, right: 20, width: 160, height: 120, background: interactiveCtaColor ? `linear-gradient(135deg, ${interactiveCtaColor}, ${interactiveCtaColor}bf)` : 'linear-gradient(135deg, #a855f7, #7c3aed)', borderRadius: 24, transform: 'rotate(-5deg)', boxShadow: interactiveCtaColor ? `0 20px 40px ${interactiveCtaColor}4d` : '0 20px 40px rgba(124,58,237,0.3)', border: interactiveCtaColor ? `2px solid ${interactiveCtaColor}73` : '2px solid #c084fc' }} />
             {/* Wallet flap */}
-            <div style={{ position: 'absolute', top: 50, right: 20, width: 160, height: 60, background: 'linear-gradient(135deg, #d8b4fe, #a855f7)', borderRadius: '24px 24px 12px 12px', transform: 'rotate(-5deg)', borderBottom: '2px solid #c084fc' }} />
+            <div style={{ position: 'absolute', top: 50, right: 20, width: 160, height: 60, background: interactiveCtaColor ? `linear-gradient(135deg, ${interactiveCtaColor}80, ${interactiveCtaColor})` : 'linear-gradient(135deg, #d8b4fe, #a855f7)', borderRadius: '24px 24px 12px 12px', transform: 'rotate(-5deg)', borderBottom: interactiveCtaColor ? `2px solid ${interactiveCtaColor}73` : '2px solid #c084fc' }} />
             {/* Cash */}
             <div style={{ position: 'absolute', top: 10, right: 40, width: 100, height: 120, background: '#fff', borderRadius: 12, transform: 'rotate(5deg)', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ fontSize: 50, color: '#d8b4fe', fontWeight: 900 }}>₹</div>
+              <div style={{ fontSize: 50, color: interactiveCtaColor || '#d8b4fe', fontWeight: 900 }}>₹</div>
             </div>
             {/* Percentage coin */}
-            <div style={{ position: 'absolute', bottom: 30, right: 0, width: 70, height: 70, background: 'linear-gradient(135deg, #c084fc, #9333ea)', borderRadius: '50%', border: '4px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 32, fontWeight: 900, transform: 'rotate(10deg)', boxShadow: '0 10px 20px rgba(124,58,237,0.4)' }}>%</div>
+            <div style={{ position: 'absolute', bottom: 30, right: 0, width: 70, height: 70, background: interactiveCtaColor ? `linear-gradient(135deg, ${interactiveCtaColor}cc, ${interactiveCtaColor})` : 'linear-gradient(135deg, #c084fc, #9333ea)', borderRadius: '50%', border: '4px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 32, fontWeight: 900, transform: 'rotate(10deg)', boxShadow: interactiveCtaColor ? `0 10px 20px ${interactiveCtaColor}66` : '0 10px 20px rgba(124,58,237,0.4)' }}>%</div>
           </div>
         </div>
 
@@ -932,14 +984,24 @@ const Selector = ({ offer }: { offer: LoanOfferData }) => {
 };
 
 // -- Scene 3: Confirmed --
-const Confirmed = ({ offer, contactDetails }: { offer: LoanOfferData, contactDetails: string }) => {
+const Confirmed = ({
+  offer,
+  contactDetails,
+  interactiveBackgroundColor,
+  interactiveCtaColor,
+}: {
+  offer: LoanOfferData;
+  contactDetails: string;
+  interactiveBackgroundColor?: string;
+  interactiveCtaColor?: string;
+}) => {
   const frame = useCurrentFrame();
   const selected = getSelectedRow(offer);
   const phone = safeText(offer.cta_phone_number, contactDetails);
   const entrance = Math.min(frame / 20, 1);
 
   return (
-    <Shell hideGrid>
+    <Shell hideGrid interactiveBackgroundColor={interactiveBackgroundColor} interactiveCtaColor={interactiveCtaColor}>
       <div style={{ padding: "80px 40px", height: "100%", display: "flex", flexDirection: "column", position: "relative" }}>
 
 
@@ -978,12 +1040,32 @@ export const LoanOfferInteractiveTemplate = ({
   );
 
   if (frame < introEnd) {
-    return <Intro offer={offer} customerName={customerName} />;
+    return (
+      <Intro
+        offer={offer}
+        customerName={customerName}
+        interactiveBackgroundColor={interactiveBackgroundColor}
+        interactiveCtaColor={interactiveCtaColor}
+      />
+    );
   }
 
   if (frame < selectorEnd) {
-    return <Selector offer={offer} />;
+    return (
+      <Selector
+        offer={offer}
+        interactiveBackgroundColor={interactiveBackgroundColor}
+        interactiveCtaColor={interactiveCtaColor}
+      />
+    );
   }
 
-  return <Confirmed offer={offer} contactDetails={contactDetails} />;
+  return (
+    <Confirmed
+      offer={offer}
+      contactDetails={contactDetails}
+      interactiveBackgroundColor={interactiveBackgroundColor}
+      interactiveCtaColor={interactiveCtaColor}
+    />
+  );
 };

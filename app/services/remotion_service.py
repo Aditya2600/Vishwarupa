@@ -48,8 +48,8 @@ VOICE_MAP = {
 
 DEFAULT_SCRIPT_EN = "Hello {{ customer_name }}. I am calling from {{ client_name }} regarding your {{ product_type }} account. The total outstanding balance is {{ tos }}. Please contact us at {{ contact_details }} to discuss repayment options."
 DEFAULT_SCRIPT_HI = "नमस्ते {{ customer_name }}। मैं {{ client_name }} से आपके {{ product_type }} खाते के संबंध में बोल रही हूँ। आपकी कुल बकाया राशि {{ tos }} है। कृपया भुगतान विकल्पों पर चर्चा करने के लिए हमसे {{ contact_details }} पर संपर्क करें।"
-DEFAULT_LOAN_OFFER_EN = "Congratulations {{ customer_name }}. Your pre-approved loan offer from {{ client_name }} is ready. You can choose a loan amount up to {{ loan_amount }} with flexible tenure options. For help, contact {{ contact_details }}."
-DEFAULT_LOAN_OFFER_HI = "बधाई हो {{ customer_name }}। {{ client_name }} की तरफ से आपका प्री-अप्रूव्ड लोन ऑफर तैयार है। आप {{ loan_amount }} तक की राशि और आसान अवधि विकल्प चुन सकते हैं। सहायता के लिए {{ contact_details }} पर संपर्क करें।"
+DEFAULT_LOAN_OFFER_EN = "Congratulations {{ customer_name }}. Your pre-approved loan offer from {{ client_name }} is ready. Tap Continue to view your exclusive offer. You can choose a loan amount up to {{ loan_amount }} with flexible tenure options. Now, choose your preferred loan amount and tenure, then tap Proceed. Finally, tap Call to connect with our team."
+DEFAULT_LOAN_OFFER_HI = "बधाई हो {{ customer_name }}। {{ client_name }} की तरफ से आपका प्री-अप्रूव्ड लोन ऑफर तैयार है। अपना एक्सक्लूसिव ऑफर देखने के लिए Continue दबाएं। आप {{ loan_amount }} तक की राशि चुन सकते हैं। अब, अपनी पसंद की लोन राशि और अवधि चुनकर Proceed करें। किसी भी सहायता के लिए Call करें।"
 DEFAULT_SCENE_LOAN_OFFER_HI = """पैसों की परेशानी से जूझ रहे हैं? अब चिंता छोड़िए।
 बधाई हो! आपके लिए एक खास प्री-अप्रूव्ड लोन ऑफर तैयार है।
 नया बाइक हो, ज़रूरी खर्च हो या आपके सपने, अब सब होगा आसान।
