@@ -331,6 +331,7 @@ export const TVSCreditEMITemplate = (props: TVSCreditEMITemplateProps) => {
     language = 'English',
   } = props;
   const {durationInFrames} = useVideoConfig();
+  const frame = useCurrentFrame();
   const normalizedLogoPosition = logoPosition.toLowerCase().replace(/\s+/g, '-');
 
   const values = {
@@ -367,6 +368,20 @@ export const TVSCreditEMITemplate = (props: TVSCreditEMITemplateProps) => {
     return Math.max(1, end - start);
   };
 
+  const activeSceneIndex = TVS_CREDIT_EMI_SCENES.findIndex((_, index) => {
+    const start = getSceneStart(index);
+    const end = start + getSceneDuration(index);
+    return frame >= start && frame < end;
+  });
+  const activeScene = activeSceneIndex >= 0 ? TVS_CREDIT_EMI_SCENES[activeSceneIndex] : null;
+  const isFullscreenImageScene = activeScene?.kind === 'fullscreen-image';
+  const isLogoTop = normalizedLogoPosition.includes('top');
+  const isLogoBottom = normalizedLogoPosition.includes('bottom');
+  const isLogoLeft = normalizedLogoPosition.includes('left');
+  const isLogoRight = normalizedLogoPosition.includes('right');
+  const logoInset = isFullscreenImageScene ? 24 : 60;
+  const logoHeight = isFullscreenImageScene ? 72 : 120;
+
   return (
     <AbsoluteFill style={{backgroundColor: '#ffffff'}}>
       {enableNarration && narrationAudioPath && (
@@ -389,14 +404,19 @@ export const TVSCreditEMITemplate = (props: TVSCreditEMITemplateProps) => {
           src={logoUrl.startsWith('http') ? logoUrl : staticFile(logoUrl)}
           style={{
             position: 'absolute',
-            top: normalizedLogoPosition.includes('top') ? 60 : undefined,
-            bottom: normalizedLogoPosition.includes('bottom') ? 60 : undefined,
-            left: normalizedLogoPosition.includes('left') ? 60 : undefined,
-            right: normalizedLogoPosition.includes('right') ? 60 : undefined,
-            height: 120,
+            top: isLogoTop ? logoInset : undefined,
+            bottom: isLogoBottom ? logoInset : undefined,
+            left: isLogoLeft ? logoInset : undefined,
+            right: isLogoRight ? logoInset : undefined,
+            height: logoHeight,
+            maxWidth: isFullscreenImageScene ? 180 : 260,
             opacity: logoOpacity / 100,
             zIndex: 100,
             objectFit: 'contain',
+            backgroundColor: isFullscreenImageScene ? 'rgba(255, 255, 255, 0.88)' : undefined,
+            borderRadius: isFullscreenImageScene ? 12 : undefined,
+            padding: isFullscreenImageScene ? 8 : undefined,
+            boxShadow: isFullscreenImageScene ? '0 8px 24px rgba(15, 23, 42, 0.16)' : undefined,
           }}
         />
       )}
