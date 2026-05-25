@@ -95,6 +95,8 @@ EMI_TEMPLATE_ASSET_ALIASES = {
     "open_app_and_search.png": "open_app_search.png",
     "enterlan.png": "enter_lan.png",
     "payment sucess.png": "payment_success.png",
+    "payment_success_image.png": "payment_success.png",
+    "payment_success_image": "payment_success.png",
     "shopvisit.png": "shop_visit.png",
 }
 
