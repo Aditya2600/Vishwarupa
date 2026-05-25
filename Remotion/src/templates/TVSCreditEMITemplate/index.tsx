@@ -148,7 +148,7 @@ const resolveImage = (
   else if (sceneImage === 'upi_app.png') key = 'upiApps';
   else if (sceneImage === 'open_app_search.png') key = 'openappSearch';
   else if (sceneImage === 'enter_lan.png') key = 'enterlan';
-  else if (sceneImage === 'payment_success.png') key = 'paymentSuccess';
+  else if (sceneImage === 'payment_success_image.png') key = 'paymentSuccess';
   else if (sceneImage === 'shop_visit.png') key = 'shopVisit';
 
   if (key) {

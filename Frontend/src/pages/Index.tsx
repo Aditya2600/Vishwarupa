@@ -1111,7 +1111,7 @@ const Index = () => {
             upiApps: "upi_app.png",
             openappSearch: "open_app_search.png",
             enterlan: "enter_lan.png",
-            paymentSuccess: "payment_success.png",
+            paymentSuccess: "payment_success_image.png",
             shopVisit: "shop_visit.png",
             ...state.emiImagePaths,
           },
