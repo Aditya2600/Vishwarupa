@@ -381,8 +381,8 @@ export const REMOTION_TEMPLATE_OPTIONS: Array<{ key: RemotionTemplateKey; name: 
   },
   {
     key: "tvs_credit_emi",
-    name: "Full 3 Method Payment Guidance",
-    description: "Comprehensive 3-method payment guidance walkthrough designed with custom app image uploads.",
+    name: "3 step payment guidance",
+    description: "Comprehensive 3-step payment guidance walkthrough designed with custom app image uploads.",
   },
 ];
 
@@ -395,8 +395,8 @@ export const TEMPLATE_LIBRARY_QUICK_STARTS: Array<{
 }> = [
   {
     mode: "hybrid_remotion_avatar_pip",
-    name: "Hybrid Avatar PIP",
-    description: "Avatar presenter with a collection-style layout, automatically optimized for portrait or landscape videos.",
+    name: "VisionDesk",
+    description: "A newsroom-inspired visual background where AI presenters deliver information alongside contextual visuals, branded graphics, and animated supporting content.",
     iconKey: "hybrid_avatar_pip",
   },
 ];

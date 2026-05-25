@@ -37,7 +37,7 @@ function buildDownloadFilename({
     videoType === "remotion"
       ? "text-to-video"
       : videoType === "hybrid_remotion_avatar_pip"
-        ? "hybrid-avatar-pip"
+        ? "visiondesk"
         : "avatar-video";
   return `${preferredName || fallbackName}.mp4`;
 }
@@ -85,12 +85,12 @@ export function StepShare({ state, update }: StepShareProps) {
   const avatarName =
     state.videoType === "remotion"
       ? "Text to Video"
-      : state.avatarName || state.avatarId || (state.videoType === "hybrid_remotion_avatar_pip" ? "Hybrid Avatar" : "None");
+      : state.avatarName || state.avatarId || (state.videoType === "hybrid_remotion_avatar_pip" ? "VisionDesk" : "None");
   const styleLabel =
     state.videoType === "remotion"
       ? "Text to Video"
       : state.videoType === "hybrid_remotion_avatar_pip"
-        ? "Hybrid Avatar PIP"
+        ? "VisionDesk"
         : "Avatar";
   const statusText =
     state.generationStatus === "completed"
@@ -169,7 +169,7 @@ export function StepShare({ state, update }: StepShareProps) {
           <CheckCircle2 className="h-6 w-6 text-success shrink-0" />
           <div>
             <p className="text-sm font-semibold text-foreground">
-              {state.videoType === "remotion" ? "Your text video is ready." : state.videoType === "hybrid_remotion_avatar_pip" ? "Your hybrid avatar video is ready." : "Your video is ready."}
+              {state.videoType === "remotion" ? "Your text video is ready." : state.videoType === "hybrid_remotion_avatar_pip" ? "Your VisionDesk video is ready." : "Your video is ready."}
             </p>
             <p className="text-xs text-muted-foreground">
               {state.videoType === "remotion"
@@ -183,7 +183,7 @@ export function StepShare({ state, update }: StepShareProps) {
           <LoaderCircle className="h-6 w-6 text-primary shrink-0 animate-spin" />
           <div>
             <p className="text-sm font-semibold text-foreground">
-              {state.videoType === "remotion" ? "Rendering text video" : state.videoType === "hybrid_remotion_avatar_pip" ? "Generating hybrid avatar video" : "Generating video"}
+              {state.videoType === "remotion" ? "Rendering text video" : state.videoType === "hybrid_remotion_avatar_pip" ? "Generating VisionDesk video" : "Generating video"}
             </p>
             <p className="text-xs text-muted-foreground">
               {state.videoType === "remotion"

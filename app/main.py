@@ -1805,7 +1805,7 @@ async def generate_hybrid_remotion_avatar_pip(
     video_record = VideoRecord(
         user_id=current_user,
         status="completed",
-        title=f"Hybrid Avatar PIP - {request.customer_name}",
+        title=f"VisionDesk - {request.customer_name}",
         video_url=final_video_url,
         request_mode="hybrid_remotion_avatar_pip",
         job_data={

@@ -82,7 +82,7 @@ export function StepLanguage({
                     : "text-muted-foreground hover:text-foreground"
                   }`}
               >
-                Hybrid Avatar PIP
+                VisionDesk
               </button>
             </div>
           </div>

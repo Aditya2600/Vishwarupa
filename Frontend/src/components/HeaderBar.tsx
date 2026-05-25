@@ -126,10 +126,10 @@ export function HeaderBar({ onCreateVideo, primaryLabel = "Create Video" }: Head
               </div>
               <div>
                 <p className="font-medium text-primary group-hover:text-white group-data-[highlighted]:text-white">
-                  Hybrid Avatar PIP
+                  VisionDesk
                 </p>
                 <p className="text-xs text-muted-foreground group-hover:text-white group-data-[highlighted]:text-white">
-                  Combine an avatar clip with a custom collection layout.
+                  A newsroom-inspired visual background where AI presenters deliver information alongside contextual visuals, branded graphics, and animated supporting content.
                 </p>
               </div>
             </DropdownMenuItem>

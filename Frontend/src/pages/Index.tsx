@@ -176,7 +176,7 @@ function mapHybridResponseToVideoResult(result: HybridRemotionAvatarPipResponse,
     status: result.success ? "completed" : "failed",
     video_url: result.final_video_url,
     thumbnail_url: null,
-    title: `Hybrid Avatar PIP - ${customerName || "Customer"}`,
+    title: `VisionDesk - ${customerName || "Customer"}`,
     raw_response: { ...result },
     saved_to: result.final_video_path,
     video_path: result.final_video_path,
@@ -334,7 +334,7 @@ const Index = () => {
         generationStatus: "completed",
         generationError: "",
       });
-      toast.success("Hybrid Avatar PIP generated successfully.");
+      toast.success("VisionDesk generated successfully.");
       goToStep(5);
     },
     onError: (error) => {

@@ -182,7 +182,7 @@ export function StepPreview({ state, update }: StepPreviewProps) {
       <div className="w-64 shrink-0">
         <div className="surface-card p-5 space-y-4">
           <h3 className="text-sm font-semibold text-foreground">Video Summary</h3>
-          <SummaryRow label="Style" value={isRemotion ? "Text to Video" : isHybrid ? "Hybrid Avatar PIP" : "Avatar"} />
+          <SummaryRow label="Style" value={isRemotion ? "Text to Video" : isHybrid ? "VisionDesk" : "Avatar"} />
           <SummaryRow label="Language" value={state.language} />
           {state.videoType !== "remotion" ? <SummaryRow label="Avatar" value={avatarName} /> : null}
           {state.videoType !== "remotion" && state.voiceName ? <SummaryRow label="Voice" value={state.voiceName} /> : null}

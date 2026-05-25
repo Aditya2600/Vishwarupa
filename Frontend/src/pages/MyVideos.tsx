@@ -114,7 +114,7 @@ function buildLocalDraftItem(): VideoListItem | null {
     draft.videoType === "remotion"
       ? "Text video"
       : draft.videoType === "hybrid_remotion_avatar_pip"
-        ? "Hybrid avatar PIP"
+        ? "VisionDesk"
         : "Avatar video";
 
   return {
