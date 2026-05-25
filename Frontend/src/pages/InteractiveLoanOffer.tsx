@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, Loader2, Pause, Phone, Play, RotateCcw } from "lucide-react";
+import { AlertCircle, Loader2, Pause, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   fetchInteractiveLoanOffer,
@@ -340,7 +340,7 @@ export default function InteractiveLoanOffer() {
     );
   }
 
-  const uniqueAmounts = Array.from(new Set(rows.map((row) => row.amount)));
+  const uniqueAmounts = Array.from(new Set(rows.map((row) => row.amount))).sort((a, b) => Number(a) - Number(b));
   const availableTenures = rows.filter((row) => row.amount === selectedAmount);
   const visibleTenures = availableTenures.length ? availableTenures : rows;
 
@@ -464,7 +464,7 @@ export default function InteractiveLoanOffer() {
 
       <div
         ref={containerRef}
-        className="relative aspect-[9/16] w-full max-w-[430px] overflow-hidden rounded-[2.4rem] border-[10px] border-slate-950 bg-slate-950 shadow-2xl"
+        className="relative flex h-[100dvh] w-full flex-col overflow-hidden bg-black md:aspect-[9/16] md:h-auto md:w-full md:max-w-[430px] md:rounded-[2.4rem] md:border-[10px] md:border-slate-950 md:bg-slate-950 md:shadow-2xl"
       >
         <video
           ref={videoRef}
@@ -500,7 +500,7 @@ export default function InteractiveLoanOffer() {
         ) : null}
 
         {/* Floating Top Controls */}
-        {hasStarted && !hasEnded && !confirmed ? (
+        {hasStarted && !hasEnded && !confirmed && !showSelector && !showSelectorsOverlay ? (
           <div className="absolute right-4 top-4 z-10 flex gap-2">
             <Button
               type="button"
@@ -510,396 +510,293 @@ export default function InteractiveLoanOffer() {
             >
               {isPlaying ? <Pause className="h-4 w-4 fill-current" /> : <Play className="ml-0.5 h-4 w-4 fill-current" />}
             </Button>
-            <Button
-              type="button"
-              onClick={handleCall}
-              className="h-10 rounded-full px-5 text-sm font-bold text-white backdrop-blur-md bg-[#702082]/90 hover:bg-[#702082] transition-colors border border-white/30"
-              style={{ boxShadow: '0 8px 20px rgba(112, 32, 130, 0.4)', textShadow: '0 1px 2px rgba(0,0,0,0.2)' }}
-            >
-              <Phone className="mr-2 h-4 w-4" />
-              Call Now
-            </Button>
           </div>
         ) : null}
 
-        {/* Applicant Name Overlay */}
-        {hasStarted && !hasDismissedAvail ? (
-          <div
-            style={{
-              position: "absolute",
-              top: "15%",
-              left: "5%",
-              width: "90%",
-              height: "28%",
-              display: "flex",
-              alignItems: "flex-end",
-              justifyContent: "center",
-              paddingBottom: "6%",
-              pointerEvents: "none",
-              zIndex: 2,
-            }}
-          >
-            <div
-              style={{
-                fontSize: `${videoWidth * 0.078}px`,
-                color: brandColor,
-                fontWeight: "900",
-                fontStyle: "normal",
-                textAlign: "center",
-                letterSpacing: "-0.02em",
-                lineHeight: 1.1,
-                fontFamily: "figtreeregular, Inter, sans-serif",
-                textShadow: `0 2px 16px ${brandColor}33`,
-              }}
-            >
-              {data.customer_name}
-            </div>
-          </div>
-        ) : null}
 
-        {/* Pre-approved Amount Overlay */}
-        {hasStarted && !hasDismissedAvail ? (
-          <div
-            style={{
-              position: "absolute",
-              top: "52%",
-              left: "10%",
-              width: "80%",
-              height: "20%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              pointerEvents: "none",
-              zIndex: 2,
-            }}
-          >
-            <div
-              style={{
-                fontSize: `${videoWidth * 0.11}px`,
-                color: "#ffffff",
-                fontWeight: "800",
-                textAlign: "center",
-                letterSpacing: "-0.02em",
-                textShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                fontFamily: "figtreeregular, Inter, sans-serif",
-              }}
-            >
-              {formatAmount(selectedAmount || data.loan_offer?.max_loan_amount)}
-            </div>
-          </div>
-        ) : null}
 
-        {/* Avail Now Pulsing Button */}
+        {/* Continue Button Overlay (Avail Now) */}
         {showAvail ? (
           <div
-            className="button-pulse"
             style={{
-              bottom: "5%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              width: `${videoWidth * 0.65}px`,
-              height: `${videoWidth * 0.14}px`,
-              "--pulse-bg": ctaColor,
-            } as CSSProperties}
-            onClick={() => void handleAvailNow()}
+              position: "absolute",
+              bottom: "10%",
+              left: 0,
+              right: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              zIndex: 30,
+              pointerEvents: "none", // Let clicks pass through except on the button itself
+            }}
           >
-            <div className="button__wrapper">
-              <div className="pulsing" style={{ border: `1px solid ${ctaColor}` }}></div>
-              <button
-                type="button"
-                className="absolute inset-0 z-10 flex items-center justify-center rounded-full transition-all border-0 premium-btn-inner text-white"
-                style={{
-                  background: `linear-gradient(135deg, ${ctaColor}, ${ctaDarkColor})`,
-                  fontSize: `${videoWidth * 0.042}px`,
-                }}
-              >
-                Avail Now
-              </button>
+            <div
+              onClick={() => void handleAvailNow()}
+              style={{
+                width: "60%",
+                maxWidth: 250,
+                padding: "8px 0",
+                background: "linear-gradient(135deg, #7c3aed 0%, #4c1d95 100%)",
+                borderRadius: 79,
+                color: "#fff",
+                fontSize: 17,
+                fontWeight: 700,
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                boxShadow: "0 12px 24px rgba(76, 29, 149, 0.25)",
+                cursor: "pointer",
+                pointerEvents: "auto",
+                animation: "popIn 0.5s ease-out forwards",
+              }}
+            >
+              Continue
+              <svg style={{ marginLeft: 12 }} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+            </div>
+            <div style={{ marginTop: 16, fontSize: 12, color: "#6b7280", fontWeight: 500, pointerEvents: "none", animation: "fadeIn 0.5s ease-out 0.3s forwards", opacity: 0 }}>
+              Learn more about your offer
             </div>
           </div>
         ) : null}
 
-        {/* Interactive Selectors and Summaries Overlay */}
+        {/* Interactive Selector UI (HTML Overlay) */}
         {(showSelector || showSelectorsOverlay) && !confirmed && selectedRow ? (
-          <>
-            {/* Amount Dropdown */}
-            <div
-              className="loan-container"
-              style={{
-                position: "absolute",
-                top: "28.62%",
-                left: "25.7%",
-                width: "58.6%",
-                height: "5.5%",
-                zIndex: 20,
-              }}
-            >
-              <select
-                value={selectedAmount}
-                onChange={(event) => {
-                  const nextAmount = event.target.value;
-                  const nextRow = rows.find((row) => row.amount === nextAmount) ?? rows[0];
-                  setSelectedAmount(nextAmount);
-                  setSelectedTenure(nextRow.tenure);
-                }}
-                className="w-full h-full bg-white font-extrabold text-[#4a105c] rounded-full pl-6 pr-12 outline-none cursor-pointer premium-select"
-                style={{
-                  fontSize: `${videoWidth * 0.046}px`,
-                  letterSpacing: "-0.01em",
-                  appearance: "none",
-                  WebkitAppearance: "none",
-                  backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='${encodeURIComponent(brandColor)}' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`,
-                  backgroundRepeat: "no-repeat",
-                  backgroundPosition: "right 1.2rem center",
-                  backgroundSize: "1em",
-                }}
-              >
-                {uniqueAmounts.map((amount) => (
-                  <option key={amount} value={amount}>
-                    {formatAmount(amount)}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div style={{ position: 'absolute', top: '15%', left: 0, right: 0, bottom: 0, backgroundColor: '#f5eefc', padding: '0 5%', pointerEvents: 'auto', display: 'flex', flexDirection: 'column', gap: 12, zIndex: 20 }}>
 
-            {/* Tenure Dropdown */}
-            <div
-              className="tenure-container"
-              style={{
-                position: "absolute",
-                top: "49.4%",
-                left: "25.7%",
-                width: "58.6%",
-                height: "5.5%",
-                zIndex: 20,
-              }}
-            >
-              <select
-                value={selectedTenure}
-                onChange={(event) => setSelectedTenure(event.target.value)}
-                className="w-full h-full bg-white font-extrabold text-[#4a105c] rounded-full pl-6 pr-12 outline-none cursor-pointer premium-select"
-                style={{
-                  fontSize: `${videoWidth * 0.046}px`,
-                  letterSpacing: "-0.01em",
-                  appearance: "none",
-                  WebkitAppearance: "none",
-                  backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='${encodeURIComponent(brandColor)}' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`,
-                  backgroundRepeat: "no-repeat",
-                  backgroundPosition: "right 1.2rem center",
-                  backgroundSize: "1em",
-                }}
-              >
-                {visibleTenures.map((row) => (
-                  <option key={`${row.amount}-${row.tenure}`} value={row.tenure}>
-                    {row.tenure} Months
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Controls Card */}
+            <div style={{ width: '100%', backgroundColor: '#fff', borderRadius: 24, padding: '16px', boxShadow: '0 8px 30px rgba(112, 32, 130, 0.05)' }}>
+              {/* Amount Section Header */}
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20 }}>
+                <div style={{ width: 32, height: 32, backgroundColor: '#f3e8ff', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7c3aed', marginRight: 12 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"></path><path d="M4 6v12c0 1.1.9 2 2 2h14v-4"></path><path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z"></path></svg>
+                </div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>Loan Amount</div>
+              </div>
 
-            {/* Selected Amount Display Label */}
-            <div
-              style={{
-                position: "absolute",
-                top: "65.908%",
-                left: "37.7%",
-                width: "53.8%",
-                height: "5.5%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "flex-end",
-                pointerEvents: "none",
-                zIndex: 2,
-                paddingRight: "8%",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: `${videoWidth * 0.044}px`,
-                  color: brandColor,
-                  fontWeight: "900",
-                  letterSpacing: "-0.01em",
-                  fontFamily: "figtreeregular, Inter, sans-serif",
-                }}
-              >
-                {formatAmount(selectedRow.amount)}
+              {/* Slider */}
+              <div style={{ position: 'relative', width: 'calc(100% - 60px)', margin: '0 auto 16px', height: 8, backgroundColor: '#f3f4f6', borderRadius: 8 }}>
+                <input
+                  type="range"
+                  min={0}
+                  max={uniqueAmounts.length - 1}
+                  value={uniqueAmounts.indexOf(selectedAmount)}
+                  onChange={(e) => {
+                    const nextAmount = uniqueAmounts[Number(e.target.value)];
+                    const nextRow = rows.find(r => r.amount === nextAmount) ?? rows[0];
+                    setSelectedAmount(nextAmount);
+                    setSelectedTenure(nextRow.tenure);
+                  }}
+                  style={{ position: 'absolute', width: '100%', height: '100%', opacity: 0, cursor: 'pointer', zIndex: 20, margin: 0, padding: 0 }}
+                />
+                {(() => {
+                  const pct = (uniqueAmounts.indexOf(selectedAmount) / Math.max(1, uniqueAmounts.length - 1)) * 100;
+                  const thumbLeft = `calc(${pct}% + ${10 - (pct / 100) * 20}px)`;
+                  return (
+                    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+                      <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pct}%`, backgroundColor: '#7c3aed', borderRadius: 8 }} />
+                      <div style={{ position: 'absolute', left: thumbLeft, top: -6, width: 20, height: 20, backgroundColor: '#fff', borderRadius: '50%', border: '5px solid #7c3aed', transform: 'translateX(-50%)', boxShadow: '0 2px 8px rgba(124, 58, 237, 0.3)' }} />
+                      <div style={{ position: 'absolute', left: thumbLeft, top: -45, background: 'linear-gradient(135deg, #9333ea, #6d28d9)', color: '#fff', padding: '6px 14px', borderRadius: 10, fontSize: 14, fontWeight: 700, transform: 'translateX(-50%)', boxShadow: '0 4px 12px rgba(124, 58, 237, 0.3)', whiteSpace: 'nowrap' }}>
+                        {formatAmount(selectedAmount)}
+                        <div style={{ position: 'absolute', bottom: -4, left: '50%', transform: 'translateX(-50%) rotate(45deg)', width: 8, height: 8, backgroundColor: '#7c3aed' }} />
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Min/Max Labels */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#9ca3af', fontSize: 12, fontWeight: 500, marginBottom: 20 }}>
+                <div>{formatAmount(uniqueAmounts[0])}</div>
+                <div>{formatAmount(uniqueAmounts[uniqueAmounts.length - 1])}</div>
+              </div>
+
+              <div style={{ width: '100%', height: 1, backgroundColor: '#f3f4f6', marginBottom: 20 }} />
+
+              {/* Tenure Section Header */}
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+                <div style={{ width: 32, height: 32, backgroundColor: '#f3e8ff', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7c3aed', marginRight: 12 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                </div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>Tenure <span style={{ fontWeight: 400, color: '#6b7280', fontSize: 13 }}>(in Months)</span></div>
+              </div>
+
+              {/* Tenure Pills */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
+                {["12", "24", "36", "48", "60"].map((t) => {
+                  const isSelected = t === selectedTenure;
+                  const isAvailable = visibleTenures.some(r => r.tenure === t);
+                  return (
+                    <div
+                      key={t}
+                      onClick={() => {
+                        if (isAvailable) setSelectedTenure(t);
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: '10px 0',
+                        borderRadius: 10,
+                        border: isSelected ? 'none' : '1px solid #e5e7eb',
+                        background: isSelected ? 'linear-gradient(135deg, #9333ea, #6d28d9)' : '#fff',
+                        color: isSelected ? '#fff' : '#4b5563',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        cursor: isAvailable ? 'pointer' : 'not-allowed',
+                        boxShadow: isSelected ? '0 4px 12px rgba(124, 58, 237, 0.2)' : 'none',
+                        opacity: isAvailable || isSelected ? 1 : 0.4
+                      }}
+                    >
+                      <div style={{ fontSize: 15, fontWeight: 800 }}>{t}</div>
+                      <div style={{ fontSize: 10, fontWeight: 500, opacity: isSelected ? 0.9 : 0.6 }}>Months</div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Selected Tenure Display Label */}
-            <div
-              style={{
-                position: "absolute",
-                top: "71.647%",
-                left: "37.7%",
-                width: "53.8%",
-                height: "5.5%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "flex-end",
-                pointerEvents: "none",
-                zIndex: 2,
-                paddingRight: "8%",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: `${videoWidth * 0.044}px`,
-                  color: brandColor,
-                  fontWeight: "900",
-                  letterSpacing: "-0.01em",
-                  fontFamily: "figtreeregular, Inter, sans-serif",
-                }}
-              >
-                {selectedRow.tenure} Months
+            {/* Summary Card */}
+            <div style={{ width: '100%', backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 24, padding: '16px', border: '1px solid rgba(255,255,255,1)', boxShadow: '0 8px 30px rgba(112, 32, 130, 0.05)', backdropFilter: 'blur(10px)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ width: 28, height: 28, backgroundColor: '#f3e8ff', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7c3aed', marginRight: 10 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"></path><path d="M16 14h-6"></path><path d="M12 18H8"></path><path d="M16 10h-2"></path><path d="M8 10h.01"></path></svg>
+                </div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#111827' }}>Loan Summary</div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, fontSize: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', color: '#4b5563' }}><svg style={{ marginRight: 6, opacity: 0.6 }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"></path><path d="M12 18V6"></path></svg> Amount</div>
+                <div style={{ fontWeight: 600, color: '#111827' }}>{formatAmount(selectedAmount)}</div>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 12, borderBottom: '1px dashed #e5e7eb', fontSize: 14, marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', color: '#4b5563' }}><svg style={{ marginRight: 6, opacity: 0.6 }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg> Tenure</div>
+                <div style={{ fontWeight: 600, color: '#111827' }}>{selectedTenure} Months</div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#7c3aed' }}>
+                <div style={{ display: 'flex', alignItems: 'center', fontSize: 14, fontWeight: 700 }}><svg style={{ marginRight: 6 }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="18" y="3" width="4" height="18"></rect><rect x="10" y="8" width="4" height="13"></rect><rect x="2" y="13" width="4" height="8"></rect></svg> Monthly EMI</div>
+                <div style={{ fontSize: 22, fontWeight: 800 }}>{formatAmount(selectedRow.emi)}</div>
               </div>
             </div>
 
-            {/* Selected EMI Display Label */}
+            {/* Action Button */}
             <div
-              style={{
-                position: "absolute",
-                top: "78.082%",
-                left: "37.7%",
-                width: "53.8%",
-                height: "5.5%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "flex-end",
-                pointerEvents: "none",
-                zIndex: 2,
-                paddingRight: "8%",
-              }}
+              onClick={() => void handleConfirm()}
+              style={{ marginTop: 'auto', marginBottom: '6%', width: '100%', padding: '16px 0', background: 'linear-gradient(135deg, #7c3aed 0%, #4c1d95 100%)', borderRadius: 20, color: '#fff', fontSize: 18, fontWeight: 700, display: 'flex', justifyContent: 'center', alignItems: 'center', boxShadow: '0 8px 20px rgba(76, 29, 149, 0.25)', cursor: 'pointer' }}
             >
-              <div
-                style={{
-                  fontSize: `${videoWidth * 0.044}px`,
-                  color: brandColor,
-                  fontWeight: "900",
-                  letterSpacing: "-0.01em",
-                  fontFamily: "figtreeregular, Inter, sans-serif",
-                }}
-              >
-                {formatAmount(selectedRow.emi)}
-              </div>
+              Proceed
+              <svg style={{ marginLeft: 8 }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
             </div>
-          </>
-        ) : null}
 
-        {/* Confirm Loan Offer Pulsing Button */}
-        {(showSelector || showSelectorsOverlay) && !confirmed && selectedRow ? (
-          <div
-            className="button-pulse"
-            style={{
-              bottom: "1%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              width: `${videoWidth * 0.65}px`,
-              height: `${videoWidth * 0.14}px`,
-              "--pulse-bg": ctaColor,
-            } as CSSProperties}
-            onClick={() => void handleConfirm()}
-          >
-            <div className="button__wrapper">
-              <div className="pulsing" style={{ border: `1px solid ${ctaColor}` }}></div>
-              <button
-                type="button"
-                className="absolute inset-0 z-10 flex items-center justify-center rounded-full transition-all border-0 premium-btn-inner text-white px-2"
-                style={{
-                  background: `linear-gradient(135deg, ${ctaColor}, ${ctaDarkColor})`,
-                  fontSize: `${videoWidth * 0.038}px`,
-                }}
-              >
-                Confirm Loan Offer
-              </button>
-            </div>
           </div>
         ) : null}
 
-        {/* Persistent Confirmation Overlay */}
+        {/* Dynamic Confirmed Screen Overlay */}
         {confirmed && selectedRow ? (
-          <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-950/18 px-6 backdrop-blur-[2px] animate-in fade-in zoom-in-95 duration-300">
-            <div className="relative w-full overflow-hidden rounded-[2rem] border border-white/70 bg-white/95 p-6 text-center shadow-2xl">
-              <div
-                className="absolute -right-16 -top-16 h-40 w-40 rounded-full opacity-15"
-                style={{ background: `radial-gradient(circle, ${ctaColor}, transparent 70%)` }}
-              />
-              <div
-                className="absolute -bottom-20 -left-16 h-44 w-44 rounded-full opacity-10"
-                style={{ background: `radial-gradient(circle, ${brandColor}, transparent 70%)` }}
-              />
-              <div className="relative mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-600 text-white shadow-lg shadow-emerald-700/20">
-                <Phone className="h-6 w-6 fill-current" />
-              </div>
-              <h2 className="relative mt-4 text-2xl font-black tracking-tight" style={{ color: brandColor }}>
-                Offer confirmed
-              </h2>
-              <p className="relative mt-2 text-sm font-semibold leading-snug text-slate-600">
-                Our team will help you complete the next step.
-              </p>
-              <div className="relative mt-5 rounded-2xl border border-slate-200 bg-slate-50/90 p-4 text-left">
-                <div className="flex items-center justify-between gap-4 border-b border-slate-200 pb-3">
-                  <span className="text-xs font-bold uppercase tracking-wide text-slate-500">Amount</span>
-                  <span className="text-base font-black" style={{ color: brandColor }}>
-                    {formatAmount(selectedRow.amount)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-4 border-b border-slate-200 py-3">
-                  <span className="text-xs font-bold uppercase tracking-wide text-slate-500">Tenure</span>
-                  <span className="text-base font-black" style={{ color: brandColor }}>
-                    {selectedRow.tenure} Months
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-4 pt-3">
-                  <span className="text-xs font-bold uppercase tracking-wide text-slate-500">EMI</span>
-                  <span className="text-base font-black" style={{ color: brandColor }}>
-                    {formatAmount(selectedRow.emi)}
-                  </span>
-                </div>
-              </div>
-              <Button
-                type="button"
-                onClick={handleCall}
-                className="relative mt-5 h-14 w-full rounded-full text-base font-black text-white shadow-xl border-0"
-                style={{ background: `linear-gradient(135deg, ${ctaColor}, ${ctaDarkColor})` }}
-              >
-                <Phone className="mr-2 h-5 w-5 fill-current" />
-                Call {phoneNumber}
-              </Button>
-              {hasEnded ? (
-                <Button
-                  type="button"
-                  onClick={() => void playFromStart()}
-                  className="relative mt-3 h-12 w-full rounded-full border-0 bg-slate-100 text-sm font-bold text-slate-900 shadow-sm hover:bg-white"
-                >
-                  <RotateCcw className="mr-2 h-4 w-4" />
-                  Replay offer
-                </Button>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
+          <div style={{ position: 'absolute', inset: 0, zIndex: 40, backgroundColor: '#f5eefc', display: 'flex', flexDirection: 'column', padding: '20px 16px', overflowY: 'hidden' }}>
+            <div style={{ width: '100%', backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 28, padding: '20px 16px', boxShadow: '0 12px 30px rgba(112, 32, 130, 0.05)', border: '1px solid rgba(255,255,255,0.8)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
 
-        {/* End Overlay buttons */}
-        {hasEnded && !selectedRow ? (
-          <div className="absolute inset-x-5 bottom-10 flex flex-col gap-3 animate-in fade-in zoom-in duration-300 z-20">
-            <Button
-              type="button"
-              onClick={handleCall}
-              className="h-14 w-full rounded-full text-base font-bold text-white shadow-2xl ring-4 ring-white/20 border-0"
-              style={{ backgroundColor: ctaColor }}
-            >
-              <Phone className="mr-2 h-5 w-5 fill-current" />
-              Call {phoneNumber}
-            </Button>
-            <Button
-              type="button"
-              onClick={() => void playFromStart()}
-              className="h-14 w-full rounded-full text-base font-bold bg-white/95 text-slate-900 shadow-xl hover:bg-white border-0"
-            >
-              <RotateCcw className="mr-2 h-5 w-5" />
-              Replay offer
-            </Button>
+              {/* Green Check */}
+              <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'linear-gradient(135deg, #4ade80, #16a34a)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 20px rgba(22, 163, 74, 0.3)', marginBottom: 12 }}>
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+              </div>
+
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#1e1b4b', marginBottom: 6 }}>
+                Offer Confirmed!
+              </div>
+              <div style={{ fontSize: 13, color: '#6b7280', fontWeight: 500, marginBottom: 16, textAlign: 'center' }}>
+                Our team will help you complete the next steps
+              </div>
+
+              {/* Details Box (Glassmorphism 3-column) */}
+              <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', padding: '12px 6px', backgroundColor: '#f8f5ff', borderRadius: 16, border: '1px solid #e9d5ff', marginBottom: 20 }}>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', backgroundColor: '#e9d5ff', color: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 4 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"></path><path d="M4 6v12c0 1.1.9 2 2 2h14v-4"></path><path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z"></path></svg>
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: '#1e1b4b', marginBottom: 2 }}>{formatAmount(selectedRow.amount)}</div>
+                  <div style={{ fontSize: 10, color: '#6b7280', fontWeight: 500 }}>Loan Amount</div>
+                </div>
+                <div style={{ width: 1, backgroundColor: '#d8b4fe' }} />
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', backgroundColor: '#e9d5ff', color: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 4 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: '#1e1b4b', marginBottom: 2 }}>{selectedRow.tenure}</div>
+                  <div style={{ fontSize: 10, color: '#6b7280', fontWeight: 500 }}>Months</div>
+                </div>
+                <div style={{ width: 1, backgroundColor: '#d8b4fe' }} />
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', backgroundColor: '#e9d5ff', color: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 4 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="18" y="3" width="4" height="18"></rect><rect x="10" y="8" width="4" height="13"></rect><rect x="2" y="13" width="4" height="8"></rect></svg>
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: '#1e1b4b', marginBottom: 2 }}>{formatAmount(selectedRow.emi)}<span style={{ fontSize: 11, color: '#6b7280', fontWeight: 500 }}>/mo</span></div>
+                  <div style={{ fontSize: 10, color: '#6b7280', fontWeight: 500 }}>EMI</div>
+                </div>
+              </div>
+
+              {/* Timeline / What's Next */}
+              <div style={{ width: '100%', marginBottom: 20 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#111827', marginBottom: 12 }}>What's next?</div>
+
+                <div style={{ position: 'relative', paddingLeft: 24 }}>
+                  {/* Vertical Line */}
+                  <div style={{ position: 'absolute', left: 7, top: 10, bottom: 20, width: 2, backgroundColor: '#d8b4fe' }} />
+
+                  {/* Steps */}
+                  {[
+                    {
+                      title: "1. Document verification",
+                      desc: "Our team will verify your documents within 24 hours",
+                      icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                    },
+                    {
+                      title: "2. Agreement signing",
+                      desc: "e-Sign the agreement securely from your device",
+                      icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                    },
+                    {
+                      title: "3. Disbursal",
+                      desc: "Loan amount will be credited to your account",
+                      icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="20" width="20" height="2"></rect><rect x="4" y="10" width="2" height="7"></rect><rect x="10" y="10" width="2" height="7"></rect><rect x="18" y="10" width="2" height="7"></rect><polygon points="12 2 2 7 22 7 12 2"></polygon></svg>
+                    }
+                  ].map((step, idx) => (
+                    <div key={idx} style={{ display: 'flex', marginBottom: 12, position: 'relative' }}>
+                      <div style={{ position: 'absolute', left: -24, top: 4, width: 16, height: 16, borderRadius: '50%', backgroundColor: '#fff', border: '2px solid #22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#22c55e', zIndex: 1 }}>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                      </div>
+                      <div style={{ width: 28, height: 28, backgroundColor: '#f5eefc', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7c3aed', marginRight: 12, flexShrink: 0 }}>
+                        {step.icon}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#1e1b4b', marginBottom: 2 }}>{step.title}</div>
+                        <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.3 }}>{step.desc}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div onClick={handleCall} style={{ width: '100%', padding: '12px 0', background: 'linear-gradient(135deg, #22c55e 0%, #15803d 100%)', borderRadius: 12, color: '#fff', fontSize: 16, fontWeight: 700, display: 'flex', justifyContent: 'center', alignItems: 'center', boxShadow: '0 8px 16px rgba(34, 197, 94, 0.2)', cursor: 'pointer' }}>
+                <svg style={{ marginRight: 8 }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                Call {phoneNumber}
+                <svg style={{ marginLeft: 8 }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </div>
+
+              {hasEnded ? (
+                <div onClick={() => void playFromStart()} style={{ marginTop: 16, cursor: 'pointer', color: '#6b7280', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center' }}>
+                  <svg style={{ marginRight: 4 }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 2v6h6"></path><path d="M3 13a9 9 0 1 0 3-7.7L3 8"></path></svg>
+                  Replay offer
+                </div>
+              ) : null}
+
+            </div>
+
+            {/* Footer */}
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: 12, color: '#6b7280', fontSize: 11, fontWeight: 500 }}>
+              <svg style={{ marginRight: 4 }} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+              Your information is 100% secure with us
+            </div>
           </div>
         ) : null}
       </div>
