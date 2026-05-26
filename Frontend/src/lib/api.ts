@@ -1,3 +1,5 @@
+import type { LoanReminderAssetKey, LoanReminderAssetPaths, RemotionTemplateKey } from "@/lib/templates";
+
 export interface AvatarOption {
   id: string;
   name: string;
@@ -33,6 +35,7 @@ export interface DirectVideoPayload {
   client_name: string;
   tos?: string;
   loan_amount?: string;
+  payment_url?: string;
   contact_details?: string;
   product_type?: string;
   avatar_id?: string;
@@ -46,6 +49,57 @@ export interface DirectVideoPayload {
   video_width?: number;
   video_height?: number;
   voice_gender?: "male" | "female";
+  template_key?: RemotionTemplateKey;
+  days_overdue?: number;
+}
+
+export type HybridAspectMode = "landscape_16_9" | "portrait_9_16" | "auto";
+
+export interface HybridRemotionAvatarPipPayload {
+  customer_name: string;
+  account_number: string;
+  days_overdue: number;
+  collection_status?: string | null;
+  amount_due: string;
+  avatar_id: string;
+  voice_id: string;
+  agent_name?: string;
+  agent_role?: string;
+  language?: string;
+  aspect_mode?: HybridAspectMode;
+  viewport_width?: number | null;
+  viewport_height?: number | null;
+}
+
+export interface HybridRemotionAvatarPipResponse {
+  success: boolean;
+  raw_avatar_video_id: string | null;
+  raw_avatar_path: string | null;
+  final_video_path: string;
+  final_video_url: string;
+  width: number;
+  height: number;
+  duration_seconds?: number | null;
+  template_key?: RemotionTemplateKey;
+  max_loan_amount?: string;
+  max_tenure?: string;
+  max_emi?: string;
+  loan_id?: string;
+  month_24_loan_amount?: string;
+  month_30_loan_amount?: string;
+  month_36_loan_amount?: string;
+  month_42_loan_amount?: string;
+  month_48_loan_amount?: string;
+  month_60_loan_amount?: string;
+  emi_calculation24?: string;
+  emi_calculation30?: string;
+  emi_calculation36?: string;
+  emi_calculation42?: string;
+  emi_calculation48?: string;
+  emi_calculation60?: string;
+  interactive_background_color?: string;
+  interactive_cta_color?: string;
+  cta_phone_number?: string;
 }
 
 export interface AvatarJobAck {
@@ -63,7 +117,7 @@ export interface AvatarJobStatus {
 }
 
 export interface VideoJobResult {
-  request_mode: "direct" | "template" | "remotion";
+  request_mode: "direct" | "template" | "remotion" | "hybrid_remotion_avatar_pip";
   video_id?: string;
   _id?: string;
   status: string;
@@ -74,7 +128,31 @@ export interface VideoJobResult {
   saved_to: string | null;
   video_path?: string | null;
   audio_path?: string | null;
+  interactive_url?: string | null;
   error?: string | null;
+}
+
+export interface InteractiveLoanOffer {
+  id: string;
+  title: string;
+  video_url: string;
+  customer_name: string;
+  client_name: string;
+  contact_details: string;
+  primary_color: string;
+  secondary_color: string;
+  loan_offer: Record<string, string | number | null>;
+  subtitles?: Array<{ text: string; start: number; end: number }>;
+  interactive_background_color?: string;
+  interactive_cta_color?: string;
+}
+
+export interface InteractiveLoanReminder {
+  id: string;
+  title: string;
+  video_url: string;
+  payment_url: string;
+  contact_details: string;
 }
 
 export interface StyledVideoResult {
@@ -95,8 +173,16 @@ export interface RemotionVideoPayload extends DirectVideoPayload {
   logoPosition: string;
   logoOpacity: number;
   logoFile?: File | null;
+  loanReminderImagePaths?: LoanReminderAssetPaths;
+  loanReminderImageFiles?: Partial<Record<LoanReminderAssetKey, File | null>>;
+  salesImagePaths?: Record<string, string>;
+  salesImageFiles?: Record<string, File | null>;
+  emiImagePaths?: Record<string, string>;
+  emiImageFiles?: Record<string, File | null>;
   voice_gender?: "male" | "female";
   video_variety?: "personalized" | "universal";
+  interactive_background_color?: string;
+  interactive_cta_color?: string;
 }
 
 export interface StylizeVideoPayload {
@@ -116,7 +202,13 @@ export interface AppConfig {
   default_language: string;
 }
 
-export const API_BASE_URL = "/api";
+function resolveApiBaseUrl(): string {
+  const configured = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
+  if (configured) return configured.replace(/\/+$/, "");
+  return "/api";
+}
+
+export const API_BASE_URL = resolveApiBaseUrl();
 const GENERATION_FAILED_MESSAGE = "We couldn't generate the video right now. Please try again.";
 const GENERATION_TIMEOUT_MESSAGE = "The video is taking longer than expected. Please try again in a moment.";
 const SERVER_UNREACHABLE_MESSAGE = "Could not reach the server. Check that the backend is running and try again.";
@@ -164,6 +256,9 @@ const INDIAN_NAME_HINTS = [
   "ankit",
   "arjun",
   "aryan",
+  "dev",
+  "kumar",
+  "advocate",
   "diya",
   "dhwani",
   "gagan",
@@ -1113,6 +1208,29 @@ export async function fetchVideoStatus(videoId: string, requestMode: "direct" | 
   return requestJson<VideoJobResult>(`/videos/${videoId}/status?request_mode=${requestMode}`);
 }
 
+export async function fetchInteractiveLoanOffer(videoId: string): Promise<InteractiveLoanOffer> {
+  return requestJson<InteractiveLoanOffer>(`/interactive/loan-offer/${videoId}`);
+}
+
+export async function fetchInteractiveLoanReminder(videoId: string): Promise<InteractiveLoanReminder> {
+  return requestJson<InteractiveLoanReminder>(`/interactive/loan-reminder/${videoId}`);
+}
+
+export async function recordInteractiveLoanOfferEvent(
+  videoId: string,
+  payload: {
+    action: string;
+    selected_loan_amount?: string;
+    selected_tenure?: string;
+    selected_emi?: string;
+  },
+): Promise<{ status: string }> {
+  return requestJson<{ status: string }>(`/interactive/loan-offer/${videoId}/events`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function generateRemotionVideo(payload: RemotionVideoPayload): Promise<VideoJobResult> {
   const formData = new FormData();
   formData.set("customer_name", payload.customer_name);
@@ -1130,12 +1248,21 @@ export async function generateRemotionVideo(payload: RemotionVideoPayload): Prom
   if (payload.video_variety) {
     formData.set("video_variety", payload.video_variety);
   }
+  if (payload.template_key) {
+    formData.set("template_key", payload.template_key);
+  }
 
   if (payload.tos?.trim()) {
     formData.set("tos", payload.tos.trim());
   }
   if (payload.loan_amount?.trim()) {
     formData.set("loan_amount", payload.loan_amount.trim());
+  }
+  if (payload.payment_url?.trim()) {
+    formData.set("payment_url", payload.payment_url.trim());
+  }
+  if (typeof payload.days_overdue === "number") {
+    formData.set("days_overdue", String(payload.days_overdue));
   }
   if (payload.contact_details?.trim()) {
     formData.set("contact_details", payload.contact_details.trim());
@@ -1161,10 +1288,75 @@ export async function generateRemotionVideo(payload: RemotionVideoPayload): Prom
   if (payload.logoFile) {
     formData.set("logo_file", payload.logoFile);
   }
+  if (payload.loanReminderImagePaths) {
+    formData.set("loan_reminder_image_paths", JSON.stringify(payload.loanReminderImagePaths));
+  }
+  if (payload.loanReminderImageFiles) {
+    Object.entries(payload.loanReminderImageFiles).forEach(([key, file]) => {
+      if (file) {
+        formData.set(`loan_reminder_image_${key}`, file);
+      }
+    });
+  }
+  if (payload.salesImagePaths) {
+    formData.set("sales_image_paths", JSON.stringify(payload.salesImagePaths));
+  }
+  if (payload.salesImageFiles) {
+    Object.entries(payload.salesImageFiles).forEach(([key, file]) => {
+      if (file) {
+        formData.set(`sales_image_${key}`, file);
+      }
+    });
+  }
+  if (payload.emiImagePaths) {
+    formData.set("emi_image_paths", JSON.stringify(payload.emiImagePaths));
+  }
+  if (payload.emiImageFiles) {
+    Object.entries(payload.emiImageFiles).forEach(([key, file]) => {
+      if (file) {
+        formData.set(`emi_image_${key}`, file);
+      }
+    });
+  }
+  [
+    "max_loan_amount",
+    "max_tenure",
+    "max_emi",
+    "loan_id",
+    "month_24_loan_amount",
+    "month_30_loan_amount",
+    "month_36_loan_amount",
+    "month_42_loan_amount",
+    "month_48_loan_amount",
+    "month_60_loan_amount",
+    "emi_calculation24",
+    "emi_calculation30",
+    "emi_calculation36",
+    "emi_calculation42",
+    "emi_calculation48",
+    "emi_calculation60",
+    "cta_phone_number",
+    "interactive_background_color",
+    "interactive_cta_color",
+  ].forEach((key) => {
+    const value = payload[key as keyof RemotionVideoPayload];
+    if (typeof value === "string" && value.trim()) {
+      formData.set(key, value.trim());
+    }
+  });
 
   return requestJson<VideoJobResult>("/generate/remotion", {
     method: "POST",
     body: formData,
+  });
+}
+
+export async function generateHybridRemotionAvatarPip(
+  payload: HybridRemotionAvatarPipPayload,
+): Promise<HybridRemotionAvatarPipResponse> {
+  return requestJson<HybridRemotionAvatarPipResponse>("/generate/hybrid-remotion-avatar-pip", {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }
 
@@ -1225,6 +1417,9 @@ export interface CampaignLeadPayload {
   phoneNumber: string;
   uniqueId: string;
   variables?: Record<string, string>;
+  loan_reminder_image_bytes?: Record<string, string>;
+  interactive_background_color?: string;
+  interactive_cta_color?: string;
 }
 
 export interface PushCampaignLeadsPayload {

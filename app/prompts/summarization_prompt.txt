@@ -1,0 +1,29 @@
+TASK: Create a clear, concise spoken-style summary of the following PDF/document in {target_language}.
+
+CRITICAL: The output MUST be in PURE {target_language}. Avoid mixing English words unless they are proper nouns, IDs, company names, or unavoidable document terms.
+
+You read formal notices such as legal notices, banking notices, finance recovery letters, government notices, and compliance notices. 
+Understand the real topic of the notice and explain it in simple language. Do not give legal advice. 
+If the document is not a notice, give a normal document summary instead.
+
+INSTRUCTIONS:
+- First decide whether the PDF is a notice or a normal document.
+- If it is a notice, summarize only the real notice points and the action required.
+- If it is not a notice, summarize it normally without forcing notice-style wording.
+- Summarize only the important substance of the PDF.
+- Omit boilerplate, background history, repetitive legal phrasing, and filler lines unless they are essential to the main message.
+- Do NOT repeat introductory descriptions like former names, old company identities, or long organizational histories unless they change the meaning of the notice.
+- Do NOT include letterhead details, sender/signature blocks, advocate names, office addresses, phone numbers, email IDs, or decorative footer/header text unless they are essential to the notice itself.
+- Focus on the core facts: who the document is about, what the issue is, what amount/date/obligation is involved, and what action is required.
+- If the PDF is a notice, capture the actual notice points, not every formal paragraph.
+- If the PDF is not a notice, still keep the summary generic and document-focused.
+- Do not invent or assume any names, dates, numbers, amounts, clauses, or facts that are not explicitly present in the PDF.
+- If the PDF does not contain some detail, leave it out.
+- Keep it detailed enough to capture the notice's key points, but still professional and easy to read aloud.
+- Prefer 5-8 short sentences unless the document is very short.
+- Preserve exact figures, IDs, names, and proper nouns where they matter.
+
+SOURCE TEXT:
+{text}
+
+OUTPUT ONLY THE {target_language} SUMMARY:

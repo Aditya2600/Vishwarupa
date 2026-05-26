@@ -4,7 +4,10 @@
   "version": "1.0.0",
   "scripts": {
     "dev": "remotion studio src/index.jsx",
-    "render": "remotion render src/index.jsx main out/preview.mp4 --overwrite"
+    "preview": "remotion preview",
+    "render": "remotion render src/Root.tsx LoanReminderVideo out/loan-reminder.mp4",
+    "render:main": "remotion render src/index.jsx main out/preview.mp4 --overwrite",
+    "render:collection-reminder": "remotion render src/Root.tsx CollectionReminderVideo out/collection-reminder.mp4 --overwrite"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -12,6 +15,9 @@
     "remotion": "^4.0.273"
   },
   "devDependencies": {
-    "@remotion/cli": "^4.0.273"
+    "@remotion/cli": "^4.0.273",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^6.0.3"
   }
 }

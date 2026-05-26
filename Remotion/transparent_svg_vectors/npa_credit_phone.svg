@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1200" viewBox="0 0 900 1200" fill="none">
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="16" stdDeviation="22" flood-color="#06253c" flood-opacity="0.2"/></filter>
+    <linearGradient id="skin" x1="235" y1="460" x2="440" y2="1030" gradientUnits="userSpaceOnUse"><stop stop-color="#ffd5bc"/><stop offset="1" stop-color="#e89c70"/></linearGradient>
+    <linearGradient id="screen" x1="450" y1="130" x2="500" y2="1030" gradientUnits="userSpaceOnUse"><stop stop-color="#ffffff"/><stop offset="1" stop-color="#f3f7fb"/></linearGradient>
+  </defs>
+  <g filter="url(#shadow)">
+    <path d="M217 432c-64 72-91 220-69 329 21 104 87 217 174 287 51 40 117 32 149-18 36-56 3-122-42-168-46-47-58-97-41-163 22-88 20-183-6-232-37-71-116-91-165-35z" fill="url(#skin)"/>
+    <path d="M276 416c42-7 78 34 68 96l-27 162c-6 37-47 58-80 39-30-17-41-55-25-85l45-86c9-17 11-37 6-55-10-36-2-66 13-71z" fill="#ffd5bc"/>
+    <rect x="327" y="86" width="402" height="948" rx="68" fill="#111827"/>
+    <rect x="350" y="112" width="356" height="896" rx="48" fill="url(#screen)"/>
+    <rect x="351" y="112" width="354" height="92" rx="45" fill="#2878cc"/>
+    <text x="528" y="175" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="60" fill="white">Credit Score</text>
+    <path d="M431 386A132 132 0 0 1 695 386" stroke="#e9edf3" stroke-width="66" stroke-linecap="butt"/>
+    <path d="M431 386A132 132 0 0 1 482 282" stroke="#f04444" stroke-width="66"/>
+    <path d="M482 282A132 132 0 0 1 558 254" stroke="#f8b329" stroke-width="66"/>
+    <path d="M558 254A132 132 0 0 1 635 286" stroke="#ffe13c" stroke-width="66"/>
+    <path d="M635 286A132 132 0 0 1 695 386" stroke="#38d348" stroke-width="66"/>
+    <path d="M563 393l126-36" stroke="#111827" stroke-width="22" stroke-linecap="round"/>
+    <circle cx="563" cy="393" r="44" fill="#cfd5dc" stroke="#adb5bd" stroke-width="6"/>
+    <text x="563" y="403" text-anchor="middle" font-family="Arial" font-weight="700" font-size="22" fill="#222">Score</text>
+    <text x="435" y="450" font-family="Arial" font-size="28" font-weight="700" fill="#111">Low</text>
+    <text x="650" y="450" font-family="Arial" font-size="28" font-weight="700" fill="#111">High</text>
+    <text x="526" y="602" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="140" font-weight="900" fill="#145a9e">NPA</text>
+    <rect x="394" y="645" width="267" height="3" fill="#d4d9df"/>
+    <text x="392" y="705" font-family="Arial" font-size="30" font-weight="700" fill="#222">Credit Factors</text>
+    <rect x="391" y="730" width="278" height="58" rx="18" fill="#eef2f6"/><rect x="391" y="730" width="12" height="58" rx="6" fill="#f0292f"/>
+    <rect x="391" y="815" width="278" height="58" rx="18" fill="#eef2f6"/><rect x="391" y="815" width="12" height="58" rx="6" fill="#f0292f"/>
+    <rect x="391" y="900" width="278" height="58" rx="18" fill="#eef2f6"/><rect x="391" y="900" width="12" height="58" rx="6" fill="#ffc928"/>
+  </g>
+</svg>

@@ -9,6 +9,10 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from 'remotion';
+import {PaymentLinkGuidanceTemplate} from './templates/PaymentLinkGuidanceTemplate';
+import {OverdueTemplate} from './templates/OverdueTemplate';
+import {LoanOfferInteractiveTemplate} from './templates/LoanOfferInteractiveTemplate';
+import {TVSCreditEMITemplate} from './templates/TVSCreditEMITemplate';
 import {
   TRANSITION_FRAMES,
   HEIGHT,
@@ -39,6 +43,7 @@ const SUBTITLE_COLORS = {
   Red: '#f87171',
   Yellow: '#facc15',
   Teal: '#2dd4bf',
+  Black: '#000000',
 };
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
@@ -46,6 +51,16 @@ const BASE_FRAME_WIDTH = WIDTH;
 const BASE_FRAME_HEIGHT = HEIGHT;
 const legalGavelImage = staticFile('image.png');
 const debtNoticeImage = staticFile('image copy.png');
+// Drives the PhonePe walkthrough: which screenshot to show, where (if anywhere)
+// to draw the tap indicator, and the relative time each step takes — weights
+// align with how long the narration spends on each step (LAN/amount entry is
+// longer because the digits are spoken).
+const PHONE_STEP_CONFIG = [
+  {image: staticFile('step1.png'), tap: {x: 231, y: 362}, weight: 1},   // Tap "Loan Repayment"
+  {image: staticFile('step2.png'), tap: {x: 110, y: 111}, weight: 1.2}, // Tap "TVS Credit"
+  {image: staticFile('step3.png'), tap: null,             weight: 2.4}, // Type LAN — no tap target
+  {image: staticFile('step3.png'), tap: null,             weight: 1.6}, // Type amount — no tap target
+];
 const SAFE_TEXT_STYLE = {
   overflowWrap: 'anywhere',
   wordBreak: 'break-word',
@@ -53,69 +68,39 @@ const SAFE_TEXT_STYLE = {
 
 const UI_COPY = {
   English: {
-    titlePrefixFallback: 'Account Notice',
-    formalNotice: 'Formal Notice',
-    accountStatus: 'Account Status',
-    financialHighlights: 'Financial Highlights',
-    immediateNextStep: 'Immediate Next Step',
-    resolutionStillPossible: 'Resolution Still Possible',
-    sceneLabels: {
-      opening: 'Notice',
-      account: 'Account',
-      context: 'Review',
-      amounts: 'Amounts',
-      action: 'Action',
-      closing: 'Resolve',
-    },
-    openingIdentity: 'Lead Identity',
-    customerLabel: 'Customer',
-    clientLabel: 'Client',
-    productLabel: 'Product',
-    outstandingLabel: 'Outstanding',
-    reviewMarkers: 'Review Markers',
-    leadLabel: 'Lead',
-    accountLabel: 'Account',
-    currentDueLabel: 'Current Due',
-    amountsPrimaryHelper: 'This is the most important amount in the video',
-    urgentAction: 'Urgent Action Required',
-    actionCardHelper: 'Immediate contact is expected to discuss payment or repayment options.',
-    finalSummary: 'Final Summary',
-    contactLabel: 'Contact',
+    titlePrefixFallback: 'Account Notice', formalNotice: 'Formal Notice', accountStatus: 'Account Status', financialHighlights: 'Financial Highlights', immediateNextStep: 'Next Step', resolutionStillPossible: 'Solution Possible', sceneLabels: { opening: 'Notice', account: 'Account', context: 'Review', amounts: 'Amounts', action: 'Action', closing: 'Resolve' }, openingIdentity: 'Lead Identity', customerLabel: 'Customer', clientLabel: 'Client', productLabel: 'Product', outstandingLabel: 'Outstanding', reviewMarkers: 'Review Markers', leadLabel: 'Lead', accountLabel: 'Account', currentDueLabel: 'Current Due', amountsPrimaryHelper: 'Primary Amount', urgentAction: 'Urgent Action', actionCardHelper: 'Immediate contact expected.', finalSummary: 'Summary', contactLabel: 'Contact',
   },
   Hindi: {
-    titlePrefixFallback: 'खाता सूचना',
-    formalNotice: 'औपचारिक सूचना',
-    accountStatus: 'खाता स्थिति',
-    financialHighlights: 'वित्तीय मुख्य बिंदु',
-    immediateNextStep: 'तत्काल अगला कदम',
-    resolutionStillPossible: 'समाधान अभी भी संभव है',
-    sceneLabels: {
-      opening: 'सूचना',
-      account: 'खाता',
-      context: 'समीक्षा',
-      amounts: 'राशि',
-      action: 'कार्रवाई',
-      closing: 'समाधान',
-    },
-    openingIdentity: 'पहचान विवरण',
-    customerLabel: 'ग्राहक',
-    clientLabel: 'बैंक',
-    productLabel: 'उत्पाद',
-    outstandingLabel: 'कुल बकाया',
-    reviewMarkers: 'मुख्य संकेत',
-    leadLabel: 'ग्राहक',
-    accountLabel: 'खाता',
-    currentDueLabel: 'वर्तमान बकाया',
-    amountsPrimaryHelper: 'यह वीडियो की सबसे महत्वपूर्ण राशि है',
-    urgentAction: 'तुरंत कार्रवाई आवश्यक',
-    actionCardHelper: 'भुगतान समाधान या पुनर्भुगतान विकल्प के लिए त्वरित कॉल अपेक्षित है।',
-    finalSummary: 'अंतिम सारांश',
-    contactLabel: 'संपर्क',
+    titlePrefixFallback: 'खाता सूचना', formalNotice: 'औपचारिक सूचना', accountStatus: 'खाता स्थिति', financialHighlights: 'वित्तीय मुख्य बिंदु', immediateNextStep: 'तत्काल अगला कदम', resolutionStillPossible: 'समाधान अभी भी संभव है', sceneLabels: { opening: 'सूचना', account: 'खाता', context: 'समीक्षा', amounts: 'राशि', action: 'कार्रवाई', closing: 'समाधान' }, openingIdentity: 'पहचान विवरण', customerLabel: 'ग्राहक', clientLabel: 'बैंक', productLabel: 'उत्पाद', outstandingLabel: 'कुल बकाया', reviewMarkers: 'मुख्य संकेत', leadLabel: 'ग्राहक', accountLabel: 'खाता', currentDueLabel: 'वर्तमान बकाया', amountsPrimaryHelper: 'महत्वपूर्ण राशि', urgentAction: 'कार्रवाई आवश्यक', actionCardHelper: 'त्वरित कॉल अपेक्षित है।', finalSummary: 'अंतिम सारांश', contactLabel: 'संपर्क',
+  },
+  Marathi: {
+    titlePrefixFallback: 'खाते सूचना', formalNotice: 'औपचारिक सूचना', accountStatus: 'खाते स्थिती', financialHighlights: 'आर्थिक ठळक मुद्दे', immediateNextStep: 'पुढील पाऊल', resolutionStillPossible: 'निवारण अजूनही शक्य आहे', sceneLabels: { opening: 'सूचना', account: 'खाते', context: 'समीक्षा', amounts: 'रक्कम', action: 'कार्रवाई', closing: 'निवारण' }, openingIdentity: 'ओळख तपशील', customerLabel: 'ग्राहक', clientLabel: 'बँक', productLabel: 'उत्पादन', outstandingLabel: 'एकूण थकबाकी', reviewMarkers: 'मुख्य संकेत', leadLabel: 'ग्राहक', accountLabel: 'खाते', currentDueLabel: 'वर्तमान थकबाकी', amountsPrimaryHelper: 'महत्वाची रक्कम', urgentAction: 'कृती आवश्यक', actionCardHelper: 'त्वरित संपर्क अपेक्षित आहे.', finalSummary: 'अંતિમ સારાંશ', contactLabel: 'संपर्क',
+  },
+  Tamil: {
+    titlePrefixFallback: 'கணக்கு அறிவிப்பு', formalNotice: 'முறைப்படியான அறிவிப்பு', accountStatus: 'கணக்கு நிலை', financialHighlights: 'நிதிச் சிறப்பம்சங்கள்', immediateNextStep: 'அடுத்த படி', resolutionStillPossible: 'தீர்வு இன்னும் சாத்தியமே', sceneLabels: { opening: 'அறிவிப்பு', account: 'கணக்கு', context: 'மதிப்பாய்வு', amounts: 'தொகைகள்', action: 'நடவடிக்கை', closing: 'தீர்வு' }, openingIdentity: 'அடையாள விவரங்கள்', customerLabel: 'வாடிக்கையாளர்', clientLabel: 'வங்கி', productLabel: 'தயாரிப்பு', outstandingLabel: 'மொத்த நிலுவை', reviewMarkers: 'முக்கிய குறிகள்', leadLabel: 'முன்னணி', accountLabel: 'கணக்கு', currentDueLabel: 'தற்போதைய நிலுவை', amountsPrimaryHelper: 'முக்கிய தொகை', urgentAction: 'நடவடிக்கை தேவை', actionCardHelper: 'உடனடி தொடர்பு எதிர்பார்க்கப்படுகிறது.', finalSummary: 'சுருக்கம்', contactLabel: 'தொடர்பு',
+  },
+  Telugu: {
+    titlePrefixFallback: 'ఖాతా నోటీసు', formalNotice: 'అధికారిక నోటీసు', accountStatus: 'ఖాతా స్థితి', financialHighlights: 'ఆర్థిక ముఖ్యాంశాలు', immediateNextStep: 'తదుపరి అడుగు', resolutionStillPossible: 'పరిష్కారం ఇంకా సాధ్యమే', sceneLabels: { opening: 'నోటీసు', account: 'ఖాతా', context: 'సమీక్ష', amounts: 'మొత్తాలు', action: 'చర్య', closing: 'పరిష్కారం' }, openingIdentity: 'గుర్తింపు వివరాలు', customerLabel: 'కస్టమర్', clientLabel: 'బ్యాంక్', productLabel: 'ఉత్పత్తి', outstandingLabel: 'మొత్తం బకాయి', reviewMarkers: 'ముఖ్య గుర్తులు', leadLabel: 'లీడ్', accountLabel: 'ఖాతా', currentDueLabel: 'ప్రస్తుత బకాయి', amountsPrimaryHelper: 'ముఖ్యమైన మొత్తం', urgentAction: 'చర్య అవసరం', actionCardHelper: 'తక్షణ సంప్రదింపు నిరీక్షణ.', finalSummary: 'సారాంశం', contactLabel: 'సంప్రదించండి',
+  },
+  Kannada: {
+    titlePrefixFallback: 'ಖಾತೆ ಸೂಚನೆ', formalNotice: 'ಔಪಚಾರಿಕ ಸೂಚನೆ', accountStatus: 'ಖಾತೆ ಸ್ಥಿತಿ', financialHighlights: 'ಹಣಕಾಸಿನ ಮುಖ್ಯಾಂಶಗಳು', immediateNextStep: 'ಮುಂದಿನ ಹಂತ', resolutionStillPossible: 'ಪರಿಹಾರ ಇನ್ನೂ ಸಾಧ್ಯವಿದೆ', sceneLabels: { opening: 'ಸೂಚನೆ', account: 'ಖಾತೆ', context: 'ಪರಿಶೀಲನೆ', amounts: 'ಮೊತ್ತಗಳು', action: 'ಕ್ರಮ', closing: 'ಪರಿಹಾರ' }, openingIdentity: 'ಗುರುತಿನ ಮಾಹಿತಿ', customerLabel: 'ಗ್ರಾಹಕ', clientLabel: 'ಬ್ಯಾಂಕ್', productLabel: 'ಉತ್ಪನ್ನ', outstandingLabel: 'ಒಟ್ಟು ಬಾಕಿ', reviewMarkers: 'ಮುಖ್ಯ ಗುರುತುಗಳು', leadLabel: 'ಲೀಡ್', accountLabel: 'ಖಾತೆ', currentDueLabel: 'ಪ್ರಸ್ತುತ ಬಾಕಿ', amountsPrimaryHelper: 'ಪ್ರಮುಖ ಮೊತ್ತ', urgentAction: 'ಕ್ರಮ ಅಗತ್ಯ', actionCardHelper: 'ತಕ್ಷಣದ ಸಂಪರ್ಕ ನಿರೀಕ್ಷಿಸಲಾಗಿದೆ.', finalSummary: 'ಸಾರಾಂಶ', contactLabel: 'ಸಂಪರ್ಕ',
+  },
+  Bengali: {
+    titlePrefixFallback: 'অ্যাকাউন্ট নোটিশ', formalNotice: 'আনুষ্ঠানিক নোটিশ', accountStatus: 'অ্যাকাউন্ট স্থিতি', financialHighlights: 'আর্থিক হাইলাইটস', immediateNextStep: 'পরবর্তী পদক্ষেপ', resolutionStillPossible: 'সমাধান এখনও সম্ভব', sceneLabels: { opening: 'নোটিশ', account: 'অ্যাকাউন্ট', context: 'পর্যালোচনা', amounts: 'পরিমাণ', action: 'পদক্ষেপ', closing: 'সমাধান' }, openingIdentity: 'পরিচয় বিবরণ', customerLabel: 'গ্রাহক', clientLabel: 'ব্যাঙ্ক', productLabel: 'পণ্য', outstandingLabel: 'মোট বকেয়া', reviewMarkers: 'মুখ্য সংকেত', leadLabel: 'লিড', accountLabel: 'অ্যাকাউন্ট', currentDueLabel: 'বর্তমান বকেয়া', amountsPrimaryHelper: 'প্রধান পরিমাণ', urgentAction: 'পদক্ষেপ প্রয়োজন', actionCardHelper: 'অবিলম্বে যোগাযোগ প্রত্যাশিত।', finalSummary: 'সারাংশ', contactLabel: 'যোগাযোগ',
+  },
+  Gujarati: {
+    titlePrefixFallback: 'ખાતાની સૂચના', formalNotice: 'ઔપચારિક સૂચના', accountStatus: 'ખાતાની સ્થિતિ', financialHighlights: 'નાણાકીય મુખ્ય મુદ્દાઓ', immediateNextStep: 'આગળનું પગલું', resolutionStillPossible: 'ઉકેલ હજુ પણ શક્ય છે', sceneLabels: { opening: 'સૂચના', account: 'ખાતું', context: 'સમીક્ષા', amounts: 'રકમ', action: 'પગલાં', closing: 'ઉકેલ' }, openingIdentity: 'ઓળખ વિગતો', customerLabel: 'ગ્રાહક', clientLabel: 'બેંક', productLabel: 'ઉત્પાદન', outstandingLabel: 'કુલ બાકી', reviewMarkers: 'મુખ્ય સંકેતો', leadLabel: 'લીഡ്', accountLabel: 'ખાતું', currentDueLabel: 'વર્તમાન બાકી', amountsPrimaryHelper: 'મુખ્ય રકમ', urgentAction: 'પગલાં જરૂરી', actionCardHelper: 'તાત્કાલિક સંપર્ક અપેક્ષিত છે.', finalSummary: 'સારાંશ', contactLabel: 'संपર્ક',
+  },
+  Malayalam: {
+    titlePrefixFallback: 'അക്കൗണ്ട് അറിയിപ്പ്', formalNotice: 'ഔദ്യോഗിക അറിയിപ്പ്', accountStatus: 'അക്കൗണ്ട് നില', financialHighlights: 'സാമ്പത്തിക വിവരങ്ങൾ', immediateNextStep: 'അടുത്ത ഘട്ടം', resolutionStillPossible: 'പരിഹാരം ഇപ്പോഴും സാധ്യമാണ്', sceneLabels: { opening: 'അറിയിപ്പ്', account: 'അക്കൗണ്ട്', context: 'പരിശോധന', amounts: 'തുകകൾ', action: 'നടപടി', closing: 'പരിഹാരം' }, openingIdentity: 'തിരിച്ചറിയൽ വിവരങ്ങൾ', customerLabel: 'ഉപഭോക്താവ്', clientLabel: 'ബാങ്ക്', productLabel: 'ഉൽപ്പന്നം', outstandingLabel: 'ആകെ കുടിശ്ശിക', reviewMarkers: 'പ്രധാന വിവരങ്ങൾ', leadLabel: 'ലീഡ്', accountLabel: 'അക്കൗണ്ട്', currentDueLabel: 'നിലവിലെ കുടിശ്ശിക', amountsPrimaryHelper: 'പ്രധാന തുക', urgentAction: 'നടപടി ആവശ്യമാണ്', actionCardHelper: 'ഉടനടി ബന്ധപ്പെടുക.', finalSummary: 'സംഗ്രഹം', contactLabel: 'ബന്ധപ്പെടുക',
+  },
+  Punjabi: {
+    titlePrefixFallback: 'ਖਾਤਾ ਨੋਟਿਸ', formalNotice: 'ਰਸਮੀ ਨੋਟਿਸ', accountStatus: 'ਖਾਤੇ ਦੀ ਸਥਿਤੀ', financialHighlights: 'ਵਿੱਤੀ ਮੁੱਖ ਨੁਕਤੇ', immediateNextStep: 'ਅਗਲਾ ਕਦਮ', resolutionStillPossible: 'ਹੱਲ ਅਜੇ ਵੀ ਸੰਭਵ ਹੈ', sceneLabels: { opening: 'ਨੋਟਿਸ', account: 'ਖਾਤਾ', context: 'ਸਮੀਖਿਆ', amounts: 'ਰਾਸ਼ੀ', action: 'ਕਾਰਵਾਈ', closing: 'ਹੱਲ' }, openingIdentity: 'ਪਛਾਣ ਵੇਰਵਾ', customerLabel: 'ਗਾਹਕ', clientLabel: 'ਬੈਂਕ', productLabel: 'ਉਤਪਾਦ', outstandingLabel: 'ਕੁੱਲ ਬਕਾਇਆ', reviewMarkers: 'ਮੁੱਖ ਸੰਕੇਤ', leadLabel: 'ਲੀਡ', accountLabel: 'ਖਾਤਾ', currentDueLabel: 'ਮੌਜੂਦਾ ਬਕਾਇਆ', amountsPrimaryHelper: 'ਮੁੱਖ ਰਾਸ਼ੀ', urgentAction: 'ਕਾਰਵਾਈ ਲੋੜੀਂਦੀ', actionCardHelper: 'ਤੁਰੰਤ ਸੰਪਰਕ ਦੀ ਉਮੀਦ ਹੈ।', finalSummary: 'ਸਾਰ', contactLabel: 'ਸੰਪਰਕ',
   },
 };
 
 const getSubtitleColor = (colorName) => SUBTITLE_COLORS[colorName] || SUBTITLE_COLORS.White;
-const getUiCopy = (language) => (language === 'English' ? UI_COPY.English : UI_COPY.Hindi);
+const getUiCopy = (language) => UI_COPY[language] || UI_COPY.English;
 
 const fitTextSize = (text, baseSize, minSize, softLimit, hardLimit) => {
   const content = safeString(text, '');
@@ -161,6 +146,12 @@ const getSubtitlePanelPlacement = (position) => {
         left: 84,
         right: 84,
         transform: 'translateY(-50%)',
+      };
+    case 'OverdueBottom':
+      return {
+        bottom: 240,
+        left: 84,
+        right: 84,
       };
     default:
       return {
@@ -269,14 +260,14 @@ const FloatingOrbs = ({frame, accentColor}) => {
 
 // ─── Scene Shell ────────────────────────────────────────────────────────────
 
-const SceneShell = ({scene, frame, children, align = 'center'}) => {
+const SceneShell = ({scene, frame, children, align = 'center', padding = '92px 74px 188px'}) => {
   const visual = getSceneVisualState(frame, scene);
   if (visual.opacity <= 0.01) return null;
 
   return (
     <AbsoluteFill
       style={{
-        padding: '92px 74px 188px',
+        padding,
         opacity: visual.opacity,
         transform: `translateY(${visual.translateY}px) scale(${visual.scale})`,
         justifyContent: align,
@@ -472,6 +463,7 @@ const SubtitlePanel = ({subtitle, subtitleProgress, branding, fallbackText}) => 
   const activeWordIndex = subtitle
     ? Math.min(words.length - 1, Math.floor(subtitleProgress * words.length))
     : -1;
+  const isDark = subtitleColor === '#000000';
 
   return (
     <div
@@ -497,11 +489,14 @@ const SubtitlePanel = ({subtitle, subtitleProgress, branding, fallbackText}) => 
               fontSize: 20,
               lineHeight: 1.35,
               fontWeight: 600,
-              color: '#94a3b8',
+              color: isDark ? 'rgba(30, 30, 30, 0.7)' : '#94a3b8',
               flexWrap: 'wrap',
               display: 'flex',
               justifyContent: 'center',
               gap: '0 6px',
+              backgroundColor: isDark ? 'rgba(255,255,255,0.82)' : 'transparent',
+              borderRadius: isDark ? 12 : 0,
+              padding: isDark ? '6px 14px' : 0,
             }}
           >
             {words.map((word, i) => {
@@ -511,11 +506,15 @@ const SubtitlePanel = ({subtitle, subtitleProgress, branding, fallbackText}) => 
                 <span
                   key={i}
                   style={{
-                    color: isPast ? '#e2e8f0' : isCurrent ? subtitleColor : 'rgba(226, 232, 240, 0.74)',
+                    color: isDark
+                      ? (isCurrent ? '#000000' : isPast ? '#374151' : 'rgba(55, 65, 81, 0.65)')
+                      : (isPast ? '#e2e8f0' : isCurrent ? subtitleColor : 'rgba(226, 232, 240, 0.74)'),
                     fontWeight: isCurrent ? 800 : isPast ? 600 : 500,
-                    textShadow: isCurrent
-                      ? `0 0 18px ${subtitleColor}, 0 4px 16px rgba(2, 6, 23, 0.95)`
-                      : '0 4px 16px rgba(2, 6, 23, 0.95)',
+                    textShadow: isDark
+                      ? 'none'
+                      : (isCurrent
+                        ? `0 0 18px ${subtitleColor}, 0 4px 16px rgba(2, 6, 23, 0.95)`
+                        : '0 4px 16px rgba(2, 6, 23, 0.95)'),
                     transition: 'none',
                     display: 'inline-block',
                   }}
@@ -531,8 +530,11 @@ const SubtitlePanel = ({subtitle, subtitleProgress, branding, fallbackText}) => 
               fontSize: 20,
               lineHeight: 1.35,
               fontWeight: 500,
-              color: 'rgba(226, 232, 240, 0.76)',
-              textShadow: '0 4px 16px rgba(2, 6, 23, 0.95)',
+              color: isDark ? 'rgba(30, 30, 30, 0.7)' : 'rgba(226, 232, 240, 0.76)',
+              textShadow: isDark ? 'none' : '0 4px 16px rgba(2, 6, 23, 0.95)',
+              backgroundColor: isDark ? 'rgba(255,255,255,0.82)' : 'transparent',
+              borderRadius: isDark ? 12 : 0,
+              padding: isDark ? '6px 14px' : 0,
             }}
           >
             {fallbackText}
@@ -543,17 +545,22 @@ const SubtitlePanel = ({subtitle, subtitleProgress, branding, fallbackText}) => 
   );
 };
 
-const LogoOverlay = ({logo}) => {
-  if (!logo?.public_path || logo.position === 'Top Right' || !logo.position) {
+const LogoOverlay = ({logo, forceAll = false}) => {
+  if (!logo?.public_path) {
     return null;
   }
+  if (!forceAll && (logo.position === 'Top Right' || !logo.position)) {
+    return null;
+  }
+
+  const logoPosition = logo.position || 'Top Right';
 
   return (
     <div
       style={{
         position: 'absolute',
         zIndex: 24,
-        ...getLogoPlacement(logo.position),
+        ...getLogoPlacement(logoPosition),
       }}
     >
       <Img
@@ -839,7 +846,7 @@ const AccountScene = ({scene, frame, fps, lead, accentColor, uiCopy}) => (
 // ─── Context Scene ───────────────────────────────────────────────────────────
 
 const ContextScene = ({scene, frame, fps, lead, uiCopy}) => (
-  <SceneShell scene={scene} frame={frame}>
+  <SceneShell scene={scene} frame={frame} padding="104px 66px 86px">
     {({localFrame}) => {
       const reveal = spring({fps, frame: localFrame, config: {damping: 18, stiffness: 84}});
       const body = safeString(lead.scene_payload.context.body, lead.script_text);
@@ -1254,6 +1261,769 @@ const ActionScene = ({scene, frame, fps, lead, accentColor, uiCopy}) => (
   </SceneShell>
 );
 
+const PaymentPhoneWalkthroughScene = ({scene, frame, fps, lead, accentColor, uiCopy, currentTime, stepBoundaries}) => (
+  <SceneShell scene={scene} frame={frame}>
+    {({localFrame}) => {
+      const copy = getPaymentCopy(lead.language);
+      const reveal = spring({fps, frame: localFrame, config: {damping: 17, stiffness: 92}});
+      const phoneReveal = spring({fps, frame: localFrame - 8, config: {damping: 18, stiffness: 86}});
+      const amount = safeString(lead.display_amounts.primary.value, safeString(lead.tos, '0'));
+      const account = safeString(lead.lan, 'N/A');
+      const client = safeString(lead.client_name, 'TVS Credit');
+      const contact = safeString(lead.contact_details, lead.scene_payload.action?.cta_value || '');
+      const paymentBody = `${copy.checklist[0][1]} ${copy.checklist[1][1]} ${copy.checklist[2][1]}`;
+      const steps = copy.phoneSteps.map((step, index) => ({
+        ...step,
+        title: step.title || amount,
+        subtitle: index === 2 ? `${step.subtitle} ${account}` : step.subtitle,
+      }));
+      const stepCount = Math.min(steps.length, PHONE_STEP_CONFIG.length);
+
+      // Prefer subtitle-anchored step advancement (so step transitions align with
+      // narration). Fall back to weighted localFrame when anchors are missing
+      // (e.g. preview without subtitles, or the second walkthrough pass after
+      // all anchor lines have already been spoken).
+      const anchors = Array.isArray(stepBoundaries) ? stepBoundaries : [];
+      const haveAnchors = anchors.some((t) => typeof t === 'number');
+      const sceneStartTime = scene.start / fps;
+      const sceneEndTime = scene.end / fps;
+      const anchorsInScene =
+        haveAnchors &&
+        anchors.some(
+          (t) => typeof t === 'number' && t >= sceneStartTime && t <= sceneEndTime,
+        );
+
+      let activeIndex;
+      if (anchorsInScene && typeof currentTime === 'number') {
+        activeIndex = stepCount - 1;
+        for (let i = 0; i < stepCount - 1; i += 1) {
+          const boundary = anchors[i];
+          if (typeof boundary === 'number' && currentTime < boundary) {
+            activeIndex = i;
+            break;
+          }
+        }
+      } else {
+        const totalWeight = PHONE_STEP_CONFIG.slice(0, stepCount).reduce((sum, s) => sum + s.weight, 0);
+        const elapsed = interpolate(
+          localFrame,
+          [12, Math.max(64, scene.duration - 20)],
+          [0, totalWeight],
+          {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'},
+        );
+        let cumulative = 0;
+        activeIndex = stepCount - 1;
+        for (let i = 0; i < stepCount; i += 1) {
+          cumulative += PHONE_STEP_CONFIG[i].weight;
+          if (elapsed < cumulative) {
+            activeIndex = i;
+            break;
+          }
+        }
+      }
+      const screenStep = steps[activeIndex];
+      const activeTap = PHONE_STEP_CONFIG[activeIndex]?.tap || null;
+      const tapPulse = 0.35 + Math.abs(Math.sin((localFrame / fps) * Math.PI * 2 * 1.05)) * 0.65;
+
+      return (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 410px',
+            gap: 36,
+            alignItems: 'center',
+            height: '100%',
+            padding: '28px 34px',
+            borderRadius: 36,
+            background: 'linear-gradient(135deg, rgba(15,23,42,0.98), rgba(49,46,129,0.92))',
+            boxShadow: '0 32px 90px rgba(15,23,42,0.22)',
+          }}
+        >
+          <div
+            style={{
+              transform: `translateY(${(1 - reveal) * 24}px)`,
+              opacity: reveal,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 14,
+                letterSpacing: 2.4,
+                textTransform: 'uppercase',
+                color: '#94a3b8',
+                ...SAFE_TEXT_STYLE,
+              }}
+            >
+              {copy.phoneEyebrow}
+            </div>
+            <div
+              style={{
+                lineHeight: 1.02,
+                fontWeight: 900,
+                marginTop: 16,
+                color: '#f8fafc',
+                ...getAdaptiveTextStyle(lead.scene_payload.action?.headline, 64, {
+                  minSize: 38,
+                  softLimit: 24,
+                  hardLimit: 72,
+                }),
+              }}
+            >
+              {copy.phoneHeadline}
+            </div>
+            <div
+              style={{
+                lineHeight: 1.52,
+                marginTop: 20,
+                color: '#dbe4f0',
+                maxWidth: 700,
+                  ...getAdaptiveTextStyle(lead.scene_payload.action?.body || lead.cta_text, 22, {
+                  minSize: 16,
+                  softLimit: 70,
+                  hardLimit: 180,
+                }),
+              }}
+            >
+              {paymentBody}
+            </div>
+
+            <div style={{display: 'grid', gap: 8, marginTop: 18, maxWidth: 620}}>
+              {steps.map((step, index) => {
+                const done = index < activeIndex;
+                const current = index === activeIndex;
+                return (
+                  <div
+                    key={step.label}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '28px 1fr',
+                      gap: 10,
+                      alignItems: 'center',
+                      padding: '8px 12px',
+                      borderRadius: 16,
+                      background: current ? `${accentColor}22` : 'rgba(15, 23, 42, 0.62)',
+                      border: `1px solid ${current ? accentColor : 'rgba(255,255,255,0.1)'}`,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 26,
+                        height: 26,
+                        borderRadius: 999,
+                        display: 'grid',
+                        placeItems: 'center',
+                        background: done || current ? accentColor : 'rgba(148,163,184,0.2)',
+                        color: '#020817',
+                        fontWeight: 900,
+                        fontSize: 12,
+                      }}
+                    >
+                      {done ? '✓' : index + 1}
+                    </div>
+                    <div>
+                      <div style={{fontSize: 15, fontWeight: 800, color: '#f8fafc'}}>{step.title}</div>
+                      <div style={{fontSize: 11, color: '#94a3b8', marginTop: 1}}>{step.subtitle}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div
+            style={{
+              width: 300,
+              height: 530,
+              justifySelf: 'center',
+              borderRadius: 46,
+              padding: 14,
+              background: 'linear-gradient(160deg, #111827, #020617)',
+              border: '1px solid rgba(255,255,255,0.22)',
+              boxShadow: `0 34px 90px ${accentColor}35`,
+              transform: `translateY(${(1 - phoneReveal) * 30}px) rotate(${(1 - phoneReveal) * -3}deg)`,
+              opacity: phoneReveal,
+              position: 'relative',
+            }}
+          >
+            <div
+              style={{
+                position: 'absolute',
+                top: 8,
+                left: '50%',
+                width: 94,
+                height: 22,
+                transform: 'translateX(-50%)',
+                borderRadius: '0 0 18px 18px',
+                background: '#020617',
+                zIndex: 2,
+              }}
+            />
+            <div
+              style={{
+                height: '100%',
+                borderRadius: 34,
+                overflow: 'hidden',
+                background: '#f8fafc',
+                color: '#111827',
+                position: 'relative',
+              }}
+            >
+              <Img
+                src={PHONE_STEP_CONFIG[activeIndex]?.image || PHONE_STEP_CONFIG[0].image}
+                style={{width: '100%', height: '100%', objectFit: 'cover', display: 'block'}}
+              />
+              {activeTap ? (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: activeTap.x,
+                    top: activeTap.y,
+                    width: 42,
+                    height: 42,
+                    borderRadius: 999,
+                    border: '3px solid rgba(255,255,255,0.95)',
+                    background: `rgba(95, 37, 159, ${0.18 + tapPulse * 0.18})`,
+                    transform: `translate(-50%, -50%) scale(${0.82 + tapPulse * 0.36})`,
+                    boxShadow: '0 0 0 10px rgba(95, 37, 159, 0.12)',
+                  }}
+                />
+              ) : null}
+            </div>
+          </div>
+
+          {contact ? (
+            <div
+              style={{
+                position: 'absolute',
+                right: 92,
+                bottom: 98,
+                padding: '12px 18px',
+                borderRadius: 999,
+                background: 'rgba(248,250,252,0.95)',
+                color: '#0f172a',
+                fontSize: 18,
+                fontWeight: 900,
+                boxShadow: '0 18px 44px rgba(2, 8, 23, 0.22)',
+              }}
+            >
+              {copy.help}: {contact}
+            </div>
+          ) : null}
+        </div>
+      );
+    }}
+  </SceneShell>
+);
+
+const PhoneRow = ({label, value, active}) => (
+  <div
+    style={{
+      padding: '9px 12px',
+      borderRadius: 14,
+      background: active ? 'rgba(95,37,159,0.1)' : '#eef2f7',
+      border: `1px solid ${active ? '#5f259f' : 'rgba(148,163,184,0.32)'}`,
+    }}
+  >
+    <div style={{fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 800}}>{label}</div>
+    <div style={{fontSize: 15, fontWeight: 900, marginTop: 3, ...SAFE_TEXT_STYLE}}>{value}</div>
+  </div>
+);
+
+const PAYMENT_COPY = {
+  English: {
+    topTitle: 'Payment Guidance',
+    topSubtitle: 'Reference walkthrough for customers',
+    welcome: 'Welcome',
+    welcomeHeadline: (name) => `Hi ${name}, here is your payment guide`,
+    welcomeBody: (client) => `Use this video as a quick reference to complete your ${client} loan payment safely.`,
+    summary: 'Payment summary',
+    loanAccount: 'Loan account',
+    provider: 'Provider',
+    support: 'Support',
+    beforeStart: 'Before you start',
+    readyTitle: 'Keep these details ready',
+    checklist: [
+      ['Payment link or PhonePe app', 'Open the link shared with you or use the PhonePe app.'],
+      ['Loan account number', 'Keep your LAN ready to verify the account.'],
+      ['Payable amount', 'Enter the amount shown in this video and review it.'],
+    ],
+    phoneEyebrow: 'PhonePe process',
+    phoneHeadline: 'Open PhonePe and pay',
+    phoneSecure: 'Secure payment',
+    phoneSteps: [
+      {label: 'PhonePe', title: 'PhonePe', subtitle: 'Payment link ready'},
+      {label: 'Loan Payment', title: 'Loan Payment', subtitle: 'Choose biller category'},
+      {label: 'TVS Credit', title: 'TVS Credit', subtitle: 'Account'},
+      {label: 'Amount', title: null, subtitle: 'Review and pay'},
+    ],
+    biller: 'Biller',
+    loanAccountUi: 'Loan account',
+    payableAmount: 'Payable amount',
+    company: 'Company',
+    selectBiller: 'Select biller',
+    enterAmount: 'Enter amount',
+    proceed: 'Proceed to Pay',
+    help: 'Help',
+    reviewEyebrow: 'Review before paying',
+    reviewTitle: 'Confirm every detail',
+    reviewBody: 'Match the provider, loan account, and amount before tapping proceed.',
+    needHelp: 'Need help?',
+    supportAvailable: 'Support is available',
+    helpTitle: 'Need help while paying?',
+    helpBody: 'Contact this number for payment assistance or any other information.',
+    fallbackSubtitle: 'Follow the steps on screen to complete payment.',
+  },
+  Hindi: {
+    topTitle: 'भुगतान मार्गदर्शन',
+    topSubtitle: 'ग्राहकों के लिए संदर्भ वीडियो',
+    welcome: 'स्वागत है',
+    welcomeHeadline: (name) => `${name} जी, यह आपका भुगतान गाइड है`,
+    welcomeBody: (client) => `${client} लोन भुगतान सुरक्षित रूप से पूरा करने के लिए इस वीडियो को संदर्भ के रूप में देखें।`,
+    summary: 'भुगतान सारांश',
+    loanAccount: 'लोन खाता',
+    provider: 'प्रदाता',
+    support: 'सहायता',
+    beforeStart: 'शुरू करने से पहले',
+    readyTitle: 'ये जानकारी तैयार रखें',
+    checklist: [
+      ['पेमेंट लिंक या PhonePe ऐप', 'साझा किया गया लिंक खोलें या PhonePe ऐप इस्तेमाल करें।'],
+      ['लोन अकाउंट नंबर', 'खाता सत्यापित करने के लिए LAN तैयार रखें।'],
+      ['देय राशि', 'वीडियो में दिखाई गई राशि दर्ज करें और जांचें।'],
+    ],
+    phoneEyebrow: 'PhonePe प्रक्रिया',
+    phoneHeadline: 'PhonePe खोलें और भुगतान करें',
+    phoneSecure: 'सुरक्षित भुगतान',
+    phoneSteps: [
+      {label: 'PhonePe', title: 'PhonePe', subtitle: 'पेमेंट लिंक तैयार'},
+      {label: 'लोन भुगतान', title: 'लोन भुगतान', subtitle: 'बिलर श्रेणी चुनें'},
+      {label: 'TVS Credit', title: 'TVS Credit', subtitle: 'खाता'},
+      {label: 'राशि', title: null, subtitle: 'जांचें और भुगतान करें'},
+    ],
+    biller: 'बिलर',
+    loanAccountUi: 'लोन खाता',
+    payableAmount: 'देय राशि',
+    company: 'कंपनी',
+    selectBiller: 'बिलर चुनें',
+    enterAmount: 'राशि दर्ज करें',
+    proceed: 'भुगतान करें',
+    help: 'सहायता',
+    reviewEyebrow: 'भुगतान से पहले जांचें',
+    reviewTitle: 'हर जानकारी की पुष्टि करें',
+    reviewBody: 'आगे बढ़ने से पहले प्रदाता, लोन खाता और राशि मिलाएं।',
+    needHelp: 'सहायता चाहिए?',
+    supportAvailable: 'सहायता उपलब्ध है',
+    helpTitle: 'भुगतान करते समय सहायता चाहिए?',
+    helpBody: 'भुगतान सहायता या अन्य जानकारी के लिए इस नंबर पर संपर्क करें।',
+    fallbackSubtitle: 'भुगतान पूरा करने के लिए स्क्रीन पर दिए गए चरणों का पालन करें।',
+  },
+  Marathi: {
+    topTitle: 'पेमेंट मार्गदर्शन',
+    topSubtitle: 'ग्राहकांसाठी संदर्भ व्हिडिओ',
+    welcome: 'स्वागत आहे',
+    welcomeHeadline: (name) => `${name}, हा तुमचा पेमेंट गाईड आहे`,
+    welcomeBody: (client) => `${client} कर्जाचे पेमेंट सुरक्षितपणे पूर्ण करण्यासाठी हा व्हिडिओ संदर्भ म्हणून वापरा.`,
+    summary: 'पेमेंट सारांश',
+    loanAccount: 'कर्ज खाते',
+    provider: 'प्रदाता',
+    support: 'सहाय्य',
+    beforeStart: 'सुरू करण्यापूर्वी',
+    readyTitle: 'ही माहिती तयार ठेवा',
+    checklist: [
+      ['पेमेंट लिंक किंवा PhonePe अॅप', 'शेअर केलेली लिंक उघडा किंवा PhonePe अॅप वापरा.'],
+      ['कर्ज खाते क्रमांक', 'खाते तपासण्यासाठी LAN तयार ठेवा.'],
+      ['देय रक्कम', 'व्हिडिओमध्ये दाखवलेली रक्कम भरा आणि तपासा.'],
+    ],
+    phoneEyebrow: 'PhonePe प्रक्रिया',
+    phoneHeadline: 'PhonePe उघडा आणि पेमेंट करा',
+    phoneSecure: 'सुरक्षित पेमेंट',
+    phoneSteps: [
+      {label: 'PhonePe', title: 'PhonePe', subtitle: 'पेमेंट लिंक तयार'},
+      {label: 'कर्ज पेमेंट', title: 'कर्ज पेमेंट', subtitle: 'बिलर श्रेणी निवडा'},
+      {label: 'TVS Credit', title: 'TVS Credit', subtitle: 'खाते'},
+      {label: 'रक्कम', title: null, subtitle: 'तपासा आणि पेमेंट करा'},
+    ],
+    biller: 'बिलर', loanAccountUi: 'कर्ज खाते', payableAmount: 'देय रक्कम', company: 'कंपनी', selectBiller: 'बिलर निवडा', enterAmount: 'रक्कम भरा', proceed: 'पेमेंट करा', help: 'सहाय्य',
+    reviewEyebrow: 'पेमेंटपूर्वी तपासा', reviewTitle: 'प्रत्येक तपशील तपासा', reviewBody: 'पुढे जाण्यापूर्वी प्रदाता, कर्ज खाते आणि रक्कम जुळवा.', needHelp: 'सहाय्य हवे आहे?', supportAvailable: 'सहाय्य उपलब्ध आहे', helpTitle: 'पेमेंट करताना मदत हवी आहे?', helpBody: 'पेमेंट सहाय्य किंवा इतर माहितीसाठी या नंबरवर संपर्क करा.', fallbackSubtitle: 'पेमेंट पूर्ण करण्यासाठी स्क्रीनवरील चरणांचे अनुसरण करा.',
+  },
+  Tamil: {
+    topTitle: 'கட்டண வழிகாட்டி', topSubtitle: 'வாடிக்கையாளர்களுக்கான குறிப்பு வீடியோ', welcome: 'வரவேற்கிறோம்',
+    welcomeHeadline: (name) => `${name}, இது உங்கள் கட்டண வழிகாட்டி`, welcomeBody: (client) => `${client} கடன் கட்டணத்தை பாதுகாப்பாக முடிக்க இந்த வீடியோவை வழிகாட்டியாக பயன்படுத்தவும்.`,
+    summary: 'கட்டண சுருக்கம்', loanAccount: 'கடன் கணக்கு', provider: 'சேவை வழங்குநர்', support: 'உதவி', beforeStart: 'தொடங்குவதற்கு முன்', readyTitle: 'இந்த விவரங்களை தயார் வைத்துக்கொள்ளுங்கள்',
+    checklist: [['கட்டண இணைப்பு அல்லது PhonePe ஆப்', 'பகிரப்பட்ட இணைப்பைத் திறக்கவும் அல்லது PhonePe ஆப்பைப் பயன்படுத்தவும்.'], ['கடன் கணக்கு எண்', 'கணக்கை சரிபார்க்க LAN தயாராக வைத்துக்கொள்ளுங்கள்.'], ['செலுத்த வேண்டிய தொகை', 'வீடியோவில் காட்டிய தொகையை உள்ளிட்டு சரிபார்க்கவும்.']],
+    phoneEyebrow: 'PhonePe செயல்முறை', phoneHeadline: 'PhonePe திறந்து கட்டணம் செலுத்துங்கள்', phoneSecure: 'பாதுகாப்பான கட்டணம்',
+    phoneSteps: [{label: 'PhonePe', title: 'PhonePe', subtitle: 'கட்டண இணைப்பு தயார்'}, {label: 'கடன் கட்டணம்', title: 'கடன் கட்டணம்', subtitle: 'பில்லர் வகையைத் தேர்வு செய்யவும்'}, {label: 'TVS Credit', title: 'TVS Credit', subtitle: 'கணக்கு'}, {label: 'தொகை', title: null, subtitle: 'சரிபார்த்து செலுத்தவும்'}],
+    biller: 'பில்லர்', loanAccountUi: 'கடன் கணக்கு', payableAmount: 'செலுத்த வேண்டிய தொகை', company: 'நிறுவனம்', selectBiller: 'பில்லரைத் தேர்வு செய்யவும்', enterAmount: 'தொகை உள்ளிடவும்', proceed: 'கட்டணம் செலுத்தவும்', help: 'உதவி',
+    reviewEyebrow: 'செலுத்துவதற்கு முன் சரிபார்க்கவும்', reviewTitle: 'ஒவ்வொரு விவரத்தையும் உறுதிப்படுத்தவும்', reviewBody: 'தொடர்வதற்கு முன் வழங்குநர், கடன் கணக்கு மற்றும் தொகையைப் பொருத்திப் பார்க்கவும்.', needHelp: 'உதவி வேண்டுமா?', supportAvailable: 'உதவி கிடைக்கும்', helpTitle: 'கட்டணம் செலுத்தும்போது உதவி வேண்டுமா?', helpBody: 'கட்டண உதவி அல்லது பிற தகவலுக்கு இந்த எண்ணை தொடர்புகொள்ளுங்கள்.', fallbackSubtitle: 'கட்டணத்தை முடிக்க திரையில் உள்ள படிகளைப் பின்பற்றவும்.',
+  },
+  Telugu: {
+    topTitle: 'చెల్లింపు మార్గదర్శకం', topSubtitle: 'కస్టమర్ల కోసం సూచన వీడియో', welcome: 'స్వాగతం',
+    welcomeHeadline: (name) => `${name}, ఇది మీ చెల్లింపు గైడ్`, welcomeBody: (client) => `${client} లోన్ చెల్లింపును సురక్షితంగా పూర్తి చేయడానికి ఈ వీడియోను సూచనగా ఉపయోగించండి.`,
+    summary: 'చెల్లింపు సారాంశం', loanAccount: 'లోన్ ఖాతా', provider: 'ప్రొవైడర్', support: 'సహాయం', beforeStart: 'ప్రారంభించే ముందు', readyTitle: 'ఈ వివరాలను సిద్ధంగా ఉంచండి',
+    checklist: [['చెల్లింపు లింక్ లేదా PhonePe యాప్', 'పంచుకున్న లింక్ తెరవండి లేదా PhonePe యాప్ ఉపయోగించండి.'], ['లోన్ ఖాతా నంబర్', 'ఖాతాను ధృవీకరించడానికి LAN సిద్ధంగా ఉంచండి.'], ['చెల్లించవలసిన మొత్తం', 'వీడియోలో చూపిన మొత్తాన్ని నమోదు చేసి తనిఖీ చేయండి.']],
+    phoneEyebrow: 'PhonePe ప్రక్రియ', phoneHeadline: 'PhonePe తెరిచి చెల్లించండి', phoneSecure: 'సురక్షిత చెల్లింపు',
+    phoneSteps: [{label: 'PhonePe', title: 'PhonePe', subtitle: 'చెల్లింపు లింక్ సిద్ధంగా ఉంది'}, {label: 'లోన్ చెల్లింపు', title: 'లోన్ చెల్లింపు', subtitle: 'బిల్లర్ వర్గాన్ని ఎంచుకోండి'}, {label: 'TVS Credit', title: 'TVS Credit', subtitle: 'ఖాతా'}, {label: 'మొత్తం', title: null, subtitle: 'తనిఖీ చేసి చెల్లించండి'}],
+    biller: 'బిల్లర్', loanAccountUi: 'లోన్ ఖాతా', payableAmount: 'చెల్లించవలసిన మొత్తం', company: 'కంపెనీ', selectBiller: 'బిల్లర్ ఎంచుకోండి', enterAmount: 'మొత్తం నమోదు చేయండి', proceed: 'చెల్లించండి', help: 'సహాయం',
+    reviewEyebrow: 'చెల్లించే ముందు తనిఖీ చేయండి', reviewTitle: 'ప్రతి వివరాన్ని నిర్ధారించండి', reviewBody: 'కొనసాగించే ముందు ప్రొవైడర్, లోన్ ఖాతా మరియు మొత్తాన్ని సరిపోల్చండి.', needHelp: 'సహాయం కావాలా?', supportAvailable: 'సహాయం అందుబాటులో ఉంది', helpTitle: 'చెల్లింపులో సహాయం కావాలా?', helpBody: 'చెల్లింపు సహాయం లేదా ఇతర సమాచారం కోసం ఈ నంబర్‌కు సంప్రదించండి.', fallbackSubtitle: 'చెల్లింపును పూర్తి చేయడానికి స్క్రీన్‌పై చూపిన దశలను అనుసరించండి.',
+  },
+  Kannada: {
+    topTitle: 'ಪಾವತಿ ಮಾರ್ಗದರ್ಶಿ', topSubtitle: 'ಗ್ರಾಹಕರಿಗಾಗಿ ಉಲ್ಲೇಖ ವೀಡಿಯೊ', welcome: 'ಸ್ವಾಗತ',
+    welcomeHeadline: (name) => `${name}, ಇದು ನಿಮ್ಮ ಪಾವತಿ ಮಾರ್ಗದರ್ಶಿ`, welcomeBody: (client) => `${client} ಸಾಲದ ಪಾವತಿಯನ್ನು ಸುರಕ್ಷಿತವಾಗಿ ಪೂರ್ಣಗೊಳಿಸಲು ಈ ವೀಡಿಯೊವನ್ನು ಉಲ್ಲೇಖವಾಗಿ ಬಳಸಿ.`,
+    summary: 'ಪಾವತಿ ಸಾರಾಂಶ', loanAccount: 'ಸಾಲ ಖಾತೆ', provider: 'ಪ್ರದಾತ', support: 'ಸಹಾಯ', beforeStart: 'ಪ್ರಾರಂಭಿಸುವ ಮೊದಲು', readyTitle: 'ಈ ವಿವರಗಳನ್ನು ಸಿದ್ಧವಾಗಿಡಿ',
+    checklist: [['ಪಾವತಿ ಲಿಂಕ್ ಅಥವಾ PhonePe ಆಪ್', 'ಹಂಚಿದ ಲಿಂಕ್ ತೆರೆಯಿರಿ ಅಥವಾ PhonePe ಆಪ್ ಬಳಸಿ.'], ['ಸಾಲ ಖಾತೆ ಸಂಖ್ಯೆ', 'ಖಾತೆ ಪರಿಶೀಲಿಸಲು LAN ಸಿದ್ಧವಾಗಿಡಿ.'], ['ಪಾವತಿಸಬೇಕಾದ ಮೊತ್ತ', 'ವೀಡಿಯೊದಲ್ಲಿರುವ ಮೊತ್ತವನ್ನು ನಮೂದಿಸಿ ಪರಿಶೀಲಿಸಿ.']],
+    phoneEyebrow: 'PhonePe ಪ್ರಕ್ರಿಯೆ', phoneHeadline: 'PhonePe ತೆರೆಯಿರಿ ಮತ್ತು ಪಾವತಿಸಿ', phoneSecure: 'ಸುರಕ್ಷಿತ ಪಾವತಿ',
+    phoneSteps: [{label: 'PhonePe', title: 'PhonePe', subtitle: 'ಪಾವತಿ ಲಿಂಕ್ ಸಿದ್ಧ'}, {label: 'ಸಾಲ ಪಾವತಿ', title: 'ಸಾಲ ಪಾವತಿ', subtitle: 'ಬಿಲ್ಲರ್ ವರ್ಗ ಆಯ್ಕೆಮಾಡಿ'}, {label: 'TVS Credit', title: 'TVS Credit', subtitle: 'ಖಾತೆ'}, {label: 'ಮೊತ್ತ', title: null, subtitle: 'ಪರಿಶೀಲಿಸಿ ಪಾವತಿಸಿ'}],
+    biller: 'ಬಿಲ್ಲರ್', loanAccountUi: 'ಸಾಲ ಖಾತೆ', payableAmount: 'ಪಾವತಿಸಬೇಕಾದ ಮೊತ್ತ', company: 'ಕಂಪನಿ', selectBiller: 'ಬಿಲ್ಲರ್ ಆಯ್ಕೆಮಾಡಿ', enterAmount: 'ಮೊತ್ತ ನಮೂದಿಸಿ', proceed: 'ಪಾವತಿಸಿ', help: 'ಸಹಾಯ',
+    reviewEyebrow: 'ಪಾವತಿಗೆ ಮೊದಲು ಪರಿಶೀಲಿಸಿ', reviewTitle: 'ಪ್ರತಿ ವಿವರವನ್ನು ದೃಢಪಡಿಸಿ', reviewBody: 'ಮುಂದುವರೆಯುವ ಮೊದಲು ಪ್ರದಾತ, ಸಾಲ ಖಾತೆ ಮತ್ತು ಮೊತ್ತವನ್ನು ಹೊಂದಿಸಿ ನೋಡಿ.', needHelp: 'ಸಹಾಯ ಬೇಕೇ?', supportAvailable: 'ಸಹಾಯ ಲಭ್ಯವಿದೆ', helpTitle: 'ಪಾವತಿಸುವಾಗ ಸಹಾಯ ಬೇಕೇ?', helpBody: 'ಪಾವತಿ ಸಹಾಯ ಅಥವಾ ಇತರ ಮಾಹಿತಿಗಾಗಿ ಈ ಸಂಖ್ಯೆಗೆ ಸಂಪರ್ಕಿಸಿ.', fallbackSubtitle: 'ಪಾವತಿಯನ್ನು ಪೂರ್ಣಗೊಳಿಸಲು ಪರದೆಯಲ್ಲಿರುವ ಹಂತಗಳನ್ನು ಅನುಸರಿಸಿ.',
+  },
+  Bengali: {
+    topTitle: 'পেমেন্ট নির্দেশিকা', topSubtitle: 'গ্রাহকদের জন্য রেফারেন্স ভিডিও', welcome: 'স্বাগতম',
+    welcomeHeadline: (name) => `${name}, এটি আপনার পেমেন্ট গাইড`, welcomeBody: (client) => `${client} ঋণের পেমেন্ট নিরাপদে সম্পন্ন করতে এই ভিডিওটি রেফারেন্স হিসেবে ব্যবহার করুন।`,
+    summary: 'পেমেন্ট সারাংশ', loanAccount: 'ঋণ অ্যাকাউন্ট', provider: 'প্রদানকারী', support: 'সহায়তা', beforeStart: 'শুরু করার আগে', readyTitle: 'এই তথ্যগুলি প্রস্তুত রাখুন',
+    checklist: [['পেমেন্ট লিঙ্ক বা PhonePe অ্যাপ', 'শেয়ার করা লিঙ্ক খুলুন অথবা PhonePe অ্যাপ ব্যবহার করুন।'], ['ঋণ অ্যাকাউন্ট নম্বর', 'অ্যাকাউন্ট যাচাই করতে LAN প্রস্তুত রাখুন।'], ['প্রদেয় পরিমাণ', 'ভিডিওতে দেখানো পরিমাণ লিখে যাচাই করুন।']],
+    phoneEyebrow: 'PhonePe প্রক্রিয়া', phoneHeadline: 'PhonePe খুলুন এবং পেমেন্ট করুন', phoneSecure: 'নিরাপদ পেমেন্ট',
+    phoneSteps: [{label: 'PhonePe', title: 'PhonePe', subtitle: 'পেমেন্ট লিঙ্ক প্রস্তুত'}, {label: 'ঋণ পেমেন্ট', title: 'ঋণ পেমেন্ট', subtitle: 'বিলার বিভাগ নির্বাচন করুন'}, {label: 'TVS Credit', title: 'TVS Credit', subtitle: 'অ্যাকাউন্ট'}, {label: 'পরিমাণ', title: null, subtitle: 'যাচাই করে পেমেন্ট করুন'}],
+    biller: 'বিলার', loanAccountUi: 'ঋণ অ্যাকাউন্ট', payableAmount: 'প্রদেয় পরিমাণ', company: 'কোম্পানি', selectBiller: 'বিলার নির্বাচন করুন', enterAmount: 'পরিমাণ লিখুন', proceed: 'পেমেন্ট করুন', help: 'সহায়তা',
+    reviewEyebrow: 'পেমেন্টের আগে যাচাই করুন', reviewTitle: 'প্রতিটি তথ্য নিশ্চিত করুন', reviewBody: 'এগোনোর আগে প্রদানকারী, ঋণ অ্যাকাউন্ট এবং পরিমাণ মিলিয়ে নিন।', needHelp: 'সহায়তা দরকার?', supportAvailable: 'সহায়তা উপলব্ধ', helpTitle: 'পেমেন্টের সময় সহায়তা দরকার?', helpBody: 'পেমেন্ট সহায়তা বা অন্য তথ্যের জন্য এই নম্বরে যোগাযোগ করুন।', fallbackSubtitle: 'পেমেন্ট সম্পন্ন করতে স্ক্রিনের ধাপগুলি অনুসরণ করুন।',
+  },
+  Gujarati: {
+    topTitle: 'ચુકવણી માર્ગદર્શન', topSubtitle: 'ગ્રાહકો માટે સંદર્ભ વિડિયો', welcome: 'સ્વાગત છે',
+    welcomeHeadline: (name) => `${name}, આ તમારી ચુકવણી માર્ગદર્શિકા છે`, welcomeBody: (client) => `${client} લોનની ચુકવણી સુરક્ષિત રીતે પૂર્ણ કરવા માટે આ વિડિયોનો સંદર્ભ લો.`,
+    summary: 'ચુકવણી સારાંશ', loanAccount: 'લોન ખાતું', provider: 'પ્રદાતા', support: 'સહાય', beforeStart: 'શરૂ કરતા પહેલા', readyTitle: 'આ વિગતો તૈયાર રાખો',
+    checklist: [['ચુકવણી લિંક અથવા PhonePe એપ', 'શેર કરેલી લિંક ખોલો અથવા PhonePe એપ વાપરો.'], ['લોન ખાતા નંબર', 'ખાતું ચકાસવા LAN તૈયાર રાખો.'], ['ચુકવવાની રકમ', 'વિડિયોમાં બતાવેલી રકમ દાખલ કરી તપાસો.']],
+    phoneEyebrow: 'PhonePe પ્રક્રિયા', phoneHeadline: 'PhonePe ખોલો અને ચુકવણી કરો', phoneSecure: 'સુરક્ષિત ચુકવણી',
+    phoneSteps: [{label: 'PhonePe', title: 'PhonePe', subtitle: 'ચુકવણી લિંક તૈયાર'}, {label: 'લોન ચુકવણી', title: 'લોન ચુકવણી', subtitle: 'બિલર કેટેગરી પસંદ કરો'}, {label: 'TVS Credit', title: 'TVS Credit', subtitle: 'ખાતું'}, {label: 'રકમ', title: null, subtitle: 'તપાસો અને ચુકવણી કરો'}],
+    biller: 'બિલર', loanAccountUi: 'લોન ખાતું', payableAmount: 'ચુકવવાની રકમ', company: 'કંપની', selectBiller: 'બિલર પસંદ કરો', enterAmount: 'રકમ દાખલ કરો', proceed: 'ચુકવણી કરો', help: 'સહાય',
+    reviewEyebrow: 'ચુકવણી પહેલા તપાસો', reviewTitle: 'દરેક વિગત ખાતરી કરો', reviewBody: 'આગળ વધતા પહેલા પ્રદાતા, લોન ખાતું અને રકમ મેળવો.', needHelp: 'સહાય જોઈએ?', supportAvailable: 'સહાય ઉપલબ્ધ છે', helpTitle: 'ચુકવણી કરતી વખતે સહાય જોઈએ?', helpBody: 'ચુકવણી સહાય અથવા અન્ય માહિતી માટે આ નંબર પર સંપર્ક કરો.', fallbackSubtitle: 'ચુકવણી પૂર્ણ કરવા માટે સ્ક્રીન પરના પગલાં અનુસરો.',
+  },
+  Malayalam: {
+    topTitle: 'പേയ്മെന്റ് ഗൈഡ്', topSubtitle: 'ഉപഭോക്താക്കൾക്കുള്ള റഫറൻസ് വീഡിയോ', welcome: 'സ്വാഗതം',
+    welcomeHeadline: (name) => `${name}, ഇത് നിങ്ങളുടെ പേയ്മെന്റ് ഗൈഡാണ്`, welcomeBody: (client) => `${client} വായ്പയുടെ പേയ്മെന്റ് സുരക്ഷിതമായി പൂർത്തിയാക്കാൻ ഈ വീഡിയോ റഫറൻസായി ഉപയോഗിക്കുക.`,
+    summary: 'പേയ്മെന്റ് സംഗ്രഹം', loanAccount: 'വായ്പ അക്കൗണ്ട്', provider: 'പ്രൊവൈഡർ', support: 'സഹായം', beforeStart: 'ആരംഭിക്കുന്നതിന് മുമ്പ്', readyTitle: 'ഈ വിവരങ്ങൾ തയ്യാറാക്കി വയ്ക്കുക',
+    checklist: [['പേയ്മെന്റ് ലിങ്ക് അല്ലെങ്കിൽ PhonePe ആപ്പ്', 'ഷെയർ ചെയ്ത ലിങ്ക് തുറക്കുക അല്ലെങ്കിൽ PhonePe ആപ്പ് ഉപയോഗിക്കുക.'], ['വായ്പ അക്കൗണ്ട് നമ്പർ', 'അക്കൗണ്ട് പരിശോധിക്കാൻ LAN തയ്യാറാക്കി വയ്ക്കുക.'], ['അടയ്ക്കേണ്ട തുക', 'വീഡിയോയിൽ കാണിച്ച തുക നൽകുകയും പരിശോധിക്കുകയും ചെയ്യുക.']],
+    phoneEyebrow: 'PhonePe പ്രക്രിയ', phoneHeadline: 'PhonePe തുറന്ന് പണമടയ്ക്കുക', phoneSecure: 'സുരക്ഷിത പേയ്മെന്റ്',
+    phoneSteps: [{label: 'PhonePe', title: 'PhonePe', subtitle: 'പേയ്മെന്റ് ലിങ്ക് തയ്യാറാണ്'}, {label: 'വായ്പ പേയ്മെന്റ്', title: 'വായ്പ പേയ്മെന്റ്', subtitle: 'ബില്ലർ വിഭാഗം തിരഞ്ഞെടുക്കുക'}, {label: 'TVS Credit', title: 'TVS Credit', subtitle: 'അക്കൗണ്ട്'}, {label: 'തുക', title: null, subtitle: 'പരിശോധിച്ച് പണമടയ്ക്കുക'}],
+    biller: 'ബില്ലർ', loanAccountUi: 'വായ്പ അക്കൗണ്ട്', payableAmount: 'അടയ്ക്കേണ്ട തുക', company: 'കമ്പനി', selectBiller: 'ബില്ലർ തിരഞ്ഞെടുക്കുക', enterAmount: 'തുക നൽകുക', proceed: 'പണമടയ്ക്കുക', help: 'സഹായം',
+    reviewEyebrow: 'പേയ്മെന്റിന് മുമ്പ് പരിശോധിക്കുക', reviewTitle: 'ഓരോ വിവരവും സ്ഥിരീകരിക്കുക', reviewBody: 'തുടരുന്നതിന് മുമ്പ് പ്രൊവൈഡർ, വായ്പ അക്കൗണ്ട്, തുക എന്നിവ ഒത്തുനോക്കുക.', needHelp: 'സഹായം വേണോ?', supportAvailable: 'സഹായം ലഭ്യമാണ്', helpTitle: 'പണമടയ്ക്കുമ്പോൾ സഹായം വേണോ?', helpBody: 'പേയ്മെന്റ് സഹായത്തിനോ മറ്റ് വിവരങ്ങൾക്കോ ഈ നമ്പറിൽ ബന്ധപ്പെടുക.', fallbackSubtitle: 'പേയ്മെന്റ് പൂർത്തിയാക്കാൻ സ്ക്രീനിലെ ഘട്ടങ്ങൾ പിന്തുടരുക.',
+  },
+};
+
+const getPaymentCopy = (language) => PAYMENT_COPY[language] || PAYMENT_COPY.English;
+
+const PaymentSceneShell = ({scene, frame, children, background = '#f8fafc'}) => {
+  const state = getSceneVisualState(frame, scene);
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        padding: '96px 78px 58px',
+        opacity: state.opacity,
+        transform: `translateY(${state.translateY}px) scale(${state.scale})`,
+        background,
+        color: '#111827',
+      }}
+    >
+      {children(state)}
+    </div>
+  );
+};
+
+const PaymentTopBar = ({lead, frame}) => {
+  const copy = getPaymentCopy(lead.language);
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: 30,
+        left: 56,
+        right: 56,
+        zIndex: 20,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '14px 18px',
+        borderRadius: 20,
+        background: 'rgba(255,255,255,0.9)',
+        border: '1px solid rgba(15,23,42,0.08)',
+        boxShadow: '0 18px 48px rgba(15,23,42,0.08)',
+        transform: `translateY(${Math.sin(frame * 0.018) * 2}px)`,
+      }}
+    >
+      <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
+        <div
+          style={{
+            width: 38,
+            height: 38,
+            borderRadius: 12,
+            background: '#5f259f',
+            color: '#fff',
+            display: 'grid',
+            placeItems: 'center',
+            fontWeight: 900,
+            fontSize: 18,
+          }}
+        >
+          P
+        </div>
+        <div>
+          <div style={{fontSize: 16, fontWeight: 900}}>{copy.topTitle}</div>
+          <div style={{fontSize: 12, color: '#64748b'}}>{copy.topSubtitle}</div>
+        </div>
+      </div>
+      <div style={{fontSize: 15, fontWeight: 800, color: '#334155'}}>
+        {safeString(lead.client_name, 'TVS Credit')} | {copy.loanAccount}: {safeString(lead.lan, 'N/A')}
+      </div>
+    </div>
+  );
+};
+
+const PaymentWelcomeScene = ({scene, frame, fps, lead}) => (
+  <PaymentSceneShell scene={scene} frame={frame} background="linear-gradient(135deg, #f8fafc, #eef2ff)">
+    {({localFrame}) => {
+      const copy = getPaymentCopy(lead.language);
+      const reveal = spring({fps, frame: localFrame, config: {damping: 18, stiffness: 90}});
+      const amount = safeString(lead.display_amounts.primary.value, safeString(lead.tos, '0'));
+      const customerName = safeString(lead.customer_name, 'Customer');
+      const clientName = safeString(lead.client_name, 'TVS Credit');
+      return (
+        <div style={{display: 'grid', gridTemplateColumns: '1.05fr 0.95fr', gap: 46, alignItems: 'center', height: '100%'}}>
+          <div style={{transform: `translateX(${(1 - reveal) * -24}px)`, opacity: reveal}}>
+            <div style={{fontSize: 15, letterSpacing: 2.5, textTransform: 'uppercase', color: '#5f259f', fontWeight: 900}}>
+              {copy.welcome}
+            </div>
+            <div
+              style={{
+                marginTop: 18,
+                fontWeight: 950,
+                lineHeight: 0.98,
+                color: '#0f172a',
+                ...getAdaptiveTextStyle(copy.welcomeHeadline(customerName), 72, {
+                  minSize: 46,
+                  softLimit: 44,
+                  hardLimit: 92,
+                }),
+              }}
+            >
+              {copy.welcomeHeadline(customerName)}
+            </div>
+            <div style={{fontSize: 24, lineHeight: 1.45, color: '#475569', marginTop: 24, maxWidth: 660}}>
+              {copy.welcomeBody(clientName)}
+            </div>
+          </div>
+          <div
+            style={{
+              borderRadius: 34,
+              padding: 30,
+              background: '#fff',
+              border: '1px solid rgba(15,23,42,0.08)',
+              boxShadow: '0 28px 80px rgba(15,23,42,0.12)',
+              transform: `translateY(${(1 - reveal) * 28}px)`,
+              opacity: reveal,
+            }}
+          >
+            <div style={{fontSize: 13, color: '#64748b', textTransform: 'uppercase', fontWeight: 900}}>{copy.summary}</div>
+            <div style={{fontSize: 54, fontWeight: 950, marginTop: 14, color: '#5f259f'}}>{amount}</div>
+            <div style={{display: 'grid', gap: 14, marginTop: 24}}>
+              <PaymentInfoRow label={copy.loanAccount} value={safeString(lead.lan, 'N/A')} />
+              <PaymentInfoRow label={copy.provider} value="TVS Credit" />
+              <PaymentInfoRow label={copy.support} value={safeString(lead.contact_details, '1800-555-999')} />
+            </div>
+          </div>
+        </div>
+      );
+    }}
+  </PaymentSceneShell>
+);
+
+const PaymentInfoRow = ({label, value}) => (
+  <div style={{display: 'flex', justifyContent: 'space-between', gap: 18, padding: '12px 0', borderTop: '1px solid #e2e8f0'}}>
+    <div style={{fontSize: 13, color: '#64748b', fontWeight: 800}}>{label}</div>
+    <div style={{fontSize: 17, color: '#0f172a', fontWeight: 900, textAlign: 'right', ...SAFE_TEXT_STYLE}}>{value}</div>
+  </div>
+);
+
+const PaymentChecklistScene = ({scene, frame, fps, lead}) => (
+  <PaymentSceneShell scene={scene} frame={frame} background="#ffffff">
+    {({localFrame}) => {
+      const copy = getPaymentCopy(lead.language);
+      const reveal = spring({fps, frame: localFrame, config: {damping: 18, stiffness: 90}});
+      return (
+        <div style={{height: '100%', display: 'grid', alignContent: 'center'}}>
+          <div style={{fontSize: 15, letterSpacing: 2.5, textTransform: 'uppercase', color: '#5f259f', fontWeight: 900}}>
+            {copy.beforeStart}
+          </div>
+          <div style={{fontSize: 58, lineHeight: 1.05, fontWeight: 950, color: '#0f172a', marginTop: 14}}>
+            {copy.readyTitle}
+          </div>
+          <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 22, marginTop: 38}}>
+            {copy.checklist.map(([title, body], index) => (
+              <div
+                key={title}
+                style={{
+                  minHeight: 250,
+                  padding: 28,
+                  borderRadius: 28,
+                  background: index === 0 ? '#f5f3ff' : '#f8fafc',
+                  border: `1px solid ${index === 0 ? '#c4b5fd' : '#e2e8f0'}`,
+                  transform: `translateY(${(1 - reveal) * (28 + index * 10)}px)`,
+                  opacity: reveal,
+                }}
+              >
+                <div style={{width: 46, height: 46, borderRadius: 16, background: '#5f259f', color: '#fff', display: 'grid', placeItems: 'center', fontSize: 20, fontWeight: 950}}>
+                  {index + 1}
+                </div>
+                <div style={{fontSize: 27, lineHeight: 1.12, fontWeight: 950, color: '#0f172a', marginTop: 28}}>{title}</div>
+                <div style={{fontSize: 17, lineHeight: 1.5, color: '#64748b', marginTop: 14}}>{body}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }}
+  </PaymentSceneShell>
+);
+
+const PaymentPhoneScene = ({scene, frame, fps, lead, currentTime, stepBoundaries}) => (
+  <PaymentPhoneWalkthroughScene scene={scene} frame={frame} fps={fps} lead={lead} accentColor="#5f259f" uiCopy={getUiCopy(lead.language)} currentTime={currentTime} stepBoundaries={stepBoundaries} />
+);
+
+const PaymentSafetyScene = ({scene, frame, fps, lead}) => (
+  <PaymentSceneShell scene={scene} frame={frame} background="#ffffff">
+    {({localFrame}) => {
+      const copy = getPaymentCopy(lead.language);
+      const reveal = spring({fps, frame: localFrame, config: {damping: 18, stiffness: 88}});
+      return (
+        <div style={{display: 'grid', gridTemplateColumns: '0.9fr 1.1fr', gap: 42, alignItems: 'center', height: '100%'}}>
+          <div style={{opacity: reveal}}>
+            <div style={{fontSize: 15, letterSpacing: 2.5, textTransform: 'uppercase', color: '#5f259f', fontWeight: 900}}>
+              {copy.reviewEyebrow}
+            </div>
+            <div style={{fontSize: 58, lineHeight: 1.05, fontWeight: 950, color: '#0f172a', marginTop: 14}}>
+              {copy.reviewTitle}
+            </div>
+            <div style={{fontSize: 22, lineHeight: 1.45, color: '#64748b', marginTop: 22}}>
+              {copy.reviewBody}
+            </div>
+          </div>
+          <div style={{display: 'grid', gap: 16}}>
+            {[
+              [copy.provider, 'TVS Credit'],
+              [copy.loanAccount, safeString(lead.lan, 'N/A')],
+              [copy.payableAmount, safeString(lead.display_amounts.primary.value, safeString(lead.tos, '0'))],
+              [copy.needHelp, safeString(lead.contact_details, '1800-555-999')],
+            ].map(([label, value], index) => (
+              <div
+                key={label}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  gap: 24,
+                  padding: '22px 24px',
+                  borderRadius: 22,
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  transform: `translateX(${(1 - reveal) * (28 + index * 8)}px)`,
+                  opacity: reveal,
+                }}
+              >
+                <div style={{fontSize: 16, color: '#64748b', fontWeight: 800}}>{label}</div>
+                <div style={{fontSize: 22, color: '#0f172a', fontWeight: 950, textAlign: 'right', ...SAFE_TEXT_STYLE}}>{value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }}
+  </PaymentSceneShell>
+);
+
+const PaymentSupportScene = ({scene, frame, fps, lead}) => (
+  <PaymentSceneShell scene={scene} frame={frame} background="linear-gradient(135deg, #5f259f, #312e81)">
+    {({localFrame}) => {
+      const copy = getPaymentCopy(lead.language);
+      const reveal = spring({fps, frame: localFrame, config: {damping: 17, stiffness: 88}});
+      return (
+        <div style={{height: '100%', display: 'grid', placeItems: 'center', color: '#fff', textAlign: 'center'}}>
+          <div style={{maxWidth: 860, transform: `translateY(${(1 - reveal) * 26}px)`, opacity: reveal}}>
+            <div style={{fontSize: 15, letterSpacing: 2.8, textTransform: 'uppercase', opacity: 0.78, fontWeight: 900}}>
+              {copy.supportAvailable}
+            </div>
+            <div style={{fontSize: 72, lineHeight: 1.02, fontWeight: 950, marginTop: 18}}>
+              {copy.helpTitle}
+            </div>
+            <div style={{fontSize: 26, lineHeight: 1.45, marginTop: 24, opacity: 0.86}}>
+              {copy.helpBody}
+            </div>
+            <div
+              style={{
+                display: 'inline-flex',
+                marginTop: 38,
+                padding: '20px 34px',
+                borderRadius: 999,
+                background: '#fff',
+                color: '#312e81',
+                fontSize: 34,
+                fontWeight: 950,
+                boxShadow: '0 28px 70px rgba(15,23,42,0.28)',
+              }}
+            >
+              {safeString(lead.contact_details, '1800-555-999')}
+            </div>
+          </div>
+        </div>
+      );
+    }}
+  </PaymentSceneShell>
+);
+
+// Match a subtitle line by phrase (case-insensitive substring) and return its end-time in seconds.
+const findSubtitleEnd = (subtitles, phrase) => {
+  if (!Array.isArray(subtitles) || !phrase) return null;
+  const needle = phrase.toLowerCase();
+  const hit = subtitles.find((s) => typeof s?.text === 'string' && s.text.toLowerCase().includes(needle));
+  return hit && typeof hit.end === 'number' ? hit.end : null;
+};
+
+const findSubtitleStart = (subtitles, phrase) => {
+  if (!Array.isArray(subtitles) || !phrase) return null;
+  const needle = phrase.toLowerCase();
+  const hit = subtitles.find((s) => typeof s?.text === 'string' && s.text.toLowerCase().includes(needle));
+  if (!hit || typeof hit.start !== 'number' || typeof hit.end !== 'number') return null;
+
+  const text = hit.text.toLowerCase();
+  const index = text.indexOf(needle);
+  if (index <= 0) return hit.start;
+
+  const proportion = index / text.length;
+  const duration = hit.end - hit.start;
+  return hit.start + proportion * duration;
+};
+
+const PaymentGuidanceVideo = ({lead, frame, fps, durationInFrames}) => {
+  const timeline = getSceneTimeline(durationInFrames, lead);
+  const track = getTrackMeta(lead.id);
+  const currentTime = frame / fps;
+  // Anchors: phrases that mark the END of each step's narration. Step N stays on
+  // screen until its anchor passes. These English terms appear verbatim across
+  // all localized payment_guidance scripts (see PAYMENT_GUIDANCE_TEMPLATES).
+  const stepBoundaries = [
+    findSubtitleEnd(track.subtitles, 'Loan Repayment'),
+    findSubtitleEnd(track.subtitles, 'TVS Credit'),
+    findSubtitleEnd(track.subtitles, 'Agreement number'),
+  ];
+  return (
+    <AbsoluteFill style={{background: '#f8fafc', fontFamily: FONT_FAMILY, overflow: 'hidden'}}>
+      <PaymentTopBar lead={lead} frame={frame} />
+      <PaymentWelcomeScene scene={timeline[0]} frame={frame} fps={fps} lead={lead} />
+      <PaymentChecklistScene scene={timeline[1]} frame={frame} fps={fps} lead={lead} />
+      <PaymentPhoneScene scene={timeline[2]} frame={frame} fps={fps} lead={lead} currentTime={currentTime} stepBoundaries={stepBoundaries} />
+      <PaymentSafetyScene scene={timeline[3]} frame={frame} fps={fps} lead={lead} />
+      <PaymentPhoneScene scene={timeline[4]} frame={frame} fps={fps} lead={lead} currentTime={currentTime} stepBoundaries={stepBoundaries} />
+      <PaymentSupportScene scene={timeline[5]} frame={frame} fps={fps} lead={lead} />
+    </AbsoluteFill>
+  );
+};
+
 // ─── Closing Scene ────────────────────────────────────────────────────────────
 
 const ClosingScene = ({scene, frame, fps, lead, accentColor, uiCopy}) => (
@@ -1621,6 +2391,209 @@ export const TemplateVideo = ({leadId}) => {
         })
       : 0.08;
 
+  if (lead.template_key === 'payment_guidance') {
+    const paymentCopy = getPaymentCopy(lead.language);
+    return (
+      <AbsoluteFill style={{backgroundColor: '#f8fafc', fontFamily: FONT_FAMILY, overflow: 'hidden'}}>
+        {audioSrc ? <Audio src={audioSrc} /> : null} 
+        <PaymentGuidanceVideo lead={lead} frame={frame} fps={fps} durationInFrames={durationInFrames} />
+        <LogoOverlay logo={logoBranding} forceAll={true} />
+        {subtitleBranding.enabled ? (
+          <SubtitlePanel
+            subtitle={currentSubtitle}
+            subtitleProgress={subtitleProgress}
+            branding={subtitleBranding}
+            fallbackText={safeString(lead.cta_text, paymentCopy.fallbackSubtitle)}
+          />
+        ) : null}
+      </AbsoluteFill>
+    );
+  }
+
+  if (lead.template_key === 'overdue_template') {
+    const toFrames = (secs) => secs != null ? Math.round(secs * fps) : null;
+    const stepBoundaries = [
+      toFrames(findSubtitleStart(track.subtitles, 'ending with') || findSubtitleStart(track.subtitles, 'के अंत में') || findSubtitleStart(track.subtitles, 'card') || findSubtitleStart(track.subtitles, 'क्रेडिट') || 4.0),
+      toFrames(findSubtitleStart(track.subtitles, '90 days') || findSubtitleStart(track.subtitles, '90 दिनों') || 9.0),
+      toFrames(findSubtitleStart(track.subtitles, 'legal action') || findSubtitleStart(track.subtitles, 'consequences') || findSubtitleStart(track.subtitles, 'कानूनी') || findSubtitleStart(track.subtitles, 'परिणामों') || 14.0),
+      toFrames(findSubtitleStart(track.subtitles, 'repayment protects') || findSubtitleStart(track.subtitles, 'protects your') || findSubtitleStart(track.subtitles, 'समय पर') || 20.0),
+      toFrames(findSubtitleStart(track.subtitles, 'minimum amount') || findSubtitleStart(track.subtitles, 'outstanding balance') || findSubtitleStart(track.subtitles, 'न्यूनतम') || findSubtitleStart(track.subtitles, 'बकाया') || 25.0),
+      toFrames(findSubtitleStart(track.subtitles, 'Call us') || findSubtitleStart(track.subtitles, 'contact') || findSubtitleStart(track.subtitles, 'कॉल करें') || findSubtitleStart(track.subtitles, 'संपर्क') || 31.0),
+    ];
+
+    return (
+      <AbsoluteFill style={{backgroundColor: '#090d16', fontFamily: FONT_FAMILY, overflow: 'hidden'}}>
+        {audioSrc ? <Audio src={audioSrc} /> : null}
+        <OverdueTemplate
+          enableNarration={false}
+          customerName={lead.customer_name}
+          lan={lead.lan}
+          clientName={lead.client_name}
+          contactDetails={lead.contact_details}
+          payableAmount={lead.tos}
+          minimumAmountDue={lead.loan_amount}
+          stepBoundaries={stepBoundaries}
+        />
+        <LogoOverlay logo={logoBranding} forceAll={true} />
+        {subtitleBranding.enabled ? (
+          <SubtitlePanel
+            subtitle={currentSubtitle}
+            subtitleProgress={subtitleProgress}
+            branding={{...subtitleBranding, position: subtitleBranding.position === 'Bottom' ? 'OverdueBottom' : subtitleBranding.position}}
+            fallbackText={safeString(lead.cta_text, 'Thank you')}
+          />
+        ) : null}
+      </AbsoluteFill>
+    );
+  }
+
+  if (lead.template_key === 'payment_link_guidance') {
+    const paymentCopy = getPaymentCopy(lead.language);
+    // Aligning step boundaries with the Payment Link Guidance narration phrases
+    // findSubtitleEnd returns seconds → convert to frames
+    const toFrames = (secs) => secs != null ? Math.round(secs * fps) : null;
+    const stepBoundaries = [
+      toFrames(findSubtitleStart(track.subtitles, 'payment link') || 60),                                                  // Step 0 (Link Click) ends
+      toFrames(findSubtitleStart(track.subtitles, 'agreement number') || findSubtitleEnd(track.subtitles, 'payment link')), // Step 1 (Intro) ends
+      toFrames(findSubtitleStart(track.subtitles, 'captcha') || findSubtitleEnd(track.subtitles, 'agreement number')),      // Step 2 ends
+      toFrames(findSubtitleStart(track.subtitles, 'terms') || findSubtitleEnd(track.subtitles, 'captcha') || findSubtitleStart(track.subtitles, 'shartein')), // Step 3 ends
+      toFrames(findSubtitleStart(track.subtitles, 'payable amount') || findSubtitleEnd(track.subtitles, 'terms') || findSubtitleStart(track.subtitles, 'rashi')), // Step 4 ends
+      toFrames(findSubtitleStart(track.subtitles, 'proceed to pay') || findSubtitleEnd(track.subtitles, 'payable amount') || findSubtitleStart(track.subtitles, 'aage')), // Step 5 ends
+      toFrames(findSubtitleStart(track.subtitles, 'payment method') || findSubtitleStart(track.subtitles, 'bhugtan') || findSubtitleEnd(track.subtitles, 'proceed to pay')), // Step 6 ends
+      toFrames(findSubtitleStart(track.subtitles, 'contact') || findSubtitleStart(track.subtitles, 'support') || findSubtitleStart(track.subtitles, 'sampark') || findSubtitleEnd(track.subtitles, 'transaction')), // Step 7 ends
+    ];
+
+    return (
+      <AbsoluteFill style={{backgroundColor: '#f7fbff', fontFamily: FONT_FAMILY, overflow: 'hidden'}}>
+        {audioSrc ? <Audio src={audioSrc} /> : null}
+        <PaymentLinkGuidanceTemplate
+          enableNarration={false}
+          customerName={lead.customer_name}
+          lan={lead.lan}
+          clientName={lead.client_name}
+          contactDetails={lead.contact_details}
+          payableAmount={lead.tos}
+          stepBoundaries={stepBoundaries}
+        />
+        <LogoOverlay logo={logoBranding} forceAll={true} />
+        {subtitleBranding.enabled ? (
+          <SubtitlePanel
+            subtitle={currentSubtitle}
+            subtitleProgress={subtitleProgress}
+            branding={{...subtitleBranding, color: 'Black'}}
+            fallbackText={safeString(lead.cta_text, paymentCopy.fallbackSubtitle)}
+          />
+        ) : null}
+      </AbsoluteFill>
+    );
+  }
+
+  if (lead.template_key === 'tvs_credit_emi') {
+    const toFrames = (secs) => secs != null ? Math.round(secs * fps) : null;
+    const stepBoundaries = [
+      toFrames(findSubtitleStart(track.subtitles, 'WhatsApp') || findSubtitleStart(track.subtitles, 'व्हाट्सएप') || 4.0),
+      toFrames(findSubtitleStart(track.subtitles, 'SMS') || findSubtitleStart(track.subtitles, 'एसएमएस') || 8.0),
+      toFrames(findSubtitleStart(track.subtitles, 'PhonePe') || findSubtitleStart(track.subtitles, 'PhonePay') || 12.0),
+      toFrames(findSubtitleStart(track.subtitles, 'Repayment') || findSubtitleStart(track.subtitles, 'पुनर्भुगतान') || 16.0),
+      toFrames(findSubtitleStart(track.subtitles, 'UPI PIN') || findSubtitleStart(track.subtitles, 'UPI पिन') || 20.0),
+      toFrames(findSubtitleStart(track.subtitles, 'Collection Shop') || findSubtitleStart(track.subtitles, 'कलेक्शन शॉप') || 24.0),
+      toFrames(findSubtitleStart(track.subtitles, 'Contact') || findSubtitleStart(track.subtitles, 'संपर्क') || findSubtitleStart(track.subtitles, 'विकल्पों') || 28.0),
+    ];
+
+    return (
+      <AbsoluteFill style={{backgroundColor: '#ffffff', fontFamily: FONT_FAMILY, overflow: 'hidden'}}>
+        {audioSrc ? <Audio src={audioSrc} /> : null}
+        <TVSCreditEMITemplate
+          enableNarration={false}
+          customerName={lead.customer_name}
+          productType={lead.product_type}
+          clientName={lead.client_name}
+          tos={lead.tos}
+          lan={lead.lan}
+          contactDetails={lead.contact_details}
+          stepBoundaries={stepBoundaries}
+          emiImagePaths={lead.emi_image_paths || lead.emiImagePaths}
+          whatsappPaynow={lead.whatsappPaynow}
+          smsLink={lead.smsLink}
+          upiApps={lead.upiApps}
+          openappSearch={lead.openappSearch}
+          enterlan={lead.enterlan}
+          paymentSuccess={lead.paymentSuccess}
+          shopVisit={lead.shopVisit}
+        />
+        <LogoOverlay logo={logoBranding} forceAll={true} />
+        {subtitleBranding.enabled ? (
+          <SubtitlePanel
+            subtitle={currentSubtitle}
+            subtitleProgress={subtitleProgress}
+            branding={subtitleBranding}
+            fallbackText={safeString(lead.cta_text, 'Thank you')}
+          />
+        ) : null}
+      </AbsoluteFill>
+    );
+  }
+
+  if (lead.template_key === 'loan_offer_interactive') {
+    const toFrames = (secs) => secs != null ? Math.round(secs * fps) : null;
+    const introBoundary = toFrames(
+      findSubtitleStart(track.subtitles, 'now, choose') ||
+        findSubtitleStart(track.subtitles, 'choose your') ||
+        findSubtitleStart(track.subtitles, 'select your') ||
+        findSubtitleStart(track.subtitles, 'preferred') ||
+        findSubtitleStart(track.subtitles, 'अपनी पसंद की') ||
+        findSubtitleStart(track.subtitles, 'पसंद की') ||
+        findSubtitleStart(track.subtitles, 'अवधि') ||
+        10.8
+    );
+    const detectedSelectorBoundary = toFrames(
+      findSubtitleStart(track.subtitles, 'thank you') ||
+        findSubtitleStart(track.subtitles, 'your offer') ||
+        findSubtitleStart(track.subtitles, 'our team') ||
+        findSubtitleStart(track.subtitles, 'assist') ||
+        findSubtitleStart(track.subtitles, 'धन्यवाद') ||
+        findSubtitleStart(track.subtitles, 'हमारी टीम') ||
+        findSubtitleStart(track.subtitles, 'मदद') ||
+        findSubtitleStart(track.subtitles, 'सहायता') ||
+        findSubtitleStart(track.subtitles, 'कॉल करें') ||
+        findSubtitleStart(track.subtitles, 'संपर्क') ||
+        findSubtitleStart(track.subtitles, 'call us') ||
+        findSubtitleStart(track.subtitles, 'contact') ||
+        findSubtitleStart(track.subtitles, 'support') ||
+        22.0
+    );
+    const finalHoldFrames = Math.round(Math.min(6, Math.max(4, (durationInFrames / fps) * 0.18)) * fps);
+    const earliestSelectorBoundary = (introBoundary ?? 0) + Math.round(fps * 2);
+    const latestSelectorBoundary = Math.max(
+      earliestSelectorBoundary,
+      durationInFrames - finalHoldFrames
+    );
+    const stepBoundaries = [
+      introBoundary,
+      Math.min(
+        latestSelectorBoundary,
+        Math.max(detectedSelectorBoundary ?? 0, earliestSelectorBoundary)
+      ),
+    ];
+
+    return (
+      <AbsoluteFill style={{backgroundColor: lead.interactive_background_color || lead.interactiveBackgroundColor || '#ffffff', fontFamily: FONT_FAMILY, overflow: 'hidden'}}>
+        {audioSrc ? <Audio src={audioSrc} /> : null}
+        <LoanOfferInteractiveTemplate
+          customerName={lead.customer_name}
+          clientName={lead.client_name}
+          contactDetails={lead.contact_details}
+          loanOffer={lead.loan_offer}
+          stepBoundaries={stepBoundaries}
+          interactiveBackgroundColor={lead.interactive_background_color || lead.interactiveBackgroundColor}
+          interactiveCtaColor={lead.interactive_cta_color || lead.interactiveCtaColor}
+        />
+        <LogoOverlay logo={logoBranding} forceAll={true} />
+      </AbsoluteFill>
+    );
+  }
+
+
   return (
     <AbsoluteFill
       style={{
@@ -1718,14 +2691,25 @@ export const TemplateVideo = ({leadId}) => {
           accentColor={accentColor}
           uiCopy={uiCopy}
         />
-        <ActionScene
-          scene={timeline[4]}
-          frame={frame}
-          fps={fps}
-          lead={lead}
-          accentColor={accentColor}
-          uiCopy={uiCopy}
-        />
+        {lead.template_key === 'payment_guidance' ? (
+          <PaymentPhoneWalkthroughScene
+            scene={timeline[4]}
+            frame={frame}
+            fps={fps}
+            lead={lead}
+            accentColor={accentColor}
+            uiCopy={uiCopy}
+          />
+        ) : (
+          <ActionScene
+            scene={timeline[4]}
+            frame={frame}
+            fps={fps}
+            lead={lead}
+            accentColor={accentColor}
+            uiCopy={uiCopy}
+          />
+        )}
         <ClosingScene
           scene={timeline[5]}
           frame={frame}

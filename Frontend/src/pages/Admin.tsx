@@ -13,10 +13,11 @@ import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { buildApiUrl } from "@/lib/api";
 
 /* ─────────────── helpers ─────────────── */
 const authFetch = (url: string, token: string, opts?: RequestInit) =>
-  fetch(url, { ...opts, headers: { Authorization: `Bearer ${token}`, ...(opts?.headers ?? {}) } });
+  fetch(buildApiUrl(url), { ...opts, headers: { Authorization: `Bearer ${token}`, ...(opts?.headers ?? {}) } });
 
 const statusColor = (s: string) => {
   if (s === "completed") return "bg-emerald-50 text-emerald-700 border-emerald-200";
@@ -79,12 +80,12 @@ const UserRow = ({ u, token, onDeleteVideo }: { u: any; token: string; onDeleteV
 
   const videosQuery = useQuery({
     queryKey: ["admin-user-videos", u.id],
-    queryFn: () => authFetch(`/api/admin/users/${u.id}/videos`, token).then((r) => r.json()),
+    queryFn: () => authFetch(`/admin/users/${u.id}/videos`, token).then((r) => r.json()),
     enabled: open,
   });
 
   const disableMut = useMutation({
-    mutationFn: () => authFetch(`/api/admin/users/${u.id}/disable`, token, { method: "PATCH" }).then((r) => r.json()),
+    mutationFn: () => authFetch(`/admin/users/${u.id}/disable`, token, { method: "PATCH" }).then((r) => r.json()),
     onSuccess: (data) => toast.success(data.disabled ? "User disabled" : "User re-enabled"),
   });
 
@@ -197,30 +198,30 @@ const AdminDashboard = () => {
 
   const statsQuery = useQuery({
     queryKey: ["admin-stats"],
-    queryFn: () => authFetch("/api/admin/stats", token).then((r) => r.json()),
+    queryFn: () => authFetch("/admin/stats", token).then((r) => r.json()),
   });
 
   const campaignsQuery = useQuery({
     queryKey: ["admin-campaigns"],
-    queryFn: () => authFetch("/api/admin/campaign-analytics", token).then((r) => r.json()),
+    queryFn: () => authFetch("/admin/campaign-analytics", token).then((r) => r.json()),
     enabled: tab === "campaigns",
     refetchInterval: 5000,
   });
 
   const usersQuery = useQuery({
     queryKey: ["admin-users"],
-    queryFn: () => authFetch("/api/admin/users", token).then((r) => r.json()),
+    queryFn: () => authFetch("/admin/users", token).then((r) => r.json()),
     enabled: tab === "users",
   });
 
   const videosQuery = useQuery({
     queryKey: ["admin-all-videos", videoSearch, videoStatus],
-    queryFn: () => authFetch(`/api/admin/all-videos?search=${encodeURIComponent(videoSearch)}&status=${videoStatus}`, token).then((r) => r.json()),
+    queryFn: () => authFetch(`/admin/all-videos?search=${encodeURIComponent(videoSearch)}&status=${videoStatus}`, token).then((r) => r.json()),
     enabled: tab === "videos",
   });
 
   const deleteVideoMut = useMutation({
-    mutationFn: (id: string) => authFetch(`/api/admin/videos/${id}`, token, { method: "DELETE" }).then((r) => r.json()),
+    mutationFn: (id: string) => authFetch(`/admin/videos/${id}`, token, { method: "DELETE" }).then((r) => r.json()),
     onSuccess: () => {
       toast.success("Video deleted.");
       qc.invalidateQueries({ queryKey: ["admin-all-videos"] });
@@ -301,8 +302,8 @@ const AdminDashboard = () => {
             { label: "Completed", val: stats?.completed, color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-100" },
             { label: "Queued", val: stats?.queued, color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-100" },
             { label: "Failed", val: stats?.failed, color: "text-red-500", bg: "bg-red-50", border: "border-red-100" },
-            { label: "Remotion", val: stats?.remotion, color: "text-indigo-600", bg: "bg-indigo-50", border: "border-indigo-100" },
-            { label: "Direct", val: stats?.direct, color: "text-cyan-600", bg: "bg-cyan-50", border: "border-cyan-100" },
+            { label: "Custom Layouts", val: stats?.remotion, color: "text-indigo-600", bg: "bg-indigo-50", border: "border-indigo-100" },
+            { label: "AI Narrator", val: stats?.direct, color: "text-cyan-600", bg: "bg-cyan-50", border: "border-cyan-100" },
           ].map((s, i) => (
             <Card key={i} className={`${s.bg} border ${s.border} rounded-2xl overflow-hidden shadow-none`}>
               <CardContent className="p-4">
@@ -349,9 +350,9 @@ const AdminDashboard = () => {
               </CardHeader>
               <CardContent className="p-6 space-y-4">
                 {[
-                  { label: "Remotion Videos", val: stats?.remotion ?? 0, total: stats?.total_videos ?? 1, color: "bg-purple-500" },
-                  { label: "Direct (HeyGen)", val: stats?.direct ?? 0, total: stats?.total_videos ?? 1, color: "bg-indigo-400" },
-                  { label: "Template Based", val: stats?.template ?? 0, total: stats?.total_videos ?? 1, color: "bg-violet-400" },
+                  { label: "Custom Layout Videos", val: stats?.remotion ?? 0, total: stats?.total_videos ?? 1, color: "bg-purple-500" },
+                  { label: "Narrator Videos", val: stats?.direct ?? 0, total: stats?.total_videos ?? 1, color: "bg-indigo-400" },
+                  { label: "API Templates", val: stats?.template ?? 0, total: stats?.total_videos ?? 1, color: "bg-violet-400" },
                 ].map((b) => (
                   <div key={b.label}>
                     <div className="flex justify-between text-xs font-bold mb-1.5">

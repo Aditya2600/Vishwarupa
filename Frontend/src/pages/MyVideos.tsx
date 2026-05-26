@@ -29,7 +29,9 @@ interface VideoListItem {
   title: string;
   status: string;
   request_mode: string;
+  template_key?: string | null;
   video_url: string | null;
+  interactive_url?: string | null;
   thumbnail_url?: string | null;
   created_at: string;
   isLocalDraft?: boolean;
@@ -108,7 +110,12 @@ function buildLocalDraftItem(): VideoListItem | null {
       : draft.generationStatus === "failed"
       ? "failed"
       : "draft";
-  const flowLabel = draft.videoType === "remotion" ? "Text video" : "Avatar video";
+  const flowLabel =
+    draft.videoType === "remotion"
+      ? "Text video"
+      : draft.videoType === "hybrid_remotion_avatar_pip"
+        ? "VisionDesk"
+        : "Avatar video";
 
   return {
     _id: draft.generatedVideo?._id ?? draft.generatedVideo?.video_id ?? `local-draft-${draft.videoType}`,
@@ -116,6 +123,7 @@ function buildLocalDraftItem(): VideoListItem | null {
     status,
     request_mode: `${draft.videoType} (local draft)`,
     video_url: localVideoUrl,
+    interactive_url: draft.generatedVideo?.interactive_url ?? null,
     created_at: new Date().toISOString(),
     isLocalDraft: true,
   };
@@ -187,8 +195,10 @@ export default function MyVideos() {
     queryKey: ["my-videos"],
     queryFn: fetchMyVideos,
     refetchInterval: false,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 
   useEffect(() => {
@@ -227,10 +237,12 @@ export default function MyVideos() {
   };
 
   const handleShare = async (video: VideoListItem) => {
-    if (!video.video_url) {
+    const shareTarget = video.interactive_url || video.video_url;
+    if (!shareTarget) {
       toast.error("This video does not have a link yet.");
       return;
     }
+    const absoluteShareUrl = new URL(shareTarget, window.location.origin).toString();
 
     try {
       if (navigator.share) {
@@ -238,12 +250,12 @@ export default function MyVideos() {
         // the domain (HeyGen) to display as the primary subtitle in the OS UI.
         await navigator.share({
           title: video.title || "Shared video",
-          text: `Here is the video: ${video.video_url}`,
+          text: `Here is the video: ${absoluteShareUrl}`,
         });
         return;
       }
 
-      await navigator.clipboard.writeText(video.video_url);
+      await navigator.clipboard.writeText(absoluteShareUrl);
       toast.success("Video link copied.");
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
@@ -286,6 +298,9 @@ export default function MyVideos() {
 
   const openCreate = (mode: "avatar" | "remotion") => {
     navigate(`/create?mode=${mode}&fresh=1`);
+  };
+  const openPdfSummarizer = () => {
+    navigate("/pdf-summarizer");
   };
 
   const handleSoftDeleteDraft = () => {
@@ -375,7 +390,7 @@ export default function MyVideos() {
               </div>
             </div>
             <div className="space-y-3 lg:w-[28rem]">
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-3">
                 <button
                   type="button"
                   onClick={() => openCreate("avatar")}
@@ -391,6 +406,14 @@ export default function MyVideos() {
                 >
                   <p className="text-sm font-semibold text-foreground">Text to Video</p>
                   <p className="mt-1 text-xs text-muted-foreground">Turn your text into engaging videos in seconds.</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={openPdfSummarizer}
+                  className="rounded-2xl border border-border bg-card p-4 text-left transition-all hover:border-primary/30 hover:bg-surface-hover"
+                >
+                  <p className="text-sm font-semibold text-foreground">PDF Summarizer</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Convert PDFs into concise multilingual voice summaries.</p>
                 </button>
               </div>
               {hasSoftDeletedDraft ? (
@@ -483,6 +506,14 @@ export default function MyVideos() {
                   className="border-border font-semibold"
                 >
                   Text to Video
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={openPdfSummarizer}
+                  className="border-border font-semibold"
+                >
+                  PDF Summarizer
                 </Button>
               </div>
             </section>
@@ -633,9 +664,9 @@ export default function MyVideos() {
                     </div>
 
                     {video.video_url && (
-                      <Button variant="link" className="p-0 h-auto text-primary text-xs" onClick={() => window.open(video.video_url, '_blank')}>
+                      <Button variant="link" className="p-0 h-auto text-primary text-xs" onClick={() => window.open(video.interactive_url || video.video_url || "", '_blank')}>
                         <ExternalLink className="mr-1 h-3 w-3" />
-                        Open Video
+                        {video.interactive_url ? "Open Interactive Link" : "Open Video"}
                       </Button>
                     )}
                   </div>

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="760" viewBox="0 0 720 760" fill="none">
+  
+<path d="M80 170 C80 105 130 60 198 60 H608 C663 60 705 105 705 160 V650 C705 706 660 748 604 748 H94 C42 748 0 706 0 654 V300 C0 225 54 170 80 170Z" fill="#C9EAD7"/>
+<g transform="translate(145 155)">
+  <circle cx="250" cy="112" r="72" fill="#F4B38B"/>
+  <path d="M176 108 C184 34 284 10 328 78 C304 58 255 72 222 58 C206 88 192 104 176 108Z" fill="#2B2F33"/>
+  <circle cx="225" cy="108" r="8" fill="#1D1D1D"/>
+  <circle cx="280" cy="108" r="8" fill="#1D1D1D"/>
+  <path d="M232 145 C250 162 279 162 296 145" stroke="#5F3A2E" stroke-width="7" stroke-linecap="round"/>
+  <path d="M168 220 C210 185 290 185 332 220 L392 585 H108 Z" fill="#F7FAFC"/>
+  <path d="M202 220 L253 586 L308 220" stroke="#B9102F" stroke-width="36" stroke-linecap="round"/>
+  <path d="M158 230 L95 590 H170 L200 230 Z" fill="#D9E7EF"/>
+  <path d="M338 230 L408 590 H332 L300 230 Z" fill="#D9E7EF"/>
+  <path d="M152 430 C98 428 58 456 40 510" stroke="#F4B38B" stroke-width="34" stroke-linecap="round"/>
+  <path d="M345 430 C420 415 468 440 492 500" stroke="#F4B38B" stroke-width="34" stroke-linecap="round"/>
+  <text x="250" y="682" text-anchor="middle" font-family="Arial" font-size="64" font-weight="900" fill="#0A9D58">LAST</text>
+  <text x="250" y="742" text-anchor="middle" font-family="Arial" font-size="64" font-weight="900" fill="#0A9D58">CHANCE</text>
+</g>
+
+</svg>

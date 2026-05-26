@@ -9,7 +9,16 @@ from app.database import users_collection
 from bson import ObjectId
 import os
 
-SECRET_KEY = os.getenv("SECRET_KEY", "default_secret_key")
+# Require SECRET_KEY to be set in environment - fail fast on startup if missing
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise ValueError(
+        "CRITICAL: SECRET_KEY environment variable is required for JWT signing. "
+        "Set a secure 32+ character value in your .env file or deployment environment."
+    )
+if len(SECRET_KEY) < 32:
+    raise ValueError("CRITICAL: SECRET_KEY must be at least 32 characters long for security.")
+
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
 

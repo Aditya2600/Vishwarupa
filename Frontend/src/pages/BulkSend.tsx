@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { HeaderBar } from "@/components/HeaderBar";
 import { useSearchParams } from "react-router-dom";
-import { fetchAvatars, fetchVoices, isVoiceCompatibleWithLanguage, compareVoicesForLanguage, type AvatarOption, type VoiceOption, fetchMyVideos, createCampaign, pushCampaignLeads, updateCampaignStatus, fetchVideo, generateDirectVideo, generateRemotionVideo } from "@/lib/api";
+import { buildApiUrl, fetchAvatars, fetchVoices, isVoiceCompatibleWithLanguage, compareVoicesForLanguage, type AvatarOption, type VoiceOption, fetchMyVideos, createCampaign, pushCampaignLeads, updateCampaignStatus, fetchVideo, generateDirectVideo, generateRemotionVideo } from "@/lib/api";
 import {
   Sparkles,
   MessageSquare,
@@ -41,7 +41,7 @@ import { cn } from "@/lib/utils";
 import { requestJson } from "@/lib/api";
 
 type Step = "config" | "assets" | "upload" | "mapping" | "preview" | "launch";
-const SAMPLE_BULK_CSV_URL = "/api/sample-csvs/bulk-campaign";
+const SAMPLE_BULK_CSV_URL = buildApiUrl("/sample-csvs/bulk-campaign");
 const CSV_PREVIEW_ROW_LIMIT = 8;
 const PRIORITY_PREVIEW_COLUMNS = [
   "name",
@@ -55,20 +55,9 @@ const PRIORITY_PREVIEW_COLUMNS = [
 
 const DEFAULT_CAMPAIGN_STRATEGIES = [
   {
-    id: "cpstest",
-    name: "Infobip CPSTest",
-    desc: "Official WhatsApp template for debt recovery.",
-    color: "indigo",
-    whatsapp: "This is regarding loan due. Kindly follow the video for more information.",
-    scriptPersonalized:
-      "Hello {{customer_name}}. This is regarding your outstanding loan due with CredResolve. Kindly follow the information in this video for more details and repayment options.",
-    scriptUniversal:
-      "This is regarding your outstanding loan due. Kindly follow the information in this video for more details and repayment options.",
-  },
-  {
-    id: "test3",
-    templateId: "34899727692974205",
-    name: "test3",
+    id: "wsp_test2",
+    templateId: "1438951627977491",
+    name: "wsp_test2",
     desc: "Account Status Update Strategy",
     color: "emerald",
     whatsapp:
@@ -81,8 +70,7 @@ const DEFAULT_CAMPAIGN_STRATEGIES = [
 ] as const;
 
 const TEMPLATE_DISPLAY_NAME_BY_ID: Record<string, string> = {
-  cpstest: "Loan Recall Strategy",
-  test3: "Account Status Update",
+  wsp_test2: "Account Status Update",
 };
 
 function normalizeCsvKey(value: string): string {
@@ -243,6 +231,10 @@ function buildLeadVariables(row: Record<string, unknown>, videoUrl?: string | nu
   return variables;
 }
 
+function getShareableVideoUrl(video: any): string | null {
+  return video?.interactive_url ?? video?.video_url ?? null;
+}
+
 function extractCampaignCode(data: unknown): string {
   if (typeof data === "string") {
     return data.trim();
@@ -287,13 +279,13 @@ export default function BulkSend() {
 
   const [selectedLanguage, setSelectedLanguage] = useState<string>("en-US");
   const [whatsappTemplate, setWhatsappTemplate] = useState<string>(
-    "This is regarding loan due. Kindly follow the video for more information."
+    "Hello,\n\nAn update regarding your account has been shared by CredResolve.\nKindly watch the video and take the necessary action.\n\nThank you."
   );
   const [videoScript, setVideoScript] = useState<string>(
-    "Hello {{customer_name}}. This is regarding your outstanding loan due with CredResolve. Kindly follow the information in this video for more details and repayment options."
+    "Hello {{customer_name}}. An update regarding your account has been shared by CredResolve. Kindly watch the information in this video and take the necessary action. Thank you."
   );
   const [mapping, setMapping] = useState<Record<string, string>>({});
-  const [selectedMsgTemplate, setSelectedMsgTemplate] = useState<string>("cpstest");
+  const [selectedMsgTemplate, setSelectedMsgTemplate] = useState<string>("wsp_test2");
   const [playingVoiceId, setPlayingVoiceId] = useState("");
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -309,6 +301,7 @@ export default function BulkSend() {
       return myVideos?.find(v => (v._id || v.video_id) === videoIdFromUrl);
     }
   });
+  const referenceShareUrl = getShareableVideoUrl(referenceVideoQuery.data);
 
 
   useEffect(() => {
@@ -356,7 +349,7 @@ export default function BulkSend() {
   const whatsappTemplatesQuery = useQuery({
     queryKey: ["whatsapp-templates"],
     queryFn: async () => {
-      const res = await fetch("/api/meta/whatsapp-templates", {
+      const res = await fetch(buildApiUrl("/meta/whatsapp-templates"), {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
       });
       if (!res.ok) {
@@ -448,7 +441,7 @@ export default function BulkSend() {
     let successCount = 0;
     let failCount = 0;
     const shouldUseCampaignSend = mode === "universal" || isFromVideo;
-    const referenceVideoUrl = referenceVideoQuery.data?.video_url ?? null;
+    const referenceVideoUrl = getShareableVideoUrl(referenceVideoQuery.data);
 
     const promise = (async () => {
       if (shouldUseCampaignSend) {
@@ -463,7 +456,7 @@ export default function BulkSend() {
           description: `Bulk send campaign for ${TEMPLATE_DISPLAY_NAME_BY_ID[selectedMsgTemplate] || strategy?.name || selectedMsgTemplate} in ${selectedLanguage}.`,
           startDate: new Date(now + 60_000).toISOString(),
           endDate: new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          templateId: strategy?.id || selectedMsgTemplate || "cpstest",
+          templateId: strategy?.id || selectedMsgTemplate || "wsp_test2",
           communicationType: "WHATSAPP",
           campaignType: "WHATSAPP",
         };
@@ -617,7 +610,7 @@ export default function BulkSend() {
     try {
       let audioSrc = "";
       if (voice.previewUrl) {
-        audioSrc = `/api/proxy-audio?url=${encodeURIComponent(voice.previewUrl)}`;
+        audioSrc = buildApiUrl(`/proxy-audio?url=${encodeURIComponent(voice.previewUrl)}`);
       } else {
         const form = new FormData();
         form.set("language", selectedLanguage);
@@ -628,7 +621,7 @@ export default function BulkSend() {
         );
         form.set("voice_id", voice.id);
 
-        const res = await fetch("/api/preview/voice", {
+        const res = await fetch(buildApiUrl("/preview/voice"), {
           method: "POST",
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
           body: form,
@@ -1371,14 +1364,14 @@ export default function BulkSend() {
                       csvHeaders,
                       mapping,
                       mode,
-                      referenceVideoQuery.data?.video_url,
+                      referenceShareUrl,
                     );
                     const previewLinkLabel = getVideoLinkPreviewLabel(
                       row,
                       csvHeaders,
                       mapping,
                       mode,
-                      referenceVideoQuery.data?.video_url,
+                      referenceShareUrl,
                     );
 
                     return (
@@ -1429,7 +1422,7 @@ export default function BulkSend() {
             <div className="space-y-1">
               <p className="text-sm font-bold text-foreground">Video link guidance</p>
               <p className="text-sm leading-6 text-muted-foreground">
-                {shouldUseCampaignSend && referenceVideoQuery.data?.video_url
+                {shouldUseCampaignSend && referenceShareUrl
                   ? "All recipients will receive the same video link."
                   : shouldUseCampaignSend
                     ? "A shared preview link is shown here. The same video link will be used for every recipient."

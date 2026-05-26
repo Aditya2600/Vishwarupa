@@ -15,6 +15,10 @@ import Signup from "./pages/Signup.tsx";
 import BulkSend from "./pages/BulkSend.tsx";
 import Admin from "./pages/Admin.tsx";
 import AdminLogin from "./pages/AdminLogin.tsx";
+import PdfSummarizer from "./pages/PdfSummarizer.tsx";
+import PublicPDF from "./pages/PublicPDF.tsx";
+import InteractiveLoanOffer from "./pages/InteractiveLoanOffer.tsx";
+import InteractiveLoanReminder from "./pages/InteractiveLoanReminder.tsx";
 
 // Must live inside <AuthProvider> so useAuth() works
 const AdminProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -38,7 +42,11 @@ const AppRoutes = () => (
     <Route path="/templates" element={<ProtectedRoute><TemplateLibrary /></ProtectedRoute>} />
     <Route path="/create" element={<ProtectedRoute><Index /></ProtectedRoute>} />
     <Route path="/bulk" element={<ProtectedRoute><BulkSend /></ProtectedRoute>} />
+    <Route path="/pdf-summarizer" element={<ProtectedRoute><PdfSummarizer /></ProtectedRoute>} />
     <Route path="/admin" element={<AdminProtectedRoute><Admin /></AdminProtectedRoute>} />
+    <Route path="/s/:id" element={<PublicPDF />} />
+    <Route path="/loan-offer/:id" element={<InteractiveLoanOffer />} />
+    <Route path="/loan-reminder/:id" element={<InteractiveLoanReminder />} />
 
     <Route path="*" element={<NotFound />} />
   </Routes>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="120" viewBox="0 0 420 120" fill="none">
+  
+<rect width="420" height="120" fill="none"/>
+<text x="20" y="76" font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="800" fill="#063F5F" letter-spacing="-1">BRAND</text>
+<text x="178" y="76" font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="800" fill="#0A9D58" letter-spacing="-1">CREDIT</text>
+<path d="M352 23 L405 23 L405 78 C386 60 369 47 352 39 Z" fill="#0A9D58"/>
+<path d="M352 23 L405 23 L389 42 Z" fill="#2AC06C"/>
+
+</svg>

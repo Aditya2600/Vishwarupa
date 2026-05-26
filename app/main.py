@@ -2,6 +2,9 @@ import asyncio
 import sys
 import hashlib
 import json
+import re
+import shutil
+from uuid import uuid4
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
@@ -9,9 +12,11 @@ from typing import Any, Literal, Optional
 from datetime import datetime
 import time
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from bson import ObjectId
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, Depends, Query, status
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, Depends, Query, status, Body
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -24,6 +29,8 @@ from app.models import (
     AvatarJobAck,
     AvatarJobStatusResponse,
     DirectVideoRequest,
+    HybridRemotionAvatarPipRequest,
+    HybridRemotionAvatarPipResponse,
     RemotionVideoRequest,
     StyledVideoResult,
     TemplateVideoRequest,
@@ -31,11 +38,18 @@ from app.models import (
     UserCreate,
     Token,
     UserInDB,
+    User,
     VideoRecord,
 )
 from app.services.heygen_client import HeyGenClient
 from app.services.media_styling_service import MediaStylingService, StyleRequest
 from app.services.remotion_service import RemotionService
+from app.services.hybrid_remotion_avatar_pip_service import (
+    HybridAvatarGenerationError,
+    HybridRenderError,
+    generate_raw_avatar_for_hybrid,
+    render_hybrid_avatar_pip_video,
+)
 from app.services.sqs_service import SQSService
 from app.services.video_service import VideoService
 from app.services.s3_service import S3Service
@@ -43,6 +57,10 @@ from app.database import users_collection, videos_collection, drafts_collection,
 from app.auth import get_password_hash, verify_password, create_access_token, get_current_user, get_current_admin
 from app.workers.avatar_job_worker import AvatarJobWorker
 from app.workers.remotion_job_worker import RemotionJobWorker
+from app.services.pdf_service import PDFService
+from app.services.summarization_service import SummarizationService
+from app.services.audio_service import audio_service
+from app.models import PDFRecord
 
 import logging
 
@@ -52,6 +70,13 @@ logger.setLevel(logging.INFO)
 formatter = logging.Formatter(
     "%(asctime)s | %(levelname)s | %(message)s"
 )
+
+IST = ZoneInfo("Asia/Kolkata")
+
+
+def now_ist() -> datetime:
+    return datetime.now(IST)
+
 SAMPLE_BULK_CSV_PATH = (
     Path(__file__).resolve().parent.parent
     / "Remotion"
@@ -64,6 +89,10 @@ app = FastAPI(title='Personalized Video Generator', version='1.0.0')
 settings.output_dir.mkdir(parents=True, exist_ok=True)
 (settings.output_dir / "text-videos").mkdir(parents=True, exist_ok=True)
 (settings.output_dir / "avatar-videos").mkdir(parents=True, exist_ok=True)
+HYBRID_PUBLIC_DIR = Path("/tmp/hybrid-public")
+HYBRID_PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
+PORTRAIT_REMOTION_TEMPLATE_KEYS = {"payment_link_guidance", "overdue_template", "loan_offer_interactive", "scene_loan_offer"}
+LOCAL_REMOTION_WORKER_TEMPLATE_KEYS = {"payment_link_guidance", "loan_offer_interactive", "loan_reminder", "scene_loan_offer", "tvs_credit_emi"}
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -114,16 +143,48 @@ async def startup_db_client():
 
 
 app.mount('/artifacts', StaticFiles(directory=settings.output_dir), name='artifacts')
+app.mount('/generated', StaticFiles(directory=HYBRID_PUBLIC_DIR), name='generated')
 service = VideoService()
 client = HeyGenClient()
 styling_service = MediaStylingService(client=client)
 remotion_service = RemotionService()
 s3_service = S3Service()
 sqs_service = SQSService()
+pdf_service = PDFService()
+summarization_service = SummarizationService()
 
 GENERIC_RUNTIME_ERROR = 'Something went wrong while processing your request. Please try again.'
 GENERIC_GENERATION_ERROR = "We couldn't generate the video right now. Please try again in a moment."
 GENERIC_GENERATION_TIMEOUT_ERROR = 'Video generation is taking longer than expected. Please try again shortly.'
+
+
+class LoanOfferInteractionEvent(BaseModel):
+    action: str
+    selected_loan_amount: str | None = None
+    selected_tenure: str | None = None
+    selected_emi: str | None = None
+
+
+def _frontend_public_url(path: str) -> str:
+    base_url = (settings.frontend_url or "").strip().rstrip("/")
+    normalized_path = path if path.startswith("/") else f"/{path}"
+    return f"{base_url}{normalized_path}" if base_url else normalized_path
+
+
+def _interactive_loan_offer_url(video_id: str) -> str:
+    return _frontend_public_url(f"/loan-offer/{video_id}")
+
+
+def _interactive_loan_reminder_url(video_id: str) -> str:
+    return _frontend_public_url(f"/loan-reminder/{video_id}")
+
+
+def _interactive_remotion_url(video_id: str, template_key: object) -> str | None:
+    if template_key == "loan_offer_interactive":
+        return _interactive_loan_offer_url(video_id)
+    if template_key == "loan_reminder":
+        return _interactive_loan_reminder_url(video_id)
+    return None
 
 
 @app.get("/sample-csvs/bulk-campaign")
@@ -175,17 +236,35 @@ def _to_mongo_safe(value: object) -> object:
 
 
 def _response_video_job_result(result: VideoJobResult) -> VideoJobResult:
-    presigned_video_url = s3_service.presign_video_url(result.video_url)
-    if presigned_video_url == result.video_url:
+    presigned_video_url = s3_service.presign_s3_url(result.video_url)
+    presigned_interactive_url = s3_service.presign_s3_url(result.interactive_url)
+    if presigned_video_url == result.video_url and presigned_interactive_url == result.interactive_url:
         return result
-    return result.model_copy(update={'video_url': presigned_video_url})
+    return result.model_copy(update={
+        'video_url': presigned_video_url,
+        'interactive_url': presigned_interactive_url,
+    })
 
 
 def _response_styled_video_result(result: StyledVideoResult) -> StyledVideoResult:
-    presigned_video_url = s3_service.presign_video_url(result.final_video_url)
+    presigned_video_url = s3_service.presign_s3_url(result.final_video_url)
     if presigned_video_url == result.final_video_url:
         return result
     return result.model_copy(update={'final_video_url': presigned_video_url})
+
+
+def _collection_status_percent(value: str | None) -> int:
+    if value is None or not value.strip():
+        return 75
+
+    match = re.search(r'\d+(?:\.\d+)?', value)
+    if not match:
+        raise ValueError('collection_status must contain a number between 0 and 100')
+
+    parsed = round(float(match.group(0)))
+    if not 0 <= parsed <= 100:
+        raise ValueError('collection_status must be between 0 and 100')
+    return parsed
 
 
 async def _persist_video_job_result(current_user: str, result: VideoJobResult) -> None:
@@ -246,7 +325,7 @@ def _build_avatar_job_status_response(job: dict) -> AvatarJobStatusResponse:
     return AvatarJobStatusResponse(
         _id=video_id,
         status=status_value,
-        video_url=s3_service.presign_video_url(
+        video_url=s3_service.presign_s3_url(
             str(response_payload.get('video_url') or job.get('video_url'))
         ) if (response_payload.get('video_url') or job.get('video_url')) else None,
         thumbnail_url=str(response_payload.get('thumbnail_url')) if response_payload.get('thumbnail_url') else None,
@@ -353,19 +432,26 @@ def _serialize_my_video(video: dict[str, Any]) -> dict[str, Any]:
     if isinstance(raw_url, str) and "/artifacts/" in raw_url:
         video_url = "/api/artifacts/" + raw_url.split("/artifacts/", 1)[1]
     elif isinstance(raw_url, str):
-        video_url = s3_service.presign_video_url(raw_url)
+        video_url = s3_service.presign_s3_url(raw_url)
     else:
         video_url = None
 
     created_at = video.get("created_at")
     updated_at = video.get("updated_at")
+    job_data = video.get("job_data") if isinstance(video.get("job_data"), dict) else {}
+    request_payload = job_data.get("request_payload") if isinstance(job_data.get("request_payload"), dict) else {}
+    template_key = str(request_payload.get("template_key") or "")
+    stored_interactive_url = str(video.get("interactive_url")) if video.get("interactive_url") else None
+    interactive_url = s3_service.presign_s3_url(stored_interactive_url) or _interactive_remotion_url(video_id, template_key)
 
     return {
         "_id": video_id,
         "title": str(video.get("title") or ""),
         "status": str(video.get("status") or "queued"),
         "request_mode": str(video.get("request_mode") or ""),
+        "template_key": template_key or None,
         "video_url": video_url,
+        "interactive_url": interactive_url,
         "thumbnail_url": str(video.get("thumbnail_url")) if video.get("thumbnail_url") else None,
         "created_at": created_at.isoformat() if isinstance(created_at, datetime) else created_at,
         "updated_at": updated_at.isoformat() if isinstance(updated_at, datetime) else updated_at,
@@ -397,6 +483,34 @@ def _form_bool(value: object, default: bool = False) -> bool:
     return str(value).strip().lower() in {'1', 'true', 'yes', 'on'}
 
 
+LOAN_REMINDER_IMAGE_KEYS = {
+    'logo',
+    'npaWarning',
+    'creditImpact',
+    'lastChance',
+    'ctaScene',
+    'financialBurden',
+}
+
+SALES_TEMPLATE_IMAGE_KEYS = {
+    'scene1',
+    'scene2',
+    'scene3',
+    'scene4',
+    'scene5',
+}
+
+EMI_TEMPLATE_IMAGE_KEYS = {
+    'whatsappPaynow',
+    'smsLink',
+    'upiApps',
+    'openappSearch',
+    'enterlan',
+    'paymentSuccess',
+    'shopVisit',
+}
+
+
 async def _parse_remotion_payload(request: Request) -> RemotionVideoRequest:
     content_type = request.headers.get('content-type', '').lower()
 
@@ -413,6 +527,15 @@ async def _parse_remotion_payload(request: Request) -> RemotionVideoRequest:
     logo_file = form.get('logo_file')
     logo_bytes: bytes | None = None
     logo_filename: str | None = None
+    loan_reminder_image_paths: dict[str, str] = {}
+    loan_reminder_image_filenames: dict[str, str] = {}
+    loan_reminder_image_bytes: dict[str, bytes] = {}
+    sales_image_paths: dict[str, str] = {}
+    sales_image_filenames: dict[str, str] = {}
+    sales_image_bytes: dict[str, bytes] = {}
+    emi_image_paths: dict[str, str] = {}
+    emi_image_filenames: dict[str, str] = {}
+    emi_image_bytes: dict[str, bytes] = {}
 
     if isinstance(logo_file, UploadFile) or (
         logo_file is not None and hasattr(logo_file, 'read') and hasattr(logo_file, 'filename')
@@ -420,15 +543,84 @@ async def _parse_remotion_payload(request: Request) -> RemotionVideoRequest:
         logo_filename = logo_file.filename
         logo_bytes = await logo_file.read()
 
+    raw_image_paths = _form_text(form.get('loan_reminder_image_paths'))
+    if raw_image_paths:
+        try:
+            parsed_paths = json.loads(raw_image_paths)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=422, detail='Invalid loan_reminder_image_paths JSON.') from exc
+        if not isinstance(parsed_paths, dict):
+            raise HTTPException(status_code=422, detail='loan_reminder_image_paths must be an object.')
+        loan_reminder_image_paths = {
+            str(key): str(value).strip()
+            for key, value in parsed_paths.items()
+            if key in LOAN_REMINDER_IMAGE_KEYS and str(value).strip()
+        }
+
+    for key in LOAN_REMINDER_IMAGE_KEYS:
+        image_file = form.get(f'loan_reminder_image_{key}')
+        if isinstance(image_file, UploadFile) or (
+            image_file is not None and hasattr(image_file, 'read') and hasattr(image_file, 'filename')
+        ):
+            loan_reminder_image_filenames[key] = image_file.filename
+            loan_reminder_image_bytes[key] = await image_file.read()
+
+    raw_sales_paths = _form_text(form.get('sales_image_paths'))
+    if raw_sales_paths:
+        try:
+            parsed_sales_paths = json.loads(raw_sales_paths)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=422, detail='Invalid sales_image_paths JSON.') from exc
+        if not isinstance(parsed_sales_paths, dict):
+            raise HTTPException(status_code=422, detail='sales_image_paths must be an object.')
+        sales_image_paths = {
+            str(key): str(value).strip()
+            for key, value in parsed_sales_paths.items()
+            if key in SALES_TEMPLATE_IMAGE_KEYS and str(value).strip()
+        }
+
+    for key in SALES_TEMPLATE_IMAGE_KEYS:
+        image_file = form.get(f'sales_image_{key}')
+        if isinstance(image_file, UploadFile) or (
+            image_file is not None and hasattr(image_file, 'read') and hasattr(image_file, 'filename')
+        ):
+            sales_image_filenames[key] = image_file.filename
+            sales_image_bytes[key] = await image_file.read()
+
+    raw_emi_paths = _form_text(form.get('emi_image_paths'))
+    if raw_emi_paths:
+        try:
+            parsed_emi_paths = json.loads(raw_emi_paths)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=422, detail='Invalid emi_image_paths JSON.') from exc
+        if not isinstance(parsed_emi_paths, dict):
+            raise HTTPException(status_code=422, detail='emi_image_paths must be an object.')
+        emi_image_paths = {
+            str(key): str(value).strip()
+            for key, value in parsed_emi_paths.items()
+            if key in EMI_TEMPLATE_IMAGE_KEYS and str(value).strip()
+        }
+
+    for key in EMI_TEMPLATE_IMAGE_KEYS:
+        image_file = form.get(f'emi_image_{key}')
+        if isinstance(image_file, UploadFile) or (
+            image_file is not None and hasattr(image_file, 'read') and hasattr(image_file, 'filename')
+        ):
+            emi_image_filenames[key] = image_file.filename
+            emi_image_bytes[key] = await image_file.read()
+
     logo_opacity = _form_int(form.get('logo_opacity'))
 
     payload = {
         'video_variety': _form_text(form.get('video_variety')) or 'personalized',
+        'template_key': _form_text(form.get('template_key')) or 'account_notice',
         'customer_name': _form_text(form.get('customer_name')),
         'lan': _form_text(form.get('lan')),
         'client_name': _form_text(form.get('client_name')),
         'tos': _form_text(form.get('tos')),
         'loan_amount': _form_text(form.get('loan_amount')),
+        'payment_url': _form_text(form.get('payment_url')),
+        'days_overdue': _form_int(form.get('days_overdue')),
         'contact_details': _form_text(form.get('contact_details')),
         'product_type': _form_text(form.get('product_type')),
         'language': _form_text(form.get('language')),
@@ -444,7 +636,35 @@ async def _parse_remotion_payload(request: Request) -> RemotionVideoRequest:
         'logo_opacity': 80 if logo_opacity is None else logo_opacity,
         'logo_filename': logo_filename,
         'logo_bytes': logo_bytes,
+        'loan_reminder_image_paths': loan_reminder_image_paths or None,
+        'loan_reminder_image_filenames': loan_reminder_image_filenames or None,
+        'loan_reminder_image_bytes': loan_reminder_image_bytes or None,
+        'sales_image_paths': sales_image_paths or None,
+        'sales_image_filenames': sales_image_filenames or None,
+        'sales_image_bytes': sales_image_bytes or None,
+        'emi_image_paths': emi_image_paths or None,
+        'emi_image_filenames': emi_image_filenames or None,
+        'emi_image_bytes': emi_image_bytes or None,
         'voice_gender': _form_text(form.get('voice_gender')) or 'female',
+        'max_loan_amount': _form_text(form.get('max_loan_amount')),
+        'max_tenure': _form_text(form.get('max_tenure')),
+        'max_emi': _form_text(form.get('max_emi')),
+        'loan_id': _form_text(form.get('loan_id')),
+        'month_24_loan_amount': _form_text(form.get('month_24_loan_amount')),
+        'month_30_loan_amount': _form_text(form.get('month_30_loan_amount')),
+        'month_36_loan_amount': _form_text(form.get('month_36_loan_amount')),
+        'month_42_loan_amount': _form_text(form.get('month_42_loan_amount')),
+        'month_48_loan_amount': _form_text(form.get('month_48_loan_amount')),
+        'month_60_loan_amount': _form_text(form.get('month_60_loan_amount')),
+        'emi_calculation24': _form_text(form.get('emi_calculation24')),
+        'emi_calculation30': _form_text(form.get('emi_calculation30')),
+        'emi_calculation36': _form_text(form.get('emi_calculation36')),
+        'emi_calculation42': _form_text(form.get('emi_calculation42')),
+        'emi_calculation48': _form_text(form.get('emi_calculation48')),
+        'emi_calculation60': _form_text(form.get('emi_calculation60')),
+        'cta_phone_number': _form_text(form.get('cta_phone_number')),
+        'interactive_background_color': _form_text(form.get('interactive_background_color')),
+        'interactive_cta_color': _form_text(form.get('interactive_cta_color')),
     }
 
     try:
@@ -456,6 +676,8 @@ async def _parse_remotion_payload(request: Request) -> RemotionVideoRequest:
             if 'input' in err and isinstance(err['input'], bytes):
                 err['input'] = "<raw_bytes_hidden>"
             if 'logo_bytes' in str(err.get('loc', '')):
+                err['input'] = "<raw_bytes_hidden>"
+            if 'loan_reminder_image_bytes' in str(err.get('loc', '')):
                 err['input'] = "<raw_bytes_hidden>"
         raise HTTPException(status_code=422, detail=safe_errors) from exc
 
@@ -476,6 +698,22 @@ def handle_timeout_error(request: Request, exc: TimeoutError) -> JSONResponse:
     return JSONResponse(status_code=504, content={'detail': detail})
 
 
+@app.exception_handler(RequestValidationError)
+async def handle_request_validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+    raw_body = await request.body()
+    body_preview = raw_body.decode("utf-8", errors="replace")[:2000] if raw_body else "<empty>"
+    logger.error(
+        "Request validation failed | method=%s | path=%s | query=%s | content_type=%s | body=%s | errors=%s",
+        request.method,
+        request.url.path,
+        request.url.query,
+        request.headers.get("content-type"),
+        body_preview,
+        exc.errors(),
+    )
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+
+
 @app.get('/health')
 def health() -> dict:
     return {'status': 'ok', 'output_dir': str(settings.output_dir.resolve())}
@@ -494,10 +732,10 @@ async def list_avatars() -> dict:
     cached_data = await api_cache.get("avatars")
     if cached_data is not None:
         ms = (time.time() - start) * 1000
-        print(f"\n⚡ [AVATAR CACHE HIT] Served directly from Cache Class in {ms:.3f} ms")
+        print(f"\n[AVATAR CACHE HIT] Served directly from Cache Class in {ms:.3f} ms")
         return cached_data
 
-    print("\n⏳ [AVATAR CACHE EMPTY] Fetching data directly from HeyGen API...")
+    print("\n[AVATAR CACHE EMPTY] Fetching data directly from HeyGen API...")
 
     avatars_resp = client.list_avatars()
     try:
@@ -718,7 +956,7 @@ async def list_avatars() -> dict:
 
     await api_cache.set("avatars", result, ttl=7200)
     ms = (time.time() - start) * 1000
-    print(f"✅ [AVATAR CACHE SAVED] Fetched from HeyGen and wrote to aiocache in {ms:.3f} ms")
+    print(f"[AVATAR CACHE SAVED] Fetched from HeyGen and wrote to aiocache in {ms:.3f} ms")
 
     return result
 
@@ -731,10 +969,10 @@ async def list_voices() -> dict:
     cached_data = await api_cache.get("voices")
     if cached_data is not None:
         ms = (time.time() - start) * 1000
-        print(f"\n⚡ [VOICE CACHE HIT] Served directly from Cache Class in {ms:.3f} ms")
+        print(f"\n[VOICE CACHE HIT] Served directly from Cache Class in {ms:.3f} ms")
         return cached_data
 
-    print("\n⏳ [VOICE CACHE EMPTY] Fetching data directly from HeyGen API...")
+    print("\n[VOICE CACHE EMPTY] Fetching data directly from HeyGen API...")
 
     raw_result = client.list_voices()
     voices = raw_result.get("data", {}).get("voices", [])
@@ -792,10 +1030,281 @@ async def list_voices() -> dict:
 
     await api_cache.set("voices", raw_result, ttl=7200)
     ms = (time.time() - start) * 1000
-    print(f"✅ [VOICE CACHE SAVED] Fetched from HeyGen and wrote to aiocache in {ms:.3f} ms")
+    print(f"[VOICE CACHE SAVED] Fetched from HeyGen and wrote to aiocache in {ms:.3f} ms")
 
     return raw_result
 
+
+@app.post("/pdf/upload")
+async def upload_pdf(
+    file: UploadFile = File(...),
+    current_user: str = Depends(get_current_user)
+):
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+    try:
+        content = await file.read()
+        file_path = pdf_service.save_upload(content, file.filename)
+        extracted_text = pdf_service.extract_text(file_path)
+        
+        # Upload original PDF to S3 for sharing
+        s3_url = None
+        if settings.aws_access_key_id:
+            try:
+                # Generate a unique S3 key per upload to avoid cross-user filename collisions.
+                safe_filename = Path(file.filename).name
+                unique_token = f"{now_ist().strftime('%Y%m%d%H%M%S')}_{uuid4().hex[:8]}"
+                s3_key = f"notices/{unique_token}_{safe_filename}"
+                s3_url = s3_service.upload_file(file_path, s3_key, content_type="application/pdf")
+            except Exception as e:
+                logger.error(f"Failed to upload original PDF to S3: {e}")
+
+        pdf_record = PDFRecord(
+            user_id=current_user,
+            filename=file.filename,
+            pdf_url=s3_url,
+            original_text=extracted_text,
+            status="pending"
+        )
+        from app.database import pdf_collection
+        result = await pdf_collection.insert_one(pdf_record.model_dump())
+        return {"pdf_id": str(result.inserted_id), "status": "pending"}
+    except Exception as e:
+        logger.error(f"PDF Upload Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/pdf/{pdf_id}/summarize")
+async def summarize_pdf(
+    pdf_id: str,
+    language: str = "Hindi",
+    gender: str = Query("Female", description="Gender for voice: 'Male' or 'Female'"),
+    current_user: str = Depends(get_current_user)
+):
+    from app.database import pdf_collection
+    pdf = await pdf_collection.find_one({"_id": ObjectId(pdf_id), "user_id": current_user})
+    if not pdf:
+        raise HTTPException(status_code=404, detail="PDF not found")
+    if not pdf.get("original_text"):
+        raise HTTPException(status_code=400, detail="No text found in PDF to summarize")
+    await pdf_collection.update_one(
+        {"_id": ObjectId(pdf_id)},
+        {"$set": {"status": "summarizing", "updated_at": now_ist()}}
+    )
+    try:
+        summary = await summarization_service.summarize_text(pdf["original_text"], target_language=language, gender=gender)
+
+        update_doc = {
+            "summary_text": summary,
+            "next_actions_text": "",
+            "status": "completed",
+            "updated_at": now_ist(),
+        }
+
+        await pdf_collection.update_one(
+            {"_id": ObjectId(pdf_id)},
+            {"$set": update_doc}
+        )
+        return {"status": "completed", "summary": summary, "next_actions": ""}
+    except Exception as e:
+        await pdf_collection.update_one(
+            {"_id": ObjectId(pdf_id)},
+            {"$set": {"status": "failed", "updated_at": now_ist()}}
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/pdf/{pdf_id}/status")
+async def get_pdf_status(
+    pdf_id: str,
+    current_user: str = Depends(get_current_user)
+):
+    from app.database import pdf_collection
+    pdf = await pdf_collection.find_one({"_id": ObjectId(pdf_id), "user_id": current_user})
+    if not pdf:
+        raise HTTPException(status_code=404, detail="PDF not found")
+    return {
+        "status": pdf["status"],
+        "summary": pdf.get("summary_text"),
+        "next_actions": pdf.get("next_actions_text"),
+        "filename": pdf["filename"],
+        "audio_url": pdf.get("audio_url"),
+        "next_actions_audio_url": pdf.get("next_actions_audio_url")
+    }
+
+@app.post("/pdf/{pdf_id}/generate-audio")
+async def generate_pdf_audio(
+    pdf_id: str,
+    data: dict | None = Body(default=None),
+    language: str = "Hindi",
+    gender: str = "Female",
+    kind: str = Query("summary", description="Type of audio to generate: 'summary' or 'next_actions'"),
+    current_user: str = Depends(get_current_user)
+):
+    # Retrieve text from body (for live edits) or fallback to DB
+    edited_text = (data or {}).get("text")
+    logger.info(
+        "PDF audio request received | pdf_id=%s | kind=%s | language=%s | gender=%s | has_body=%s | has_edited_text=%s",
+        pdf_id,
+        kind,
+        language,
+        gender,
+        data is not None,
+        bool(edited_text),
+    )
+    from app.database import pdf_collection
+    pdf = await pdf_collection.find_one({"_id": ObjectId(pdf_id), "user_id": current_user})
+    if not pdf:
+        logger.warning("PDF audio request failed | pdf_id=%s | reason=pdf_not_found", pdf_id)
+        raise HTTPException(status_code=404, detail="PDF not found")
+    # Determine which text to convert to audio
+    kind = (kind or "summary").lower()
+    if kind == "summary":
+        text_key = "summary_text"
+        prefix = "summary"
+    elif kind in ("next_actions", "next-actions", "nextactions"):
+        text_key = "next_actions_text"
+        prefix = "next_actions"
+    else:
+        raise HTTPException(status_code=400, detail="Invalid kind parameter")
+
+    # Use live edited text if provided, otherwise fetch from DB
+    text_to_convert = edited_text
+    if not text_to_convert:
+        if not pdf.get(text_key):
+            logger.warning(
+                "PDF audio request failed | pdf_id=%s | kind=%s | reason=missing_text | text_key=%s",
+                pdf_id,
+                kind,
+                text_key,
+            )
+            if kind in ("next_actions", "next-actions", "nextactions"):
+                await pdf_collection.update_one(
+                    {"_id": ObjectId(pdf_id)},
+                    {"$set": {text_key: "", "next_actions_audio_url": None, "updated_at": now_ist()}}
+                )
+                return {"status": "skipped", "audio_url": None}
+            raise HTTPException(status_code=400, detail=f"{text_key} not available. Summarize the document first.")
+        text_to_convert = pdf[text_key]
+
+    if kind in ("next_actions", "next-actions", "nextactions") and not str(text_to_convert).strip():
+        await pdf_collection.update_one(
+            {"_id": ObjectId(pdf_id)},
+            {"$set": {text_key: "", "next_actions_audio_url": None, "updated_at": now_ist()}}
+        )
+        return {"status": "skipped", "audio_url": None}
+
+    try:
+        logger.info(
+            "PDF audio generation starting | pdf_id=%s | kind=%s | prefix=%s | text_length=%s",
+            pdf_id,
+            kind,
+            prefix,
+            len(text_to_convert),
+        )
+        audio_url = await audio_service.generate_audio(
+            pdf_id=pdf_id,
+            text=text_to_convert,
+            language=language,
+            gender=gender,
+            prefix=prefix
+        )
+        
+        # Sync the edited text back to the database so it's saved
+        if edited_text:
+            await pdf_collection.update_one(
+                {"_id": ObjectId(pdf_id)},
+                {"$set": {text_key: edited_text, "updated_at": now_ist()}}
+            )
+
+        logger.info(
+            "PDF audio generation completed | pdf_id=%s | kind=%s | audio_url=%s",
+            pdf_id,
+            kind,
+            audio_url,
+        )
+        return {"status": "completed", "audio_url": audio_url}
+    except Exception as e:
+        logger.exception("Audio Generation Error | pdf_id=%s | kind=%s", pdf_id, kind)
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Static serving for PDF audio fallback
+@app.get("/pdf/audio/{filename}")
+async def get_pdf_audio_file(filename: str):
+    file_path = Path(settings.default_output_dir) / "pdf_audio" / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Audio file not found")
+    from fastapi.responses import FileResponse
+    return FileResponse(file_path)
+
+@app.post("/pdf/{pdf_id}/whatsapp-log")
+async def log_pdf_whatsapp(
+    pdf_id: str,
+    current_user: str = Depends(get_current_user)
+):
+    from app.database import pdf_collection, whatsapp_logs_collection
+    pdf = await pdf_collection.find_one({"_id": ObjectId(pdf_id), "user_id": current_user})
+    
+    if not pdf:
+        raise HTTPException(status_code=404, detail="PDF not found")
+
+    log_entry = {
+        "pdf_id": pdf_id,
+        "user_id": current_user,
+        "filename": pdf["filename"],
+        "action": "whatsapp_summary_generated",
+        "timestamp": now_ist()
+    }
+    
+    await whatsapp_logs_collection.insert_one(log_entry)
+    return {"status": "logged"}
+
+@app.get("/pdf/share/{pdf_id}")
+async def share_pdf_summary(pdf_id: str):
+    from app.database import pdf_collection
+    if not ObjectId.is_valid(pdf_id):
+        raise HTTPException(status_code=400, detail="Invalid PDF ID")
+    
+    pdf = await pdf_collection.find_one({"_id": ObjectId(pdf_id)})
+    if not pdf:
+        raise HTTPException(status_code=404, detail="Summary not found")
+        
+    # Presign all relevant URLs
+    audio_url = pdf.get("audio_url")
+    if audio_url:
+        audio_url = s3_service.presign_s3_url(audio_url)
+        
+    next_actions_audio_url = pdf.get("next_actions_audio_url")
+    if next_actions_audio_url:
+        next_actions_audio_url = s3_service.presign_s3_url(next_actions_audio_url)
+
+    pdf_url = pdf.get("pdf_url")
+    if not pdf_url:
+        # Fallback: Try to upload local file to S3 if missing (for older records)
+        filename = pdf.get("filename")
+        if filename:
+            local_path = Path("input/pdf") / filename
+            if local_path.exists():
+                logger.info(f"Auto-uploading missing S3 PDF for share link: {filename}")
+                safe_filename = Path(filename).name
+                s3_key = f"notices/{pdf_id}_{safe_filename}"
+                pdf_url = s3_service.upload_file(local_path, s3_key, content_type="application/pdf")
+                if pdf_url:
+                    # Save it so we don't have to upload again next time
+                    await pdf_collection.update_one({"_id": ObjectId(pdf_id)}, {"$set": {"pdf_url": pdf_url}})
+    
+    if pdf_url:
+        pdf_url = s3_service.presign_s3_url(pdf_url)
+        
+    return {
+        "summary_text": pdf.get("summary_text"),
+        "next_actions_text": pdf.get("next_actions_text"),
+        "audio_url": audio_url,
+        "next_actions_audio_url": next_actions_audio_url,
+        "pdf_url": pdf_url,
+        "filename": pdf.get("filename"),
+        "language": pdf.get("language"),
+        "created_at": pdf.get("created_at")
+    }
 
 @app.get('/meta/config')
 def get_config() -> dict:
@@ -803,6 +1312,7 @@ def get_config() -> dict:
         "default_avatar_id": settings.heygen_avatar_id,
         "default_voice_id": settings.heygen_voice_id,
         "default_template_id": settings.heygen_template_id,
+        "frontend_url": settings.frontend_url,
         "default_language": "Hindi"
     }
 
@@ -842,7 +1352,7 @@ def get_template_details(template_id: str, version: str = 'v3', current_user: st
     return client.get_template_details(template_id, version=version)
 
 
-# ── WhatsApp Campaign Templates (DB-backed) ───────────────────────────────────
+# â”€â”€ WhatsApp Campaign Templates (DB-backed) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @app.get('/meta/whatsapp-templates')
 async def list_whatsapp_templates(current_user: str = Depends(get_current_user)):
@@ -899,7 +1409,7 @@ async def _proxy_cpaas_request(method: str, path: str, payload: Any | None = Non
             payload_summary["firstLead"] = leads[0] if leads else None
             payload_summary.pop("leads", None)
 
-    url = f"{settings.cpaas_api_base_url.rstrip('/')}/{path.lstrip('/')}"
+    url = f"{settings.cpaas_api_root_url.rstrip('/')}/{path.lstrip('/')}"
     headers = {
         "Accept": "application/json",
         "API-AUTH-TOKEN": settings.cpaas_api_auth_token,
@@ -909,8 +1419,9 @@ async def _proxy_cpaas_request(method: str, path: str, payload: Any | None = Non
         headers["Content-Type"] = "application/json"
 
     logger.info(
-        "CPAAS request | method=%s | path=%s | payload=%s",
+        "CPAAS request | method=%s | url=%s | path=%s | payload=%s",
         method,
+        url,
         path,
         json.dumps(payload_summary, default=str),
     )
@@ -919,7 +1430,7 @@ async def _proxy_cpaas_request(method: str, path: str, payload: Any | None = Non
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.request(method, url, headers=headers, json=payload)
     except httpx.HTTPError as exc:
-        logger.exception("CPAAS transport failure | method=%s | path=%s", method, path)
+        logger.exception("CPAAS transport failure | method=%s | url=%s | path=%s", method, url, path)
         raise HTTPException(status_code=502, detail=f"Failed to reach CPAAS service: {exc}") from exc
 
     content_type = response.headers.get("content-type", "")
@@ -941,8 +1452,9 @@ async def _proxy_cpaas_request(method: str, path: str, payload: Any | None = Non
         }
 
     logger.info(
-        "CPAAS response | method=%s | path=%s | status=%s | body=%s",
+        "CPAAS response | method=%s | url=%s | path=%s | status=%s | body=%s",
         method,
+        url,
         path,
         response.status_code,
         json.dumps(body, default=str)[:4000],
@@ -970,15 +1482,75 @@ async def _resolve_cpaas_template_key(template_id: Any) -> str | None:
     )
 
     if not template_doc:
+        logger.warning(
+            "CPAAS template resolution fell back to raw template id | requested=%s",
+            raw_template_id,
+        )
         return raw_template_id
 
     resolved_template_key = str(
         template_doc.get("id")
         or template_doc.get("name")
+        or template_doc.get("templateId")
+        or template_doc.get("template_id")
+        or template_doc.get("vendorTemplateId")
+        or template_doc.get("vendor_template_id")
         or raw_template_id
     ).strip()
 
+    logger.info(
+        "CPAAS template resolution | requested=%s | resolved=%s | doc_id=%s | doc_name=%s | vendor_template_id=%s",
+        raw_template_id,
+        resolved_template_key,
+        template_doc.get("id"),
+        template_doc.get("name"),
+        template_doc.get("templateId")
+        or template_doc.get("template_id")
+        or template_doc.get("vendorTemplateId")
+        or template_doc.get("vendor_template_id"),
+    )
+
     return resolved_template_key or raw_template_id
+
+
+def _normalize_cpaas_lead_variables(payload: dict[str, Any]) -> dict[str, Any]:
+    upstream_payload = dict(payload)
+    raw_leads = upstream_payload.get("leads")
+    if not isinstance(raw_leads, list):
+        return upstream_payload
+
+    normalized_leads: list[dict[str, Any]] = []
+    for lead in raw_leads:
+        if not isinstance(lead, dict):
+            normalized_leads.append(lead)
+            continue
+
+        normalized_lead = dict(lead)
+        raw_variables = normalized_lead.get("variables")
+        if isinstance(raw_variables, list):
+            variables_map: dict[str, str] = {}
+            for item in raw_variables:
+                if not isinstance(item, dict):
+                    continue
+                key = str(item.get("key") or item.get("name") or "").strip()
+                if not key:
+                    continue
+                value = item.get("val")
+                if value is None:
+                    value = item.get("value")
+                variables_map[key] = "" if value is None else str(value)
+
+            logger.info(
+                "Normalized CPaaS lead variables from array to object | uniqueId=%s | keys=%s",
+                normalized_lead.get("uniqueId"),
+                sorted(variables_map.keys()),
+            )
+            normalized_lead["variables"] = variables_map
+
+        normalized_leads.append(normalized_lead)
+
+    upstream_payload["leads"] = normalized_leads
+    return upstream_payload
 
 
 @app.post('/cpaas/campaigns')
@@ -994,7 +1566,8 @@ async def create_cpaas_campaign(payload: dict, current_user: str = Depends(get_c
 
 @app.post('/cpaas/campaigns/push-lead')
 async def push_cpaas_campaign_leads(payload: dict, current_user: str = Depends(get_current_user)):
-    return await _proxy_cpaas_request("POST", "/campaigns/push-lead", payload)
+    upstream_payload = _normalize_cpaas_lead_variables(payload)
+    return await _proxy_cpaas_request("POST", "/campaigns/push-lead", upstream_payload)
 
 
 @app.post('/cpaas/campaigns/{campaign_code}/status')
@@ -1073,7 +1646,7 @@ async def create_avatar_job(request: DirectVideoRequest, current_user: str = Dep
 
     video_id: str | None = None
     try:
-        now = datetime.utcnow()
+        now = now_ist()
         request_payload = _to_mongo_safe(request.model_dump(mode='python'))
         video_record = VideoRecord(
             user_id=current_user,
@@ -1110,7 +1683,7 @@ async def create_avatar_job(request: DirectVideoRequest, current_user: str = Dep
     except Exception as exc:
         if not video_id:
             raise HTTPException(status_code=502, detail=GENERIC_GENERATION_ERROR) from exc
-        failed_at = datetime.utcnow()
+        failed_at = now_ist()
         await videos_collection.update_one(
             {'_id': _mongo_id(video_id), 'user_id': current_user},
             {'$set': {
@@ -1157,6 +1730,96 @@ async def generate_direct(request: DirectVideoRequest, wait: bool = True, curren
     return _response_video_job_result(result)
 
 
+@app.post('/generate/hybrid-remotion-avatar-pip', response_model=HybridRemotionAvatarPipResponse)
+async def generate_hybrid_remotion_avatar_pip(
+    request: HybridRemotionAvatarPipRequest,
+    current_user: str = Depends(get_current_user),
+):
+    if not request.avatar_id.strip():
+        raise HTTPException(status_code=400, detail="avatar_id is required")
+    if not request.voice_id.strip():
+        raise HTTPException(status_code=400, detail="voice_id is required")
+
+    try:
+        collection_status = _collection_status_percent(request.collection_status)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    video_id = uuid4().hex
+
+    try:
+        raw_avatar = await asyncio.to_thread(
+            generate_raw_avatar_for_hybrid,
+            customer_name=request.customer_name,
+            account_number=request.account_number,
+            days_overdue=request.days_overdue,
+            amount_due=request.amount_due,
+            avatar_id=request.avatar_id,
+            voice_id=request.voice_id,
+            agent_name=request.agent_name,
+            language=request.language,
+        )
+
+        render_result = await asyncio.to_thread(
+            render_hybrid_avatar_pip_video,
+            video_id=video_id,
+            avatar_mp4_path=raw_avatar["avatar_local_path"],
+            customer_name=request.customer_name,
+            account_number=request.account_number,
+            days_overdue=request.days_overdue,
+            collection_status=collection_status,
+            amount_due=request.amount_due,
+            agent_name=request.agent_name,
+            agent_role=request.agent_role,
+            aspect_mode=request.aspect_mode,
+            viewport_width=request.viewport_width,
+            viewport_height=request.viewport_height,
+        )
+    except HybridAvatarGenerationError as exc:
+        raise HTTPException(status_code=502, detail=str(exc) or GENERIC_GENERATION_ERROR) from exc
+    except HybridRenderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc) or GENERIC_GENERATION_ERROR) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    final_source_path = Path(render_result["output_path"])
+    if not final_source_path.exists():
+        raise HTTPException(status_code=500, detail="Hybrid render completed without a final MP4.")
+
+    public_filename = f"{video_id}.mp4"
+    public_path = HYBRID_PUBLIC_DIR / public_filename
+    shutil.copyfile(final_source_path, public_path)
+    final_video_url = f"/generated/{public_filename}"
+
+    response = HybridRemotionAvatarPipResponse(
+        success=True,
+        raw_avatar_video_id=raw_avatar.get("heygen_video_id"),
+        raw_avatar_path=raw_avatar.get("avatar_local_path"),
+        final_video_path=str(public_path),
+        final_video_url=final_video_url,
+        width=int(render_result["width"]),
+        height=int(render_result["height"]),
+        duration_seconds=render_result.get("duration_seconds"),
+    )
+
+    video_record = VideoRecord(
+        user_id=current_user,
+        status="completed",
+        title=f"VisionDesk - {request.customer_name}",
+        video_url=final_video_url,
+        request_mode="hybrid_remotion_avatar_pip",
+        job_data={
+            "request_payload": _to_mongo_safe(request),
+            "raw_avatar": _to_mongo_safe(raw_avatar),
+            "render_result": _to_mongo_safe(render_result),
+            "response": _to_mongo_safe(response),
+        },
+    )
+    await videos_collection.insert_one(_to_mongo_safe(video_record))
+
+    return response
+
+
 @app.get('/videos/{video_id}/status')
 async def get_video_status(
     video_id: str,
@@ -1180,7 +1843,13 @@ async def get_video_status(
             "video_id": str(doc["_id"]),
             "_id": str(doc["_id"]),
             "status": doc.get("status", "pending"),
-            "video_url": s3_service.presign_video_url(doc.get("video_url"))
+            "video_url": s3_service.presign_s3_url(doc.get("video_url")),
+            "interactive_url": (
+                s3_service.presign_s3_url(str(doc.get("interactive_url"))) if doc.get("interactive_url") else None
+            ) or _interactive_remotion_url(
+                str(doc["_id"]),
+                doc.get("job_data", {}).get("request_payload", {}).get("template_key"),
+            ),
         }
 
     result = service.get_video_status_result(video_id, request_mode=request_mode)
@@ -1297,11 +1966,29 @@ async def generate_template(request: TemplateVideoRequest, wait: bool = True, cu
 async def generate_remotion(request: Request, current_user: str = Depends(get_current_user)):
 
     payload = await _parse_remotion_payload(request)
+    if payload.template_key in PORTRAIT_REMOTION_TEMPLATE_KEYS:
+        payload.video_width = 1080
+        payload.video_height = 1920
     logger.info(f"Remotion video payload ended:")
     # 1. Create a deterministic hash of the entire configuration payload
     payload_dict = payload.model_dump(exclude_none=True)
     if 'logo_bytes' in payload_dict and payload_dict['logo_bytes']:
         payload_dict['logo_bytes'] = str(len(payload_dict['logo_bytes']))
+    if 'loan_reminder_image_bytes' in payload_dict and payload_dict['loan_reminder_image_bytes']:
+        payload_dict['loan_reminder_image_bytes'] = {
+            key: len(value) if isinstance(value, (bytes, bytearray)) else str(value)
+            for key, value in payload_dict['loan_reminder_image_bytes'].items()
+        }
+    if 'sales_image_bytes' in payload_dict and payload_dict['sales_image_bytes']:
+        payload_dict['sales_image_bytes'] = {
+            key: len(value) if isinstance(value, (bytes, bytearray)) else str(value)
+            for key, value in payload_dict['sales_image_bytes'].items()
+        }
+    if 'emi_image_bytes' in payload_dict and payload_dict['emi_image_bytes']:
+        payload_dict['emi_image_bytes'] = {
+            key: len(value) if isinstance(value, (bytes, bytearray)) else str(value)
+            for key, value in payload_dict['emi_image_bytes'].items()
+        }
     
     payload_str = json.dumps(payload_dict, sort_keys=True, ensure_ascii=False)
     payload_hash = hashlib.sha256(payload_str.encode('utf-8')).hexdigest()
@@ -1317,6 +2004,15 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         # Reconstruct the VideoJobResult from the stored dataset directly
         job_data = cached_record['job_data'].copy()
         job_data.pop('payload_hash', None)
+        interactive_url = _interactive_remotion_url(
+            str(cached_record.get('_id') or job_data.get('video_id') or ''),
+            payload.template_key,
+        )
+        stored_interactive_url = cached_record.get('interactive_url')
+        if stored_interactive_url:
+            interactive_url = str(stored_interactive_url)
+        if interactive_url:
+            job_data['interactive_url'] = interactive_url
         return _response_video_job_result(VideoJobResult(**job_data))
 
     from bson import ObjectId
@@ -1333,6 +2029,7 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         title=f"{payload.title_prefix} - {payload.customer_name} - {payload.lan}",
         raw_response={},
         saved_to=None,
+        interactive_url=_interactive_remotion_url(video_id, payload.template_key),
     )
 
     embeddable_job_data = {
@@ -1365,36 +2062,47 @@ async def generate_remotion(request: Request, current_user: str = Depends(get_cu
         title=f"{payload.title_prefix} - {payload.customer_name} - {payload.lan}",
         raw_response={},
         saved_to=None,
+        interactive_url=_interactive_remotion_url(video_id, payload.template_key),
     )
     
-    # NOTE: Render and S3 Upload logic has been moved to the RemotionJobWorker 
-    # for asynchronous processing to prevent API timeouts.
-    logger.info(f"Job record {video_id} persisted to database. Handing off to SQS queue...")
-    
-    # 3. Submit to SQS
-    try:
-        from app.services.sqs_service import SQSService
-        from app.constants import SQS_QUEUE_URL
-        sqs_svc = SQSService()
-        sqs_svc.send_job(
-            payload={
-                '_id': video_id,
-                'request_mode': 'remotion'
-            },
-            queue_url=SQS_QUEUE_URL
+    if payload.template_key in LOCAL_REMOTION_WORKER_TEMPLATE_KEYS:
+        # This template depends on newly bundled local screenshot assets. Keep it
+        # on the current runtime so an older shared SQS worker cannot claim it and
+        # render the account-notice fallback.
+        logger.info(
+            "Interactive Remotion job %s will be rendered by the local Remotion worker.",
+            video_id,
         )
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        with open("sqs_fail.log", "a") as f:
-            f.write(f"SQS FAIL: {e}\n{traceback.format_exc()}\n")
-        await videos_collection.delete_one({'_id': _mongo_id(video_id)})
-        raise HTTPException(status_code=500, detail=f"Failed to enqueue remotion video generation: {e}")
+        asyncio.create_task(RemotionJobWorker()._process_job(video_id, None))
+    else:
+        # NOTE: Render and S3 Upload logic has been moved to the RemotionJobWorker
+        # for asynchronous processing to prevent API timeouts.
+        logger.info(f"Job record {video_id} persisted to database. Handing off to SQS queue...")
 
-    # Local development fallback: process the job in the current API process
-    # immediately as well. The worker claims only queued jobs, so this does not
-    # double-render when SQS polling is healthy.
-    asyncio.create_task(RemotionJobWorker()._process_job(video_id, None))
+        # 3. Submit to SQS
+        try:
+            from app.services.sqs_service import SQSService
+            from app.constants import SQS_QUEUE_URL
+            sqs_svc = SQSService()
+            sqs_svc.send_job(
+                payload={
+                    '_id': video_id,
+                    'request_mode': 'remotion'
+                },
+                queue_url=SQS_QUEUE_URL
+            )
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            with open("sqs_fail.log", "a") as f:
+                f.write(f"SQS FAIL: {e}\n{traceback.format_exc()}\n")
+            await videos_collection.delete_one({'_id': _mongo_id(video_id)})
+            raise HTTPException(status_code=500, detail=f"Failed to enqueue remotion video generation: {e}")
+
+        # Local development fallback: process the job in the current API process
+        # immediately as well. The worker claims only queued jobs, so this does not
+        # double-render when SQS polling is healthy.
+        asyncio.create_task(RemotionJobWorker()._process_job(video_id, None))
 
     # Return the 'queued' result instantly.
     # The background worker will handle the render and update the DB status.
@@ -1516,36 +2224,131 @@ async def get_video_details(video_id: str, current_user: str = Depends(get_curre
     if url and isinstance(url, str) and "/artifacts/" in url:
         video["video_url"] = "/api/artifacts/" + url.split("/artifacts/", 1)[1]
     elif isinstance(url, str):
-        video["video_url"] = s3_service.presign_video_url(url)
+        video["video_url"] = s3_service.presign_s3_url(url)
+
+    job_data = video.get("job_data") if isinstance(video.get("job_data"), dict) else {}
+    request_payload = job_data.get("request_payload") if isinstance(job_data.get("request_payload"), dict) else {}
+    stored_interactive_url = str(video.get("interactive_url")) if video.get("interactive_url") else None
+    interactive_url = s3_service.presign_s3_url(stored_interactive_url) or _interactive_remotion_url(str(video["_id"]), request_payload.get("template_key"))
+    if interactive_url:
+        video["interactive_url"] = interactive_url
     
     video.pop("job_data", None)
     return video
 
 
-@app.get('/meta/whatsapp-templates')
-async def get_whatsapp_templates():
-    """Returns dynamic WhatsApp templates for bulk campaigns."""
-    try:
-        cursor = whatsapp_templates_collection.find({})
-        templates = await cursor.to_list(length=50)
-        for t in templates:
-            t["_id"] = str(t["_id"])
-        
-        if not templates:
-            # Fallback to the official CPSTest if DB is empty
-            return [{
-                "id": "cpstest",
-                "name": "Infobip CPSTest",
-                "desc": "Official WhatsApp template for debt recovery.",
-                "color": "indigo",
-                "whatsapp": "This is regarding loan due. Kindly follow the video for more information.",
-                "scriptPersonalized": "Hello {{customer_name}}. This is regarding your outstanding loan due with CredResolve. Kindly follow the information in this video for more details and repayment options.",
-                "scriptUniversal": "This is regarding your outstanding loan due. Kindly follow the information in this video for more details and repayment options."
-            }]
-        return templates
-    except Exception as e:
-        logger.error(f"Failed to fetch whatsapp templates: {e}")
-        return []
+@app.get('/interactive/loan-offer/{video_id}')
+async def get_interactive_loan_offer(video_id: str):
+    video = await videos_collection.find_one({"_id": _mongo_id(video_id)})
+    if not video:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Interactive video not found")
+
+    job_data = video.get("job_data") if isinstance(video.get("job_data"), dict) else {}
+    request_payload = job_data.get("request_payload") if isinstance(job_data.get("request_payload"), dict) else {}
+    if request_payload.get("template_key") != "loan_offer_interactive":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Interactive loan offer not found")
+
+    raw_url = video.get("video_url")
+    if isinstance(raw_url, str) and "/artifacts/" in raw_url:
+        video_url = "/api/artifacts/" + raw_url.split("/artifacts/", 1)[1]
+    elif isinstance(raw_url, str):
+        video_url = s3_service.presign_s3_url(raw_url)
+    else:
+        video_url = None
+
+    if not video_url:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Interactive video is still processing")
+
+    def field(name: str, fallback: object = "") -> object:
+        value = request_payload.get(name)
+        return fallback if value is None or str(value).strip() == "" else value
+
+    return {
+        "id": str(video.get("_id") or video_id),
+        "title": str(video.get("title") or "Interactive Loan Offer"),
+        "video_url": video_url,
+        "customer_name": field("customer_name", "Customer"),
+        "client_name": field("client_name", "Finance Partner"),
+        "contact_details": field("contact_details", "1800-555-999"),
+        "primary_color": field("primary_color", "#053666"),
+        "secondary_color": field("secondary_color", "#0f7734"),
+        "interactive_background_color": field("interactive_background_color", "#f5f7fb"),
+        "interactive_cta_color": field("interactive_cta_color", "#702082"),
+        "loan_offer": {
+            "max_loan_amount": field("max_loan_amount", field("loan_amount", "105000")),
+            "max_tenure": field("max_tenure", "60"),
+            "max_emi": field("max_emi", field("tos", "3398")),
+            "loan_id": field("loan_id", field("lan", "")),
+            "cta_phone_number": field("cta_phone_number", field("contact_details", "1800-555-999")),
+            "month_24_loan_amount": field("month_24_loan_amount", "75000"),
+            "month_30_loan_amount": field("month_30_loan_amount", "90000"),
+            "month_36_loan_amount": field("month_36_loan_amount", "105000"),
+            "month_42_loan_amount": field("month_42_loan_amount", "NA"),
+            "month_48_loan_amount": field("month_48_loan_amount", "NA"),
+            "month_60_loan_amount": field("month_60_loan_amount", field("max_loan_amount", "105000")),
+            "emi_calculation24": field("emi_calculation24", ""),
+            "emi_calculation30": field("emi_calculation30", ""),
+            "emi_calculation36": field("emi_calculation36", ""),
+            "emi_calculation42": field("emi_calculation42", ""),
+            "emi_calculation48": field("emi_calculation48", ""),
+            "emi_calculation60": field("emi_calculation60", field("max_emi", "3398")),
+        },
+        "subtitles": video.get("subtitles") or [],
+    }
+
+
+@app.get('/interactive/loan-reminder/{video_id}')
+async def get_interactive_loan_reminder(video_id: str):
+    video = await videos_collection.find_one({"_id": _mongo_id(video_id)})
+    if not video:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Interactive video not found")
+
+    job_data = video.get("job_data") if isinstance(video.get("job_data"), dict) else {}
+    request_payload = job_data.get("request_payload") if isinstance(job_data.get("request_payload"), dict) else {}
+    if request_payload.get("template_key") not in {"loan_reminder", "collection_reminder"}:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Interactive loan reminder not found")
+
+    raw_url = video.get("video_url")
+    if isinstance(raw_url, str) and "/artifacts/" in raw_url:
+        video_url = "/api/artifacts/" + raw_url.split("/artifacts/", 1)[1]
+    elif isinstance(raw_url, str):
+        video_url = s3_service.presign_s3_url(raw_url)
+    else:
+        video_url = None
+
+    if not video_url:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Interactive video is still processing")
+
+    def field(name: str, fallback: object = "") -> object:
+        value = request_payload.get(name)
+        return fallback if value is None or str(value).strip() == "" else value
+
+    return {
+        "id": str(video.get("_id") or video_id),
+        "title": str(video.get("title") or "Loan Reminder"),
+        "video_url": video_url,
+        "payment_url": field("payment_url", ""),
+        "contact_details": field("contact_details", "1800-555-999"),
+    }
+
+
+@app.post('/interactive/loan-offer/{video_id}/events')
+async def record_interactive_loan_offer_event(video_id: str, event: LoanOfferInteractionEvent):
+    update = {
+        "action": event.action,
+        "selected_loan_amount": event.selected_loan_amount,
+        "selected_tenure": event.selected_tenure,
+        "selected_emi": event.selected_emi,
+        "created_at": now_ist().isoformat(),
+    }
+    result = await videos_collection.update_one(
+        {"_id": _mongo_id(video_id), "job_data.request_payload.template_key": "loan_offer_interactive"},
+        {"$push": {"interaction_events": update}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Interactive loan offer not found")
+    return {"status": "ok"}
+
 
 @app.get('/custom-avatars')
 async def get_custom_avatars():
@@ -1606,7 +2409,7 @@ async def preview_voice(
         dummy_lead = LeadRecord(
             customer_name="Ramesh Kumar",
             lan="LAN12345",
-            client_name="ABC Finance",
+            client_name="TVS Credit",
             tos="38450",
             loan_amount="120000",
             contact_details="1800-555-999",
@@ -1690,7 +2493,7 @@ async def delete_video(video_id: str, current_user: str = Depends(get_current_us
 @app.post('/drafts/save')
 async def save_draft(draft: dict, current_user: str = Depends(get_current_user)):
     print(f"DEBUG: Saving draft for {current_user}")
-    now = datetime.utcnow()
+    now = now_ist()
     result = await drafts_collection.update_one(
         {"user_id": current_user},
         {"$set": {
@@ -1786,7 +2589,7 @@ async def get_user_videos_admin(user_id: str, admin: dict = Depends(get_current_
         v['_id'] = str(v['_id'])
         url = v.get('video_url')
         if url and isinstance(url, str) and not "/artifacts/" in url:
-            v['video_url'] = s3_service.presign_video_url(url)
+            v['video_url'] = s3_service.presign_s3_url(url)
         v.pop('job_data', None)
     return videos
 
@@ -1806,7 +2609,7 @@ async def get_all_videos(search: str = "", status: str = "", admin: dict = Depen
         v['_id'] = str(v['_id'])
         url = v.get('video_url')
         if url and isinstance(url, str) and not "/artifacts/" in url:
-            v['video_url'] = s3_service.presign_video_url(url)
+            v['video_url'] = s3_service.presign_s3_url(url)
         v.pop('job_data', None)
     return videos
 
@@ -1836,7 +2639,7 @@ async def whatsapp_webhook(request: Request):
                     {"message_id": m_id},
                     {"$set": {
                         "status": status_group,
-                        "updated_at": datetime.utcnow()
+                        "updated_at": now_ist()
                     }}
                 )
         return {"status": "ok"}
@@ -1886,10 +2689,205 @@ async def log_whatsapp_attempt(data: dict, admin: dict = Depends(get_current_adm
             "customer_name": data.get("customer_name"),
             "template_id": data.get("template_id"),
             "status": "SENT",
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": now_ist(),
+            "updated_at": now_ist()
         }
         await whatsapp_logs_collection.insert_one(log_entry)
         return {"status": "logged"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+        await whatsapp_logs_collection.insert_one(log_entry)
+        return {"status": "logged"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post('/pdf/bulk-csv')
+@app.post('/api/pdf/bulk-csv')
+async def bulk_process_csv(
+    file: UploadFile = File(...),
+    current_user: str = Depends(get_current_user)
+):
+    """
+    Accepts a CSV mapping (phone_number, pdf_link, language) and kicks off background processing.
+    """
+    import csv
+    import io
+    from app.database import pdf_collection
+
+    try:
+        content = await file.read()
+        stream = io.StringIO(content.decode('utf-8'))
+        reader = csv.DictReader(stream)
+        
+        batch_ids = []
+        skipped_rows = 0
+
+        def _normalize_row(row: dict[str, Any]) -> dict[str, str]:
+            normalized: dict[str, str] = {}
+            for key, value in row.items():
+                cleaned_key = str(key or "").strip().lstrip("\ufeff").lower().replace(" ", "_")
+                cleaned_value = "" if value is None else str(value).strip()
+                normalized[cleaned_key] = cleaned_value
+            return normalized
+
+        def _first_present(row: dict[str, str], *keys: str) -> str:
+            for key in keys:
+                value = row.get(key, "").strip()
+                if value:
+                    return value
+            return ""
+
+        for row in reader:
+            normalized_row = _normalize_row(row)
+            phone = _first_present(
+                normalized_row,
+                "phone_number",
+                "phone",
+                "mobile",
+                "mobile_number",
+                "contact_number",
+                "whatsapp",
+                "whatsapp_number",
+            )
+            url = _first_present(
+                normalized_row,
+                "pdf_link",
+                "pdf_url",
+                "url",
+                "link",
+                "source",
+                "source_url",
+            )
+            lang = _first_present(normalized_row, "language", "lang", "language_name") or "Hindi"
+
+            if not phone or not url:
+                skipped_rows += 1
+                logger.warning(
+                    "Skipping bulk CSV row due to missing phone or url | phone=%s | url_present=%s | headers=%s",
+                    phone,
+                    bool(url),
+                    sorted(normalized_row.keys()),
+                )
+                continue
+
+            # Create entry in "pdf_summaries" collection
+            record = PDFRecord(
+                user_id=current_user,
+                phone_number=phone,
+                language=lang,
+                pdf_url=url,
+                filename=url.split('/')[-1] if '/' in url else "notice.pdf",
+                status='pending'
+            )
+            
+            res = await pdf_collection.insert_one(record.model_dump())
+            record_id = str(res.inserted_id)
+            batch_ids.append(record_id)
+
+            # Fire and forget background task
+            asyncio.create_task(process_single_bulk_item(record_id, lang))
+
+        return {
+            "status": "success",
+            "batch_size": len(batch_ids),
+            "skipped_rows": skipped_rows,
+            "ids": batch_ids,
+        }
+    except Exception as e:
+        logger.error(f"Bulk CSV error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def process_single_bulk_item(record_id: str, language: str):
+    """
+    Worker function to process one bulk PDF from a URL.
+    """
+    from app.database import pdf_collection
+
+    try:
+        # 1. Update status to downloading
+        await pdf_collection.update_one(
+            {"_id": ObjectId(record_id)},
+            {"$set": {"status": "downloading", "updated_at": now_ist()}}
+        )
+
+        # 2. Extract text from URL (Stream-to-Memory)
+        doc_record = await pdf_collection.find_one({"_id": ObjectId(record_id)})
+        doc_text = await pdf_service.extract_text_from_url(doc_record['pdf_url'])
+
+        # 3. Summarize (Summary via AI, next actions start blank for user input)
+        await pdf_collection.update_one(
+            {"_id": ObjectId(record_id)},
+            {"$set": {"status": "summarizing", "original_text": doc_text}}
+        )
+        
+        # Generate Summary
+        summary = await summarization_service.summarize_text(doc_text, target_language=language)
+        next_actions = ""
+
+        # 4. Generate Audio for both
+        audio_url = await audio_service.generate_audio(
+            pdf_id=record_id,
+            text=summary,
+            language=language,
+            gender="Female",
+            prefix="summary"
+        )
+        
+        next_actions_audio_url = None
+        if next_actions.strip():
+            try:
+                next_actions_audio_url = await audio_service.generate_audio(
+                    pdf_id=record_id,
+                    text=next_actions,
+                    language=language,
+                    gender="Female",
+                    prefix="next_actions"
+                )
+            except Exception as e:
+                logger.warning(f"Bulk Next-actions audio generation failed for {record_id}: {e}")
+
+        # 5. Finalize
+        update_fields = {
+            "status": "completed",
+            "summary_text": summary,
+            "audio_url": audio_url,
+            "next_actions_text": next_actions,
+            "updated_at": now_ist()
+        }
+        if next_actions_audio_url:
+            update_fields["next_actions_audio_url"] = next_actions_audio_url
+
+        await pdf_collection.update_one(
+            {"_id": ObjectId(record_id)},
+            {"$set": update_fields}
+        )
+        logger.info(f"Bulk item {record_id} completed successfully.")
+
+    except Exception as e:
+        logger.error(f"Failed processing bulk item {record_id}: {e}")
+        await pdf_collection.update_one(
+            {"_id": ObjectId(record_id)},
+            {"$set": {"status": "failed", "error": str(e), "updated_at": now_ist()}}
+        )
+
+@app.get('/api/pdf/{record_id}/status')
+async def get_pdf_status(record_id: str, current_user: str = Depends(get_current_user)):
+    """
+    Returns the processing status of a specific PDF item.
+    """
+    record = await pdf_collection.find_one({"_id": ObjectId(record_id), "user_id": current_user})
+    if not record:
+        raise HTTPException(status_code=404, detail="Bulk record not found")
+    
+    return {
+        "status": record.get("status"),
+        "phone_number": record.get("phone_number"),
+        "language": record.get("language"),
+        "summary": record.get("summary_text"),
+        "next_actions": record.get("next_actions_text"),
+        "audio_url": record.get("audio_url"),
+        "next_actions_audio_url": record.get("next_actions_audio_url"),
+        "pdf_url": record.get("pdf_url"),
+        "filename": record.get("filename"),
+        "error": record.get("error")
+    }

@@ -1,12 +1,17 @@
 import { useState, useCallback, useEffect } from "react";
-import type { VideoJobResult } from "@/lib/api";
+import type { HybridAspectMode, VideoJobResult } from "@/lib/api";
 import {
+  DEFAULT_LOAN_REMINDER_ASSET_PATHS,
   getDefaultAvatarScript,
   getDefaultRemotionTranscript,
+  type LoanReminderAssetKey,
+  type LoanReminderAssetPaths,
+  type RemotionTemplateKey,
   resolveNarratorGender,
 } from "@/lib/templates";
 
 export const WIZARD_STORAGE_KEY = "avatar-wizard-storage";
+export type VideoType = "avatar" | "remotion" | "hybrid_remotion_avatar_pip";
 
 export interface WizardState {
   currentStep: number;
@@ -34,19 +39,32 @@ export interface WizardState {
   logoOpacity: number;
   logoFileName: string;
   aspectRatio: string;
+  aspectMode: HybridAspectMode;
   exportFormat: string;
   customerName: string;
   lan: string;
+  daysOverdue: string;
+  collectionStatus: string;
   clientName: string;
   tos: string;
   loanAmount: string;
+  paymentUrl: string;
   contactDetails: string;
   templateName: string;
   backgroundColor: string;
   includeCaptions: boolean;
   titlePrefix: string;
   productType: string;
-  videoType: "avatar" | "remotion";
+  remotionTemplateKey: RemotionTemplateKey;
+  loanReminderImagePaths: LoanReminderAssetPaths;
+  loanReminderImageFileNames: Partial<Record<LoanReminderAssetKey, string>>;
+  salesImagePaths: Record<string, string>;
+  salesImageFileNames: Partial<Record<string, string>>;
+  emiImagePaths: Record<string, string>;
+  emiImageFileNames: Partial<Record<string, string>>;
+  interactiveBackgroundColor: string;
+  interactiveCtaColor: string;
+  videoType: VideoType;
   videoVariety: "personalized" | "universal";
   avatarJobId: string;
   generatedVideo: VideoJobResult | null;
@@ -83,18 +101,45 @@ const defaultState: WizardState = {
   logoOpacity: 80,
   logoFileName: "",
   aspectRatio: "16:9",
+  aspectMode: "portrait_9_16",
   exportFormat: "MP4",
   customerName: "",
   lan: "",
+  daysOverdue: "",
+  collectionStatus: "",
   clientName: "",
   tos: "",
   loanAmount: "",
+  paymentUrl: "",
   contactDetails: "1800-555-999",
   templateName: "universal_template.txt",
   backgroundColor: "#F4F4F4",
   includeCaptions: true,
   titlePrefix: "Legal Notice",
   productType: "loan",
+  remotionTemplateKey: "account_notice",
+  loanReminderImagePaths: DEFAULT_LOAN_REMINDER_ASSET_PATHS,
+  loanReminderImageFileNames: {},
+  salesImagePaths: {
+    scene1: "scene1.png",
+    scene2: "scene2.png",
+    scene3: "scene3.png",
+    scene4: "scene4.png",
+    scene5: "scene5.png",
+  },
+  salesImageFileNames: {},
+  emiImagePaths: {
+    whatsappPaynow: "paynow_whatsapp.png",
+    smsLink: "link_sms.png",
+    upiApps: "upi_app.png",
+    openappSearch: "open_app_search.png",
+    enterlan: "enter_lan.png",
+    paymentSuccess: "payment_success.png",
+    shopVisit: "shop_visit.png",
+  },
+  emiImageFileNames: {},
+  interactiveBackgroundColor: "#f5f7fb",
+  interactiveCtaColor: "#702082",
   videoType: "avatar",
   videoVariety: "universal",
   avatarJobId: "",
@@ -109,11 +154,16 @@ const defaultState: WizardState = {
 function restoreSavedState(savedState: Partial<WizardState>): WizardState {
   const rawStep = Number(savedState.currentStep ?? defaultState.currentStep);
   const safeStep = Number.isFinite(rawStep) ? Math.max(0, Math.min(Math.floor(rawStep), 5)) : 0;
-  const savedVideoType = savedState.videoType ?? defaultState.videoType;
+  const savedVideoType =
+    savedState.videoType === "avatar" ||
+    savedState.videoType === "remotion" ||
+    savedState.videoType === "hybrid_remotion_avatar_pip"
+      ? savedState.videoType
+      : defaultState.videoType;
   const normalizedStep =
     savedVideoType === "remotion" && safeStep === 1
       ? 2
-      : savedVideoType === "avatar" && safeStep === 3
+      : savedVideoType !== "remotion" && safeStep === 3
         ? 2
         : safeStep;
 
@@ -124,7 +174,13 @@ function restoreSavedState(savedState: Partial<WizardState>): WizardState {
     resolveNarratorGender(savedVoiceGender ?? savedAvatarGender),
   );
   const savedVariety = (savedState.videoVariety ?? defaultState.videoVariety) as "personalized" | "universal";
-  const defaultRemotionTranscript = getDefaultRemotionTranscript(savedState.language ?? defaultState.language, savedVariety);
+  const savedTemplateKey = savedState.remotionTemplateKey ?? defaultState.remotionTemplateKey;
+  const defaultRemotionTranscript = getDefaultRemotionTranscript(
+    savedState.language ?? defaultState.language,
+    savedVariety,
+    savedVoiceGender,
+    savedTemplateKey,
+  );
   const restored = {
     ...defaultState,
     ...savedState,
@@ -140,6 +196,32 @@ function restoreSavedState(savedState: Partial<WizardState>): WizardState {
         ? savedState.remotionTranscriptCustomized
         : Boolean(savedState.remotionTranscript && savedState.remotionTranscript !== defaultRemotionTranscript),
     logoFileName: "",
+    loanReminderImagePaths: {
+      ...DEFAULT_LOAN_REMINDER_ASSET_PATHS,
+      ...(savedState.loanReminderImagePaths ?? {}),
+    },
+    loanReminderImageFileNames: {},
+    salesImagePaths: {
+      scene1: "scene1.png",
+      scene2: "scene2.png",
+      scene3: "scene3.png",
+      scene4: "scene4.png",
+      scene5: "scene5.png",
+      ...(savedState.salesImagePaths ?? {}),
+    },
+    salesImageFileNames: {},
+    emiImagePaths: {
+      whatsappPaynow: "paynow_whatsapp.png",
+      smsLink: "link_sms.png",
+      upiApps: "upi_app.png",
+      openappSearch: "open_app_search.png",
+      enterlan: "enter_lan.png",
+      paymentSuccess: "payment_success.png",
+      shopVisit: "shop_visit.png",
+      ...(savedState.emiImagePaths ?? {}),
+    },
+    emiImageFileNames: {},
+    videoType: savedVideoType,
   };
 
   if (restored.generationStatus === "styling") {
@@ -214,7 +296,7 @@ export function useWizardStore() {
       if (next === 1 && prev.videoType === "remotion") {
         return { ...prev, currentStep: 2 };
       }
-      if (next === 3 && prev.videoType === "avatar") {
+      if (next === 3 && prev.videoType !== "remotion") {
         return { ...prev, currentStep: 4 };
       }
       return { ...prev, currentStep: Math.min(next, STEPS.length - 1) };
@@ -224,7 +306,7 @@ export function useWizardStore() {
   const prevStep = useCallback(() => {
     setState((prev) => {
       const previous = prev.currentStep - 1;
-      if (previous === 3 && prev.videoType === "avatar") {
+      if (previous === 3 && prev.videoType !== "remotion") {
         return { ...prev, currentStep: 2 };
       }
       if (previous === 1 && prev.videoType === "remotion") {
@@ -249,7 +331,7 @@ export function useWizardStore() {
         return s.videoType === "remotion" || !!s.avatarId;
       case 2:
       case 3:
-        const isUniversal = s.videoVariety === "universal";
+        const isUniversal = s.videoType === "remotion" && s.videoVariety === "universal";
         const hasTranscript = (s.videoType === "remotion" ? s.remotionTranscript : s.transcript).trim().length > 0;
         
         if (isUniversal) {
@@ -260,12 +342,22 @@ export function useWizardStore() {
           hasTranscript &&
           s.customerName.trim().length > 0 &&
           s.lan.trim().length > 0 &&
-          s.clientName.trim().length > 0 &&
-          (s.videoType === "avatar" ||
+          (s.videoType === "hybrid_remotion_avatar_pip" || s.clientName.trim().length > 0) &&
+          (s.videoType !== "hybrid_remotion_avatar_pip" || (
+            s.daysOverdue.trim().length > 0 &&
+            s.tos.trim().length > 0 &&
+            s.voiceId.trim().length > 0
+          )) &&
+          (s.videoType !== "remotion" ||
             (
               s.tos.trim().length > 0 &&
               s.loanAmount.trim().length > 0 &&
               s.contactDetails.trim().length > 0 &&
+              (
+                (s.remotionTemplateKey !== "loan_reminder" &&
+                  s.remotionTemplateKey !== "collection_reminder") ||
+                s.paymentUrl.trim().length > 0
+              ) &&
               s.productType.trim().length > 0
             ))
         );

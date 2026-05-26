@@ -6,8 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WizardState } from "@/store/wizardStore";
-import { VoiceOption } from "@/lib/api";
-import { UNIVERSAL_TEMPLATES, REMOTION_TEMPLATES, getDefaultRemotionTranscript, getDefaultAvatarScript } from "@/lib/templates";
+import { buildApiUrl, VoiceOption } from "@/lib/api";
+import {
+  DEFAULT_LOAN_REMINDER_ASSET_PATHS,
+  REMOTION_TEMPLATE_OPTIONS,
+  getDefaultRemotionTranscript,
+  getDefaultAvatarScript,
+  type RemotionTemplateKey,
+} from "@/lib/templates";
 
 const RESET_GENERATION_STATE = {
   generatedVideo: null,
@@ -21,9 +27,12 @@ const RESET_GENERATION_STATE = {
 type WizardFieldKey =
   | "customerName"
   | "lan"
+  | "daysOverdue"
+  | "collectionStatus"
   | "clientName"
   | "tos"
   | "loanAmount"
+  | "paymentUrl"
   | "contactDetails"
   | "productType";
 
@@ -54,7 +63,7 @@ const FIELD_DEFINITIONS: FieldDefinition[] = [
     key: "clientName",
     label: "Client Name",
     tags: ["client_name", "client"],
-    placeholder: "ABC Finance",
+    placeholder: "TVS Credit",
     required: true,
   },
   {
@@ -69,6 +78,12 @@ const FIELD_DEFINITIONS: FieldDefinition[] = [
     label: "Loan Amount",
     tags: ["loan_amount", "loan_amt", "amt"],
     placeholder: "1,20,000",
+  },
+  {
+    key: "paymentUrl",
+    label: "Payment URL",
+    tags: ["payment_url", "paymentUrl", "pay_url"],
+    placeholder: "https://payments.example.com/pay/12345",
   },
   {
     key: "contactDetails",
@@ -87,9 +102,12 @@ const FIELD_DEFINITIONS: FieldDefinition[] = [
 const DEMO_FIELD_VALUES: Record<WizardFieldKey, string> = {
   customerName: "Ramesh Kumar",
   lan: "LAN12345",
-  clientName: "ABC Finance",
+  daysOverdue: "35",
+  collectionStatus: "75",
+  clientName: "TVS Credit",
   tos: "38450",
   loanAmount: "120000",
+  paymentUrl: "https://payments.example.com/pay/12345",
   contactDetails: "1800-555-999",
   productType: "loan",
 };
@@ -100,11 +118,31 @@ interface StepTranscriptProps {
   voices?: VoiceOption[];
 }
 
-function isRequiredInCurrentMode(field: FieldDefinition, isRemotion: boolean): boolean {
-  // Make lead personalization mandatory only for Text to Video (Remotion)
-  // Optional for Avatar Video to allow generic generation
-  if (!isRemotion) return false;
-  return field.required ?? false;
+function isRequiredInCurrentMode(field: FieldDefinition, state: WizardState): boolean {
+  // Keep "required" indicators aligned with wizardStore.canProceed().
+  if (state.videoType === "remotion" && state.videoVariety === "universal") return false;
+
+  if (state.videoType === "avatar") {
+    return field.key === "customerName" || field.key === "lan" || field.key === "clientName";
+  }
+
+  if (state.videoType === "hybrid_remotion_avatar_pip") {
+    return field.key === "customerName" || field.key === "lan" || field.key === "daysOverdue" || field.key === "tos";
+  }
+
+  // Remotion (personalized)
+  return (
+    field.key === "customerName" ||
+    field.key === "lan" ||
+    field.key === "clientName" ||
+    field.key === "tos" ||
+    field.key === "loanAmount" ||
+    (field.key === "paymentUrl" &&
+      (state.remotionTemplateKey === "loan_reminder" ||
+        state.remotionTemplateKey === "collection_reminder")) ||
+    field.key === "contactDetails" ||
+    field.key === "productType"
+  );
 }
 
 function getFieldValue(state: WizardState, key: WizardFieldKey): string {
@@ -113,12 +151,18 @@ function getFieldValue(state: WizardState, key: WizardFieldKey): string {
       return state.customerName;
     case "lan":
       return state.lan;
+    case "daysOverdue":
+      return state.daysOverdue;
+    case "collectionStatus":
+      return state.collectionStatus;
     case "clientName":
       return state.clientName;
     case "tos":
       return state.tos;
     case "loanAmount":
       return state.loanAmount;
+    case "paymentUrl":
+      return state.paymentUrl;
     case "contactDetails":
       return state.contactDetails;
     case "productType":
@@ -138,6 +182,12 @@ function updateField(
     case "lan":
       update({ lan: value, ...RESET_GENERATION_STATE });
       return;
+    case "daysOverdue":
+      update({ daysOverdue: value, ...RESET_GENERATION_STATE });
+      return;
+    case "collectionStatus":
+      update({ collectionStatus: value, ...RESET_GENERATION_STATE });
+      return;
     case "clientName":
       update({ clientName: value, ...RESET_GENERATION_STATE });
       return;
@@ -146,6 +196,9 @@ function updateField(
       return;
     case "loanAmount":
       update({ loanAmount: value, ...RESET_GENERATION_STATE });
+      return;
+    case "paymentUrl":
+      update({ paymentUrl: value, ...RESET_GENERATION_STATE });
       return;
     case "contactDetails":
       update({ contactDetails: value, ...RESET_GENERATION_STATE });
@@ -164,6 +217,17 @@ export function StepTranscript({ state, update, voices = [] }: StepTranscriptPro
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const isRemotion = state.videoType === "remotion";
+  const isHybrid = state.videoType === "hybrid_remotion_avatar_pip";
+  const activeFieldDefinitions = FIELD_DEFINITIONS.filter((field) => {
+    if (field.key === "paymentUrl") {
+      return (
+        isRemotion &&
+        (state.remotionTemplateKey === "loan_reminder" ||
+          state.remotionTemplateKey === "collection_reminder")
+      );
+    }
+    return true;
+  });
 
   const handleVoicePreview = async (overrideText?: string) => {
     if (isPreviewing) return;
@@ -194,7 +258,7 @@ export function StepTranscript({ state, update, voices = [] }: StepTranscriptPro
         formData.set("voice_id", state.voiceId);
       }
 
-      const response = await fetch("/api/preview/voice", {
+      const response = await fetch(buildApiUrl("/preview/voice"), {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${localStorage.getItem("token")}`,
@@ -269,7 +333,7 @@ export function StepTranscript({ state, update, voices = [] }: StepTranscriptPro
       const gen = state.voiceGender || "female";
       if (state.videoVariety === "universal") {
         if (!state.remotionTranscriptCustomized || shouldForceReset) {
-          const langUniversal = getDefaultRemotionTranscript(state.language, "universal", gen);
+          const langUniversal = getDefaultRemotionTranscript(state.language, "universal", gen, state.remotionTemplateKey);
           if (state.remotionTranscript !== langUniversal) {
             updates.remotionTranscript = langUniversal;
             updates.remotionTranscriptCustomized = false; // reset flag if we forced it
@@ -279,7 +343,7 @@ export function StepTranscript({ state, update, voices = [] }: StepTranscriptPro
       } else {
         // Personalized mode
         if (!state.remotionTranscriptCustomized || shouldForceReset) {
-          const langDefault = getDefaultRemotionTranscript(state.language, "personalized", gen);
+          const langDefault = getDefaultRemotionTranscript(state.language, "personalized", gen, state.remotionTemplateKey);
           if (state.remotionTranscript !== langDefault) {
             updates.remotionTranscript = langDefault;
             updates.remotionTranscriptCustomized = false; // reset flag if we forced it
@@ -330,7 +394,7 @@ export function StepTranscript({ state, update, voices = [] }: StepTranscriptPro
 
   const handleResetToDefault = () => {
     if (isRemotion) {
-      const defaultValue = getDefaultRemotionTranscript(state.language, state.videoVariety);
+      const defaultValue = getDefaultRemotionTranscript(state.language, state.videoVariety, state.voiceGender, state.remotionTemplateKey);
       update({
         remotionTranscript: defaultValue,
         remotionTranscriptCustomized: false,
@@ -381,11 +445,66 @@ const handleDemoTab =
     updateField(update, fieldKey, DEMO_FIELD_VALUES[fieldKey]);
   };
 
+  const handleRemotionTemplateSelect = (templateKey: RemotionTemplateKey) => {
+    const isPersonalizedTemplate =
+      templateKey === "payment_guidance" ||
+      templateKey === "payment_link_guidance" ||
+      templateKey === "overdue_template" ||
+      templateKey === "loan_offer_interactive" ||
+      templateKey === "loan_reminder" ||
+      templateKey === "collection_reminder" ||
+      templateKey === "scene_loan_offer" ||
+      templateKey === "tvs_credit_emi";
+    const nextVariety = isPersonalizedTemplate ? "personalized" : state.videoVariety;
+    const nextTitlePrefix =
+      templateKey === "payment_guidance"
+        ? "Payment Guidance"
+      : templateKey === "payment_link_guidance"
+        ? "Payment Link Guidance"
+        : templateKey === "loan_reminder"
+          ? "Loan Reminder"
+          : templateKey === "collection_reminder"
+            ? "Collection Reminder"
+            : templateKey === "overdue_template"
+              ? "Credit Card Overdue Notice"
+              : templateKey === "loan_offer_interactive"
+                ? "Loan Offer"
+                : templateKey === "scene_loan_offer"
+                  ? "Sales Template"
+                  : state.titlePrefix;
+    update({
+      remotionTemplateKey: templateKey,
+      videoVariety: nextVariety,
+      remotionTranscript: getDefaultRemotionTranscript(
+      state.language,
+      nextVariety,
+      state.voiceGender,
+      templateKey,
+    ),
+    remotionTranscriptCustomized: false,
+      titlePrefix: nextTitlePrefix,
+      productType: "loan",
+      ...(templateKey === "loan_reminder" || templateKey === "collection_reminder" || templateKey === "scene_loan_offer"
+        ? {
+            aspectRatio: "9:16",
+          }
+        : {}),
+      ...(templateKey === "loan_reminder"
+        ? {
+            loanReminderImagePaths: DEFAULT_LOAN_REMINDER_ASSET_PATHS,
+            loanReminderImageFileNames: {},
+          }
+        : {}),
+      ...RESET_GENERATION_STATE,
+    });
+  toast.success(`${REMOTION_TEMPLATE_OPTIONS.find((option) => option.key === templateKey)?.name ?? "Template"} selected.`);
+};
+
 // Helper to get fallback values for Avatar mode if blank
 const getDisplayValue = (fieldKey: WizardFieldKey) => {
   const val = getFieldValue(state, fieldKey);
   // For Avatar mode (NOT remotion), show default if empty
-  if (!isRemotion && !val.trim()) {
+  if (state.videoType === "avatar" && !val.trim()) {
     return DEMO_FIELD_VALUES[fieldKey];
   }
   return val;
@@ -393,6 +512,70 @@ const getDisplayValue = (fieldKey: WizardFieldKey) => {
 
 return (
   <div className="max-w-5xl">
+    {isRemotion ? (
+      <div className="mb-6 grid gap-3 sm:grid-cols-2">
+        {REMOTION_TEMPLATE_OPTIONS.map((template) => {
+          const isSelected = state.remotionTemplateKey === template.key;
+          return (
+            <button
+              key={template.key}
+              type="button"
+              onClick={() => handleRemotionTemplateSelect(template.key)}
+              className={`rounded-xl border p-4 text-left transition-all ${
+                isSelected
+                  ? "border-primary bg-primary/5 shadow-sm"
+                  : "border-border bg-card hover:border-primary/30 hover:bg-surface-hover"
+              }`}
+            >
+              <p className="text-sm font-semibold text-foreground">{template.name}</p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{template.description}</p>
+            </button>
+          );
+        })}
+      </div>
+    ) : null}
+
+    {isHybrid ? (
+      <div className="mb-6">
+        <label className="text-sm font-medium text-muted-foreground mb-3 block">Hybrid Output Shape</label>
+        <div className="flex flex-wrap gap-2">
+          {[
+            { value: "portrait_9_16", label: "Portrait 9:16" },
+            { value: "landscape_16_9", label: "Landscape 16:9" },
+            { value: "auto", label: "Auto" },
+          ].map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() =>
+                update({
+                  aspectMode: option.value as WizardState["aspectMode"],
+                  aspectRatio:
+                    option.value === "landscape_16_9"
+                      ? "16:9"
+                      : option.value === "portrait_9_16"
+                        ? "9:16"
+                        : state.aspectRatio,
+                  ...RESET_GENERATION_STATE,
+                })
+              }
+              className={`rounded-lg border px-4 py-2 text-sm font-medium transition-all ${
+                state.aspectMode === option.value
+                  ? "border-primary bg-primary/10 text-foreground"
+                  : "border-border bg-secondary text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    ) : null}
+
+    {!isHybrid && 
+     state.remotionTemplateKey !== "loan_offer_interactive" && 
+     state.remotionTemplateKey !== "scene_loan_offer" &&
+     state.remotionTemplateKey !== "tvs_credit_emi" ? (
     <div className="mb-6 flex justify-center">
       <Tabs
         value={state.videoVariety}
@@ -405,8 +588,8 @@ return (
 
           // Auto-populate when switching tabs if content is default or empty
           const gen = state.voiceGender || "female";
-          const currentUniversal = getDefaultRemotionTranscript(state.language, "universal", gen);
-          const currentPersonalized = getDefaultRemotionTranscript(state.language, "personalized", gen);
+          const currentUniversal = getDefaultRemotionTranscript(state.language, "universal", gen, state.remotionTemplateKey);
+          const currentPersonalized = getDefaultRemotionTranscript(state.language, "personalized", gen, state.remotionTemplateKey);
 
           if (newVariety === "universal") {
             if (isRemotion) {
@@ -458,20 +641,21 @@ return (
         </TabsList>
       </Tabs>
     </div>
+    ) : null}
 
-    {state.videoVariety === "personalized" ? (
+    {isHybrid || state.videoVariety === "personalized" ? (
       <div className="mb-6">
         <div className="surface-card p-5 space-y-5">
           <p className="text-sm font-semibold text-foreground">Lead Personalization</p>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {FIELD_DEFINITIONS.map((field) => (
-              <Field key={field.key} label={field.label} required={isRemotion && field.required}>
+            {activeFieldDefinitions.map((field) => (
+              <Field key={field.key} label={field.label} required={isRequiredInCurrentMode(field, state)}>
                 <Input
                   value={getDisplayValue(field.key)}
                   onChange={(event) => updateField(update, field.key, event.target.value)}
                   onKeyDown={handleDemoTab(field.key)}
                   placeholder={field.placeholder}
-                  className={getErrorClass(getFieldValue(state, field.key), isRemotion && field.required)}
+                  className={getErrorClass(getFieldValue(state, field.key), isRequiredInCurrentMode(field, state))}
                 />
               </Field>
             ))}
@@ -564,7 +748,7 @@ return (
       className={`${getErrorClass(transcript, true)} min-h-[300px] resize-none rounded-xl text-sm leading-relaxed`}
     />
 
-    {state.videoVariety === "personalized" && (
+    {(isHybrid || state.videoVariety === "personalized") && (
       <div className="mt-4 rounded-xl border border-secondary bg-secondary/30 p-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <p className="text-sm font-semibold text-foreground">Supported Placeholders</p>
@@ -573,7 +757,7 @@ return (
           </p>
         </div>
         <div className="mt-3 flex flex-wrap gap-3">
-          {FIELD_DEFINITIONS.map((field) => (
+          {activeFieldDefinitions.map((field) => (
             <PlaceholderTag
               key={field.key}
               tag={field.tags[0]}

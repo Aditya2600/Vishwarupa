@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="1050" viewBox="0 0 560 1050" fill="none">
+  
+<g transform="translate(70 20) rotate(-5 240 500)">
+  <rect x="50" y="15" width="400" height="960" rx="72" fill="#0B1626"/>
+  <rect x="68" y="35" width="364" height="920" rx="55" fill="white"/>
+  <rect x="180" y="58" width="140" height="34" rx="17" fill="#050A12"/>
+  <rect x="110" y="158" width="280" height="93" rx="12" fill="#0A9D58"/>
+  <rect x="110" y="280" width="280" height="93" rx="12" fill="#063F5F"/>
+  <text x="250" y="126" text-anchor="middle" font-family="Arial" font-size="34" font-weight="800" fill="#063F5F">Settle your dues</text>
+  <text x="250" y="164" text-anchor="middle" font-family="Arial" font-size="34" font-weight="800" fill="#063F5F">instantly</text>
+  <text x="250" y="214" text-anchor="middle" font-family="Arial" font-size="28" font-weight="800" fill="white">Pay Now</text>
+  <text x="250" y="336" text-anchor="middle" font-family="Arial" font-size="23" font-weight="800" fill="white">Request a Call Back</text>
+</g>
+
+</svg>

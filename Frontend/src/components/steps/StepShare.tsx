@@ -33,7 +33,12 @@ function buildDownloadFilename({
   videoType: WizardState["videoType"];
 }): string {
   const preferredName = sanitizeFilenamePart(title ?? "") || sanitizeFilenamePart(customerName);
-  const fallbackName = videoType === "remotion" ? "text-to-video" : "avatar-video";
+  const fallbackName =
+    videoType === "remotion"
+      ? "text-to-video"
+      : videoType === "hybrid_remotion_avatar_pip"
+        ? "visiondesk"
+        : "avatar-video";
   return `${preferredName || fallbackName}.mp4`;
 }
 
@@ -48,6 +53,18 @@ function triggerDownload(href: string, filename: string) {
   link.remove();
 }
 
+function toAbsoluteShareUrl(url: string): string {
+  if (!url) {
+    return "";
+  }
+
+  try {
+    return new URL(url, window.location.origin).toString();
+  } catch {
+    return url;
+  }
+}
+
 interface StepShareProps {
   state: WizardState;
   update: (partial: Partial<WizardState>) => void;
@@ -55,15 +72,26 @@ interface StepShareProps {
 
 export function StepShare({ state, update }: StepShareProps) {
   const generatedVideo = state.generatedVideo;
-  let videoUrl = state.styledVideoUrl || generatedVideo?.video_url || "";
+  let shareUrl = generatedVideo?.interactive_url || state.styledVideoUrl || generatedVideo?.video_url || "";
+  let downloadUrl = state.styledVideoUrl || generatedVideo?.video_url || "";
   
-  if (videoUrl.startsWith("/api/artifacts/")) {
-    videoUrl = videoUrl.replace("/api/artifacts/", "https://vishvarupa.s3.ap-south-1.amazonaws.com/");
+  if (shareUrl.startsWith("/api/artifacts/")) {
+    shareUrl = shareUrl.replace("/api/artifacts/", "https://vishvarupa.s3.ap-south-1.amazonaws.com/");
   }
+  if (downloadUrl.startsWith("/api/artifacts/")) {
+    downloadUrl = downloadUrl.replace("/api/artifacts/", "https://vishvarupa.s3.ap-south-1.amazonaws.com/");
+  }
+  shareUrl = toAbsoluteShareUrl(shareUrl);
   const avatarName =
     state.videoType === "remotion"
       ? "Text to Video"
-      : state.avatarName || state.avatarId || "None";
+      : state.avatarName || state.avatarId || (state.videoType === "hybrid_remotion_avatar_pip" ? "VisionDesk" : "None");
+  const styleLabel =
+    state.videoType === "remotion"
+      ? "Text to Video"
+      : state.videoType === "hybrid_remotion_avatar_pip"
+        ? "VisionDesk"
+        : "Avatar";
   const statusText =
     state.generationStatus === "completed"
       ? generatedVideo?.status ?? "completed"
@@ -76,13 +104,13 @@ export function StepShare({ state, update }: StepShareProps) {
       : "not started";
 
   const handleCopyShareLink = async () => {
-    if (!videoUrl) {
+    if (!shareUrl) {
       toast.error("Generate a video first.");
       return;
     }
 
     try {
-      await navigator.clipboard.writeText(videoUrl);
+      await navigator.clipboard.writeText(shareUrl);
       toast.success("Share link copied.");
     } catch {
       toast.error("Clipboard access failed.");
@@ -90,7 +118,7 @@ export function StepShare({ state, update }: StepShareProps) {
   };
 
   const handleDownloadVideo = async () => {
-    if (!videoUrl) {
+    if (!downloadUrl) {
       toast.error("Generate a video first.");
       return;
     }
@@ -102,7 +130,7 @@ export function StepShare({ state, update }: StepShareProps) {
     });
 
     try {
-      const resolvedUrl = new URL(videoUrl, window.location.href);
+      const resolvedUrl = new URL(downloadUrl, window.location.href);
       if (resolvedUrl.origin === window.location.origin) {
         const response = await fetch(resolvedUrl.toString(), { credentials: "include" });
         if (!response.ok) {
@@ -120,18 +148,18 @@ export function StepShare({ state, update }: StepShareProps) {
       console.error("Falling back to direct video download link.", error);
     }
 
-    triggerDownload(videoUrl, filename);
+    triggerDownload(downloadUrl, filename);
     toast.success("Download started.");
   };
 
   const handleShareOnWhatsApp = () => {
-    if (!videoUrl) {
+    if (!shareUrl) {
       toast.error("Generate a video first.");
       return;
     }
 
-    const shareUrl = `https://wa.me/?text=${encodeURIComponent(videoUrl)}`;
-    window.open(shareUrl, "_blank", "noopener,noreferrer");
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareUrl)}`;
+    window.open(whatsappUrl, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -141,7 +169,7 @@ export function StepShare({ state, update }: StepShareProps) {
           <CheckCircle2 className="h-6 w-6 text-success shrink-0" />
           <div>
             <p className="text-sm font-semibold text-foreground">
-              {state.videoType === "remotion" ? "Your text video is ready." : "Your video is ready."}
+              {state.videoType === "remotion" ? "Your text video is ready." : state.videoType === "hybrid_remotion_avatar_pip" ? "Your VisionDesk video is ready." : "Your video is ready."}
             </p>
             <p className="text-xs text-muted-foreground">
               {state.videoType === "remotion"
@@ -155,7 +183,7 @@ export function StepShare({ state, update }: StepShareProps) {
           <LoaderCircle className="h-6 w-6 text-primary shrink-0 animate-spin" />
           <div>
             <p className="text-sm font-semibold text-foreground">
-              {state.videoType === "remotion" ? "Rendering text video" : "Generating video"}
+              {state.videoType === "remotion" ? "Rendering text video" : state.videoType === "hybrid_remotion_avatar_pip" ? "Generating VisionDesk video" : "Generating video"}
             </p>
             <p className="text-xs text-muted-foreground">
               {state.videoType === "remotion"
@@ -230,7 +258,7 @@ export function StepShare({ state, update }: StepShareProps) {
                 <Button
                   key={d.label}
                   variant="outline"
-                  disabled={!videoUrl}
+                  disabled={d.label === "Download Video" ? !downloadUrl : !shareUrl}
                   onClick={() => {
                     if (d.label === "Copy Share Link") {
                       void handleCopyShareLink();
@@ -255,17 +283,17 @@ export function StepShare({ state, update }: StepShareProps) {
           <h3 className="text-sm font-semibold text-foreground mb-4">Video Metadata</h3>
           <Meta
             label="Video Name"
-            value={generatedVideo?.title ?? `${state.customerName.trim() || (state.videoType === "remotion" ? "Text to Video" : "Avatar Video")} - Draft`}
+            value={generatedVideo?.title ?? `${state.customerName.trim() || styleLabel} - Draft`}
           />
           <Meta label="Created At" value={new Date().toLocaleDateString()} />
-          <Meta label="Style" value={state.videoType === "remotion" ? "Text to Video" : "Avatar"} />
+          <Meta label="Style" value={styleLabel} />
           <Meta label="Language" value={state.language} />
-          {state.videoType === "avatar" ? <Meta label="Avatar" value={avatarName} /> : null}
+          {state.videoType !== "remotion" ? <Meta label="Avatar" value={avatarName} /> : null}
           <Meta label="Status" value={statusText} />
           <Meta label="Video ID" value={generatedVideo?._id ?? generatedVideo?.video_id ?? "Pending"} />
           {state.videoType === "remotion" ? <Meta label="Logo" value={state.logoFileName || "None"} /> : null}
           <HighlightedOutputLink
-            href={videoUrl}
+            href={shareUrl}
             onCopy={() => void handleCopyShareLink()}
           />
         </div>

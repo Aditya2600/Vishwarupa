@@ -1,16 +1,16 @@
 import { Check } from "lucide-react";
-import { STEPS } from "@/store/wizardStore";
+import { STEPS, type VideoType } from "@/store/wizardStore";
 
 interface WorkflowSidebarProps {
   currentStep: number;
   onStepClick: (step: number) => void;
-  videoType: "avatar" | "remotion";
+  videoType: VideoType;
 }
 
 export function WorkflowSidebar({ currentStep, onStepClick, videoType }: WorkflowSidebarProps) {
   const filteredSteps = STEPS.map((step, i) => ({ ...step, originalIndex: i }))
     .filter((step) => !(videoType === "remotion" && step.key === "avatar"))
-    .filter((step) => !(videoType === "avatar" && step.key === "subtitle"));
+    .filter((step) => !(videoType !== "remotion" && step.key === "subtitle"));
 
   return (
     <aside className="w-56 shrink-0 border-r border-border bg-sidebar hidden md:flex flex-col h-full">

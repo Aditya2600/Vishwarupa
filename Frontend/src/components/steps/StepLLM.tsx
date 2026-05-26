@@ -2,7 +2,7 @@ import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { WizardState } from "@/store/wizardStore";
 
-const MODELS = ["Claude 3.5 Sonnet", "GPT-4.1", "Gemini 2.0 Flash", "Llama 3.1 70B"];
+const MODELS = ["Claude 3.5 Sonnet", "GPT-4.1", "Grok 4.1", "Llama 3.1 70B"];
 const TONES = ["Professional", "Casual", "Empathetic", "Urgent", "Educational"];
 
 interface StepLLMProps {

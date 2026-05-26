@@ -54,12 +54,13 @@ yarn-error.log*
 Remotion/public/metadata.json
 Remotion/public/audio/*
 !Remotion/public/audio/.gitkeep
-Remotion/public/assets/*
-!Remotion/public/assets/credresolve_logo_2-removebg-preview.png
+Remotion/public/assets/*.vtt
 Remotion/out/
 Remotion/output.mp4
 
 # Temporary files and Debug Scripts
+scratch/
+scratch.py
 *.tmp
 *.swp
 *.mp3
@@ -73,3 +74,6 @@ lipsync_poc/
 # Remotion JSON artifacts
 Remotion/leads.json
 Remotion/props_*.json
+
+# Claude Code
+.claude/

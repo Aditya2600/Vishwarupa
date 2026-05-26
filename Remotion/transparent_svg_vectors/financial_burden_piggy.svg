@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" fill="none">
+  <defs><filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="18" stdDeviation="20" flood-color="#05273e" flood-opacity="0.18"/></filter><linearGradient id="pig" x1="130" y1="470" x2="570" y2="750" gradientUnits="userSpaceOnUse"><stop stop-color="#ffc4ce"/><stop offset="1" stop-color="#df7d8b"/></linearGradient><linearGradient id="bag" x1="445" y1="80" x2="690" y2="620" gradientUnits="userSpaceOnUse"><stop stop-color="#c7a27b"/><stop offset="1" stop-color="#8f6b45"/></linearGradient></defs>
+  <g filter="url(#shadow)">
+    <path d="M455 626c-12-164-13-335 39-471 38-43 170-54 262 1 56 126 68 319 23 470H455z" fill="url(#bag)"/>
+    <path d="M487 174c77 38 173 37 246-1" stroke="#6f4d2d" stroke-width="18" stroke-linecap="round" opacity=".55"/>
+    <path d="M473 142c34-79 105-99 135-48 45-51 113-34 136 43-76 45-185 46-271 5z" fill="#c8a47c"/>
+    <path d="M487 174c-14-30-30-55-54-78M735 174c18-31 38-55 65-75" stroke="#7b572f" stroke-width="10" stroke-linecap="round"/>
+    <path d="M225 725c-71-28-115-84-110-154 6-90 95-159 218-165 155-8 267 72 272 184 4 94-76 166-210 184l-22 58h-86l-16-62c-15-2-31-5-46-9v-36z" fill="url(#pig)"/>
+    <path d="M236 437l-58-92c76 0 105 31 117 81l-59 11z" fill="#f9aebc"/>
+    <ellipse cx="193" cy="573" rx="74" ry="52" fill="#f2a2b1"/>
+    <circle cx="173" cy="574" r="8" fill="#7a3740"/><circle cx="211" cy="574" r="8" fill="#7a3740"/>
+    <circle cx="333" cy="520" r="12" fill="#1f2937"/>
+    <path d="M210 641c35 53 91 56 132 10" stroke="#1f2937" stroke-width="8" stroke-linecap="round"/>
+    <path d="M618 637c26-78 117-119 204-86 32 12 60 34 83 64l-89 177c-65 4-128-10-180-45-40-27-36-57-18-110z" fill="#e898a5"/>
+    <path d="M790 596c-52 36-105 64-161 77" stroke="#fff" stroke-width="28" stroke-linecap="round"/>
+    <path d="M868 644c-41 56-89 98-151 127" stroke="#fff" stroke-width="28" stroke-linecap="round"/>
+    <path d="M729 587c-50-33-89-24-118 27" stroke="#fff" stroke-width="25" stroke-linecap="round"/>
+    <path d="M580 744c-54-48-111-39-170 31l80 38c32-36 66-42 102-17l-12-52z" fill="#e898a5"/>
+    <path d="M683 830h-67l-17-64h104l-20 64z" fill="#d78594"/>
+    <path d="M777 94l88 66-45 60 146 63-61 83 185 140-58 77-292-216 60-83-149-61 126-129z" fill="#e02521"/>
+    <path d="M1008 595l92-1-34-84-58 85z" fill="#e02521"/>
+  </g>
+</svg>

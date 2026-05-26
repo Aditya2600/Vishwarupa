@@ -11,6 +11,7 @@ WORKDIR /app
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
+    ca-certificates \
     chromium \
     ffmpeg \
     fonts-liberation \
@@ -31,7 +32,6 @@ RUN npm --prefix /app/Remotion install
 
 COPY app ./app
 COPY Remotion ./Remotion
-COPY sample_data ./sample_data
 COPY scripts ./scripts
 COPY .env.example ./.env.example
 COPY README.md ./README.md

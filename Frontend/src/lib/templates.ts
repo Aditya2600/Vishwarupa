@@ -10,7 +10,65 @@ interface GenderedTemplate {
 }
 
 type TemplateValue = string | GenderedTemplate;
+export type RemotionTemplateKey =
+  | "account_notice"
+  | "payment_guidance"
+  | "payment_link_guidance"
+  | "overdue_template"
+  | "loan_offer_interactive"
+  | "loan_reminder"
+  | "scene_loan_offer"
+  | "collection_reminder"
+  | "tvs_credit_emi";
+export type CreateMode = "avatar" | "remotion" | "hybrid_remotion_avatar_pip";
+export type LoanReminderAssetKey =
+  | "logo"
+  | "npaWarning"
+  | "creditImpact"
+  | "lastChance"
+  | "ctaScene"
+  | "financialBurden";
 
+export type LoanReminderAssetPaths = Record<LoanReminderAssetKey, string>;
+
+export const LOAN_REMINDER_ASSET_SLOTS: Array<{
+  key: LoanReminderAssetKey;
+  label: string;
+  defaultPath: string;
+}> = [
+  { key: "logo", label: "Logo", defaultPath: "assets/tvs_credit_logo.png" },
+  { key: "npaWarning", label: "NPA Warning", defaultPath: "man_phone_transparent.png" },
+  { key: "creditImpact", label: "Credit Impact", defaultPath: "credit_score_transparent.png" },
+  { key: "lastChance", label: "Last Chance", defaultPath: "last_chance_transparent.png" },
+  { key: "ctaScene", label: "CTA Scene", defaultPath: "phone_paynow_transparent.png" },
+  { key: "financialBurden", label: "Financial Burden", defaultPath: "piggy_bank_arrow_transparent.png" },
+];
+
+export const DEFAULT_LOAN_REMINDER_ASSET_PATHS: LoanReminderAssetPaths = Object.fromEntries(
+  LOAN_REMINDER_ASSET_SLOTS.map((slot) => [slot.key, slot.defaultPath]),
+) as LoanReminderAssetPaths;
+
+const LOAN_REMINDER_TRANSCRIPT = `Yeh ek important reminder hai {{ client_name }} ki taraf se.
+Dear {{ customer_name }}, aapke {{ product_type }} account number {{ lan }} par {{ tos }} ka overdue amount pending hai.
+Kripya dhyaan dein, agar payment aur delay hoti hai, toh aapka account critically overdue category mein ja sakta hai, ya applicable policy ke according NPA report ho sakta hai.
+Iska negative impact aapke credit score par pad sakta hai, aur future loan approval, credit card eligibility, aur financial services access affect ho sakte hain.
+Lender policy ke according recovery action initiate ho sakta hai, legal notice issue ho sakta hai, aur additional charges bhi badh sakte hain.
+Further financial burden avoid karne ke liye, kripya apna overdue amount jald se jald clear karein.
+Aap apne overdue amount ko secure repayment channel ke through clear kar sakte hain. Zarurat ho toh assistance ke liye support team se sampark karein.
+Additional charges avoid karein, aur apni financial profile protect karne ke liye aaj hi dues clear karein.
+Dhanyavaad.`;
+
+const COLLECTION_REMINDER_TRANSCRIPT = `Dear {{ customer_name }},
+Your {{ product_type }} ending with {{ lan }} has an overdue amount of {{ tos }}.
+If this continues beyond 90 days, your account will be classified as a Non-Performing Asset, NPA.
+Non-payment can lead to legal action to recover dues, restrictions on future loans or credit cards from any financial institution, and a lasting negative impact on your financial health.
+Take action now. Clear your outstanding balance and avoid these consequences.
+Timely repayment brings several benefits. Protect your credit score and ensure access to future loans.
+We understand that life can be challenging. If full repayment is difficult, here are some options for you. Pay the minimum amount due.
+Act now to protect your financial future.
+You can call your {{ client_name }} banker at {{ contact_details }} for assistance.
+Our team is here to guide you. Thank you for choosing {{ client_name }}.
+Contact us today, and let's work together for a solution.`;
 function getGenderedText(value: TemplateValue, gender: Gender): string {
   if (typeof value === "string") return value;
   return value[gender];
@@ -116,6 +174,238 @@ Thank you.`,
   }
 };
 
+export const PAYMENT_GUIDANCE_TEMPLATES: Record<string, TemplateValue> = {
+  English: `Welcome {{ customer_name }}.
+This is a personalized payment guidance video for your {{ client_name }} loan account {{ lan }}.
+Step one: Open the PhonePe app on your phone, scroll to Recharge and Bills, and tap Loan Repayment.
+Step two: On the Select your Lender page, choose TVS Credit from the list of loan billers.
+Step three: Enter your Agreement number {{ lan }}, tap Confirm, and pay the amount {{ tos }}.
+For any other information or support, please contact {{ contact_details }}.
+Thank you.`,
+  Hindi: {
+    male: `नमस्ते {{ customer_name }}।
+यह आपके {{ client_name }} लोन अकाउंट {{ lan }} के लिए एक व्यक्तिगत भुगतान मार्गदर्शन वीडियो है।
+पहला चरण: अपने फोन पर PhonePe ऐप खोलें, Recharge and Bills सेक्शन में जाएं और Loan Repayment पर टैप करें।
+दूसरा चरण: Select your Lender पेज पर लोन बिलर्स की सूची में से TVS Credit चुनें।
+तीसरा चरण: अपना Agreement number {{ lan }} दर्ज करें, Confirm पर टैप करें और देय राशि {{ tos }} का भुगतान करें।
+किसी भी अन्य जानकारी या सहायता के लिए कृपया {{ contact_details }} पर संपर्क करें।
+धन्यवाद।`,
+    female: `नमस्ते {{ customer_name }}।
+यह आपके {{ client_name }} लोन अकाउंट {{ lan }} के लिए एक व्यक्तिगत भुगतान मार्गदर्शन वीडियो है।
+पहला चरण: अपने फोन पर PhonePe ऐप खोलें, Recharge and Bills सेक्शन में जाएं और Loan Repayment पर टैप करें।
+दूसरा चरण: Select your Lender पेज पर लोन बिलर्स की सूची में से TVS Credit चुनें।
+तीसरा चरण: अपना Agreement number {{ lan }} दर्ज करें, Confirm पर टैप करें और देय राशि {{ tos }} का भुगतान करें।
+किसी भी अन्य जानकारी या सहायता के लिए कृपया {{ contact_details }} पर संपर्क करें।
+धन्यवाद।`
+  },
+  Marathi: `नमस्कार {{ customer_name }}.
+हा तुमच्या {{ client_name }} लोन खाते {{ lan }} साठी वैयक्तिक पेमेंट मार्गदर्शन व्हिडिओ आहे.
+पहिली पायरी: तुमच्या फोनवर PhonePe अॅप उघडा, Recharge and Bills विभागात जा आणि Loan Repayment वर टॅप करा.
+दुसरी पायरी: Select your Lender पेजवर लोन बिलर्सच्या यादीतून TVS Credit निवडा.
+तिसरी पायरी: तुमचा Agreement number {{ lan }} प्रविष्ट करा, Confirm वर टॅप करा आणि देय रक्कम {{ tos }} भरा.
+इतर कोणत्याही माहितीसाठी किंवा सहाय्यासाठी कृपया {{ contact_details }} वर संपर्क करा.
+धन्यवाद.`,
+  Tamil: `வணக்கம் {{ customer_name }}.
+உங்கள் {{ client_name }} கடன் கணக்கு {{ lan }} க்கான தனிப்பட்ட கட்டண வழிகாட்டி வீடியோ இது.
+படி ஒன்று: உங்கள் ஃபோனில் PhonePe ஆப்பைத் திறந்து, Recharge and Bills பகுதிக்குச் சென்று, Loan Repayment-ஐ தட்டவும்.
+படி இரண்டு: Select your Lender பக்கத்தில் கடன் பில்லர்கள் பட்டியலிலிருந்து TVS Credit-ஐ தேர்ந்தெடுக்கவும்.
+படி மூன்று: உங்கள் Agreement number {{ lan }}-ஐ உள்ளிட்டு, Confirm-ஐ தட்டவும், செலுத்த வேண்டிய தொகை {{ tos }}-ஐ செலுத்தவும்.
+வேறு தகவல் அல்லது உதவிக்கு {{ contact_details }} எண்ணில் தொடர்புகொள்ளவும்.
+நன்றி.`,
+  Telugu: `నమస్కారం {{ customer_name }}.
+ఇది మీ {{ client_name }} లోన్ ఖాతా {{ lan }} కోసం వ్యక్తిగత చెల్లింపు మార్గదర్శక వీడియో.
+దశ ఒకటి: మీ ఫోన్‌లో PhonePe యాప్ తెరిచి, Recharge and Bills విభాగానికి వెళ్లి, Loan Repayment పై ట్యాప్ చేయండి.
+దశ రెండు: Select your Lender పేజీలో లోన్ బిల్లర్ల జాబితా నుండి TVS Credit ఎంచుకోండి.
+దశ మూడు: మీ Agreement number {{ lan }} నమోదు చేసి, Confirm పై ట్యాప్ చేసి, చెల్లించవలసిన మొత్తం {{ tos }} చెల్లించండి.
+ఇతర సమాచారం లేదా సహాయం కోసం దయచేసి {{ contact_details }} ని సంప్రదించండి.
+ధన్యవాదాలు.`,
+  Kannada: `ನಮಸ್ಕಾರ {{ customer_name }}.
+ಇದು ನಿಮ್ಮ {{ client_name }} ಸಾಲ ಖಾತೆ {{ lan }} ಗಾಗಿ ವೈಯಕ್ತಿಕ ಪಾವತಿ ಮಾರ್ಗದರ್ಶಿ ವೀಡಿಯೊ.
+ಹಂತ ಒಂದು: ನಿಮ್ಮ ಫೋನ್‌ನಲ್ಲಿ PhonePe ಆಪ್ ತೆರೆದು, Recharge and Bills ವಿಭಾಗಕ್ಕೆ ಹೋಗಿ, Loan Repayment ಮೇಲೆ ಟ್ಯಾಪ್ ಮಾಡಿ.
+ಹಂತ ಎರಡು: Select your Lender ಪುಟದಲ್ಲಿ ಸಾಲ ಬಿಲ್ಲರ್‌ಗಳ ಪಟ್ಟಿಯಿಂದ TVS Credit ಆಯ್ಕೆಮಾಡಿ.
+ಹಂತ ಮೂರು: ನಿಮ್ಮ Agreement number {{ lan }} ನಮೂದಿಸಿ, Confirm ಮೇಲೆ ಟ್ಯಾಪ್ ಮಾಡಿ, ಪಾವತಿಸಬೇಕಾದ ಮೊತ್ತ {{ tos }} ಪಾವತಿಸಿ.
+ಯಾವುದೇ ಇತರ ಮಾಹಿತಿ ಅಥವಾ ಸಹಾಯಕ್ಕಾಗಿ ದಯವಿಟ್ಟು {{ contact_details }} ಗೆ ಸಂಪರ್ಕಿಸಿ.
+ಧನ್ಯವಾದಗಳು.`,
+  Bengali: `নমস্কার {{ customer_name }}।
+এটি আপনার {{ client_name }} ঋণ অ্যাকাউন্ট {{ lan }}-এর জন্য একটি ব্যক্তিগত পেমেন্ট নির্দেশিকা ভিডিও।
+ধাপ এক: আপনার ফোনে PhonePe অ্যাপ খুলুন, Recharge and Bills বিভাগে যান এবং Loan Repayment-এ ট্যাপ করুন।
+ধাপ দুই: Select your Lender পেজে ঋণ বিলারদের তালিকা থেকে TVS Credit নির্বাচন করুন।
+ধাপ তিন: আপনার Agreement number {{ lan }} লিখুন, Confirm-এ ট্যাপ করুন এবং প্রদেয় পরিমাণ {{ tos }} পরিশোধ করুন।
+অন্য কোনও তথ্য বা সহায়তার জন্য অনুগ্রহ করে {{ contact_details }}-এ যোগাযোগ করুন।
+ধন্যবাদ।`,
+  Gujarati: `નમસ્તે {{ customer_name }}.
+આ તમારા {{ client_name }} લોન ખાતા {{ lan }} માટે વ્યક્તિગત ચુકવણી માર્ગદર્શન વિડિયો છે.
+પગલું એક: તમારા ફોન પર PhonePe એપ ખોલો, Recharge and Bills વિભાગમાં જાઓ અને Loan Repayment પર ટેપ કરો.
+પગલું બે: Select your Lender પૃષ્ઠ પર લોન બિલર્સની યાદીમાંથી TVS Credit પસંદ કરો.
+પગલું ત્રણ: તમારો Agreement number {{ lan }} દાખલ કરો, Confirm પર ટેપ કરો અને ચુકવવાની રકમ {{ tos }} ચૂકવો.
+અન્ય માહિતી અથવા સહાય માટે કૃપા કરીને {{ contact_details }} પર સંપર્ક કરો.
+આભાર.`,
+  Malayalam: `നമസ്കാരം {{ customer_name }}.
+ഇത് നിങ്ങളുടെ {{ client_name }} വായ്പ അക്കൗണ്ട് {{ lan }} നുള്ള വ്യക്തിഗത പേയ്മെന്റ് ഗൈഡ് വീഡിയോയാണ്.
+ഘട്ടം ഒന്ന്: നിങ്ങളുടെ ഫോണിൽ PhonePe ആപ്പ് തുറന്ന്, Recharge and Bills വിഭാഗത്തിലേക്ക് പോകുക, Loan Repayment ടാപ്പ് ചെയ്യുക.
+ഘട്ടം രണ്ട്: Select your Lender പേജിൽ വായ്പ ബില്ലർമാരുടെ പട്ടികയിൽ നിന്ന് TVS Credit തിരഞ്ഞെടുക്കുക.
+ഘട്ടം മൂന്ന്: നിങ്ങളുടെ Agreement number {{ lan }} നൽകുക, Confirm ടാപ്പ് ചെയ്യുക, അടയ്ക്കേണ്ട തുക {{ tos }} അടയ്ക്കുക.
+മറ്റ് വിവരങ്ങൾക്കോ സഹായത്തിനോ ദയവായി {{ contact_details }} ബന്ധപ്പെടുക.
+നന്ദി.`,
+};
+
+export const PAYMENT_LINK_GUIDANCE_TEMPLATES: Record<string, TemplateValue> = {
+  English: `Welcome {{ customer_name }}.
+This video will guide you through completing payment from the payment link.
+First, enter your agreement number and captcha exactly as shown.
+Next, accept the terms and review the payable amount for account {{ lan }}.
+Then tap proceed to pay and choose your preferred payment method.
+For support, please contact {{ contact_details }}.
+Thank you.`,
+  Hindi: {
+    male: `नमस्ते {{ customer_name }}। सब से पहले SMS में दिए गए लिंक पर क्लिक करें। इसके बाद अपना एग्रीमेंट नंबर और कैप्चा ठीक से दर्ज करें। फिर नियम और शर्तें स्वीकार करें और अपनी राशि जांचें। इसके बाद आगे बढ़ने के लिए Proceed to Pay पर टैप करें और अपनी पसंद का भुगतान तरीका चुनें। सहायता के लिए कृपया {{ contact_details }} पर संपर्क करें। धन्यवाद।`,
+    female: `नमस्ते {{ customer_name }}। सब se pehle SMS mein diye gaye link par click karein. Iske baad apna agreement number aur captcha thik se darj karein. Phir niyam aur shartein swikar karein aur apni rashi jaanchein. Iske baad aage badhne ke liye Proceed to Pay par tap karein aur apni pasand ka bhugtan tareeka chunein. Sahayata ke liye kripya {{ contact_details }} par sampark karein. Dhanyawad.`,
+  },
+};
+
+export const TVS_CREDIT_EMI_TEMPLATES: Record<string, TemplateValue> = {
+  English: `Hello {{ customer_name }}. Regarding your {{ product_type }} account from {{ client_name }}. An EMI amount of ₹{{ tos }} is pending on account {{ lan }}. For your convenience, below are 3 easy ways to make your EMI payment.
+Method 1 — Payment via Payment Link. A secure link has been sent to you on WhatsApp. You can also find the payment link shared via SMS.
+Method 2 — Payment through UPI or Payment Apps. Pay conveniently using PhonePe, Google Pay, or any UPI app. Go to Repayment, search for TVS Credit, and enter your LAN. Complete the payment using your UPI PIN. Wait for the successful payment confirmation.
+Method 3 — EMI Collection Shop. Visit your nearest EMI Collection Shop to deposit your EMI amount.
+Please treat this communication as important and contact {{ contact_details }} immediately to discuss options and avoid charges.`,
+  Hindi: {
+    male: `नमस्ते {{ customer_name }}। आपके {{ client_name }} के {{ product_type }} खाते के संबंध में। आपके {{ lan }} खाते पर {{ tos }} रुपये की EMI राशि लंबित है। आपकी सुविधा के लिए, EMI भुगतान करने के 3 आसान तरीके नीचे दिए गए हैं।
+Method 1 - पेमेंट लिंक के माध्यम से भुगतान। व्हाट्सएप पर आपको एक सुरक्षित लिंक भेजा गया है। आप एसएमएस के माध्यम से साझा किया गया भुगतान लिंक भी पा सकते हैं।
+Method 2 - UPI या पेमेंट ऐप के माध्यम से भुगतान। PhonePe, Google Pay या किसी भी UPI ऐप का उपयोग करके आसानी से भुगतान करें। पुनर्भुगतान (Repayment) पर जाएं, TVS Credit खोजें, और अपना LAN दर्ज करें। अपने UPI पिन का उपयोग करके भुगतान पूरा करें। सफल भुगतान की पुष्टि की प्रतीक्षा करें।
+Method 3 - EMI कलेक्शन शॉप। अपनी EMI राशि जमा करने के लिए अपने नजदीकी EMI कलेक्शन शॉप पर जाएं।
+विकल्पों पर चर्चा करने और अतिरिक्त शुल्क से बचने के लिए तुरंत {{ contact_details }} पर संपर्क करें।`,
+    female: `नमस्ते {{ customer_name }}। आपके {{ client_name }} के {{ product_type }} खाते के संबंध में। आपके {{ lan }} खाते पर {{ tos }} रुपये की EMI राशि लंबित है। आपकी सुविधा के लिए, EMI भुगतान करने के 3 आसान तरीके नीचे दिए गए हैं।
+Method 1 - पेमेंट लिंक के माध्यम से भुगतान। व्हाट्सएप पर आपको एक सुरक्षित लिंक भेजा गया है। आप एसएमएस के माध्यम से साझा किया गया भुगतान लिंक भी पा सकते हैं।
+Method 2 - UPI या पेमेंट ऐप के माध्यम से भुगतान। PhonePe, Google Pay या किसी भी UPI ऐप का उपयोग करके आसानी से भुगतान करें। पुनर्भुगतान (Repayment) पर जाएं, TVS Credit खोजें, और अपना LAN दर्ज करें। अपने UPI पिन का उपयोग करके भुगतान पूरा करें। सफल भुगतान की पुष्टि की प्रतीक्षा करें।
+Method 3 - EMI कलेक्शन शॉप। अपनी EMI राशि जमा करने के लिए अपने नजदीकी EMI कलेक्शन शॉप पर जाएं।
+विकल्पों पर चर्चा करने और अतिरिक्त शुल्क से बचने के लिए तुरंत {{ contact_details }} पर संपर्क करें।`,
+  }
+};
+
+export const TVS_CREDIT_EMI_UNIVERSAL_TEMPLATES: Record<string, TemplateValue> = {
+  English: `Hello. Regarding your account from our team. An outstanding amount is pending on your account.
+A secure link has been sent to you on WhatsApp.
+You can also find the payment link shared via SMS.
+Pay conveniently using PhonePe, Google Pay, or any UPI app.
+Go to Repayment, search for TVS Credit, and enter your LAN.
+Complete the payment using your UPI PIN.
+Visit your nearest EMI Collection Shop to deposit your EMI amount.
+Contact our team immediately to discuss options and avoid charges.`,
+  Hindi: {
+    male: `नमस्ते। हमारी टीम की ओर से आपके खाते के संबंध में। आपके खाते पर बकाया राशि लंबित है।
+व्हाट्सएप पर आपको एक सुरक्षित लिंक भेजा गया है।
+आप एसएमएस के माध्यम से साझा किया गया भुगतान लिंक भी पा सकते हैं।
+PhonePe, Google Pay या किसी भी UPI ऐप का उपयोग करके आसानी से भुगतान करें।
+पुनर्भुगतान (Repayment) पर जाएं, TVS Credit खोजें, और अपना LAN दर्ज करें।
+अपने UPI पिन का उपयोग करके भुगतान पूरा करें।
+अपनी EMI राशि जमा करने के लिए अपने नजदीकी EMI कलेक्शन शॉप पर जाएं।
+विकल्पों पर चर्चा करने और अतिरिक्त शुल्क से बचने के लिए तुरंत हमारी टीम से संपर्क करें।`,
+    female: `नमस्ते। हमारी टीम की ओर से आपके खाते के संबंध में। आपके खाते पर बकाया राशि लंबित है।
+व्हाट्सएप पर आपको एक सुरक्षित लिंक भेजा गया है।
+आप एसएमएस के माध्यम से साझा किया गया भुगतान लिंक भी पा सकते हैं।
+PhonePe, Google Pay या किसी भी UPI ऐप का उपयोग करके आसानी से भुगतान करें।
+पुनर्भुगतान (Repayment) पर जाएं, TVS Credit खोजें, और अपना LAN दर्ज करें।
+अपने UPI पिन का उपयोग करके भुगतान पूरा करें।
+अपनी EMI राशि जमा करने के लिए अपने नजदीकी EMI कलेक्शन शॉप पर जाएं।
+विकल्पों पर चर्चा करने और अतिरिक्त शुल्क से बचने के लिए तुरंत हमारी टीम से संपर्क करें।`,
+  }
+};
+
+export const OVERDUE_TEMPLATES: Record<string, TemplateValue> = {
+  English: `Dear {{ customer_name }}. Your {{ client_name }} credit card ending with {{ lan }} has an overdue amount of {{ tos }}. If this continues beyond 90 days, your account will be classified as a Non-Performing Asset (NPA). Non-payment can lead to legal action to recover dues, restrictions on future loans or credit cards, and a lasting negative impact on your financial credibility. But you can take action now. Clear your outstanding balance and avoid these consequences. Timely repayment protects your credit score, ensures access to future loans, and avoids late fees or penalties. We understand that life can be challenging. If full repayment is difficult, you can pay the minimum amount due of {{ loan_amount }} or reach out for further assistance. Act now to protect your financial future. Call us at {{ contact_details }} for assistance. Thank you for choosing {{ client_name }}.`,
+  Hindi: {
+    male: `प्रिय {{ customer_name }}। आपके {{ client_name }} क्रेडिट कार्ड, जिसके अंत में {{ lan }} है, का बकाया भुगतान {{ tos }} है। यदि यह 90 दिनों से अधिक जारी रहता है, तो आपके खाते को NPA वर्गीकृत किया जाएगा। भुगतान न करने से कानूनी कार्रवाई हो सकती है, भविष्य के ऋणों या क्रेडिट कार्डों पर प्रतिबंध लग सकते हैं, और आपके क्रेडिट इतिहास पर बुरा प्रभाव पड़ सकता है। लेकिन आप अभी कदम उठा सकते हैं। अपना बकाया चुकाएं और इन परिणामों से बचें। समय पर भुगतान आपके क्रेडिट स्कोर को सुरक्षित रखता है, नए लोन सुनिश्चित करता है, और विलंब शुल्क या पेनल्टी से बचाता है। हम समझते हैं कि जीवन चुनौतीपूर्ण हो सकता है। यदि पूरा भुगतान कठिन है, तो आप न्यूनतम देय राशि {{ loan_amount }} का भुगतान कर सकते हैं या सहायता के लिए संपर्क कर सकते हैं। अपने वित्तीय भविष्य की सुरक्षा के लिए अभी कदम उठाएं। सहायता के लिए हमें {{ contact_details }} पर कॉल करें। {{ client_name }} को चुनने के लिए धन्यवाद।`,
+    female: `प्रिय {{ customer_name }}। आपके {{ client_name }} क्रेडिट कार्ड, जिसके अंत में {{ lan }} है, का बकाया भुगतान {{ tos }} है। यदि यह 90 दिनों से अधिक जारी रहता है, तो आपके खाते को NPA वर्गीकृत किया जाएगा। भुगतान न करने से कानूनी कार्रवाई हो सकती है, भविष्य के ऋणों या क्रेडिट कार्डों पर प्रतिबंध लग सकते हैं, और आपके क्रेडिट इतिहास पर बुरा प्रभाव पड़ सकता. लेकिन आप अभी कदम उठा सकते हैं। अपना बकाया चुकाएं और इन परिणामों से बचें। समय पर भुगतान आपके क्रेडिट स्कोर को सुरक्षित रखता है, नए लोन सुनिश्चित करता है, और विलंब शुल्क या पेनल्टी से बचाता है। हम समझते हैं कि जीवन चुनौतीपूर्ण हो सकता है। यदि पूरा भुगतान कठिन है, तो आप न्यूनतम देय राशि {{ loan_amount }} का भुगतान कर सकते हैं या सहायता के लिए संपर्क कर सकते हैं। अपने वित्तीय भविष्य की सुरक्षा के लिए अभी कदम उठाएं। सहायता के लिए हमें {{ contact_details }} पर कॉल करें। {{ client_name }} को चुनने के लिए धन्यवाद।`,
+  },
+};
+
+export const LOAN_OFFER_INTERACTIVE_TEMPLATES: Record<string, TemplateValue> = {
+  English: `Congratulations {{ customer_name }}. You have a pre-approved loan offer from {{ client_name }} up to {{ loan_amount }}. Please tap Continue to view details.
+Now, choose your preferred loan amount and tenure, and tap Confirm Loan Offer to submit.
+Thank you. Your offer is confirmed, and our team will contact you shortly to complete the next steps. For help, you can call us now.`,
+  Hindi: {
+    male: `बधाई हो {{ customer_name }}। {{ client_name }} की ओर से आपके लिए {{ loan_amount }} तक का प्री-अप्रूव्ड लोन ऑफर उपलब्ध है। विवरण देखने के लिए कृपया Continue पर टैप करें।
+अब, अपनी पसंद की लोन राशि और अवधि चुनें, और सबमिट करने के लिए कन्फर्म लोन ऑफर पर टैप करें।
+धन्यवाद। आपका ऑफर कन्फर्म हो गया है, और हमारी टीम अगले कदम पूरे करने के लिए जल्द ही आपसे संपर्क करेगी। सहायता के लिए आप अभी हमें कॉल कर सकते हैं।`,
+    female: `बधाई हो {{ customer_name }}। {{ client_name }} की ओर से आपके लिए {{ loan_amount }} तक का प्री-अप्रूव्ड लोन ऑफर उपलब्ध है। विवरण देखने के लिए कृपया Continue पर टैप करें।
+अब, अपनी पसंद की लोन राशि और अवधि चुनें, और सबमिट करने के लिए कन्फर्म लोन ऑफर पर टैप करें।
+धन्यवाद। आपका ऑफर कन्फर्म हो गया है, और हमारी टीम अगले कदम पूरे करने के लिए जल्द ही आपसे संपर्क करेगी। सहायता के लिए आप अभी हमें कॉल कर सकते हैं।`,
+  },
+};
+
+export const SCENE_LOAN_OFFER_TRANSCRIPT = `पैसों की परेशानी से जूझ रहे हैं? अब चिंता छोड़िए।
+बधाई हो! आपके लिए एक खास प्री-अप्रूव्ड लोन ऑफर तैयार है।
+नया बाइक हो, ज़रूरी खर्च हो या आपके सपने, अब सब होगा आसान।
+अपनी जरूरत के हिसाब से आसान लोन विकल्प चुनना अब और भी सरल है।
+तेज़ प्रोसेस, कम दस्तावेज़ और भरोसेमंद सहायता।
+हर कदम पर हमारी टीम आपके साथ है।
+अपने सपनों को आगे बढ़ाइए और बेहतर कल की शुरुआत कीजिए।
+आपका प्री-अप्रूव्ड ऑफर आपका इंतज़ार कर रहा है।`;
+
+export const REMOTION_TEMPLATE_OPTIONS: Array<{ key: RemotionTemplateKey; name: string; description: string }> = [
+  {
+    key: "account_notice",
+    name: "Account Notice",
+    description: "Formal personalized account update with amount and contact details.",
+  },
+  {
+    key: "payment_guidance",
+    name: "Payment Guidance",
+    description: "Personalized walkthrough for paying through a link or PhonePe loan payment.",
+  },
+  {
+    key: "payment_link_guidance",
+    name: "Payment Link Guidance",
+    description: "Screenshot-based guide for captcha, terms, amount review, and payment options.",
+  },
+  {
+    key: "overdue_template",
+    name: "Credit Card Overdue Notice",
+    description: "Overdue alert sequence detailing NPA classification, credit score impact, and payment options.",
+  },
+  {
+    key: "loan_offer_interactive",
+    name: "Interactive Loan Offer",
+    description: "Brand-editable loan offer with Continue, amount/tenure selection, EMI summary, and confirm CTA.",
+  },
+  {
+    key: "scene_loan_offer",
+    name: "Sales Template",
+    description: "Image-led sales video using the five provided scenes.",
+  },
+  {
+    key: "loan_reminder",
+    name: "Loan Reminder",
+    description: "Portrait loan reminder with scene-wise captions and configurable brand imagery.",
+  },
+  {
+    key: "collection_reminder",
+    name: "Collection Reminder",
+    description: "Personalized collection reminder video with repayment details and contact CTA.",
+  },
+  {
+    key: "tvs_credit_emi",
+    name: "3 step payment guidance",
+    description: "Comprehensive 3-step payment guidance walkthrough designed with custom app image uploads.",
+  },
+];
+
+export const TEMPLATE_LIBRARY_QUICK_STARTS: Array<{
+  mode: CreateMode;
+  name: string;
+  description: string;
+  template?: RemotionTemplateKey;
+  iconKey: "hybrid_avatar_pip" | RemotionTemplateKey | "avatar";
+}> = [
+  {
+    mode: "hybrid_remotion_avatar_pip",
+    name: "VisionDesk",
+    description: "A newsroom-inspired visual background where AI presenters deliver information alongside contextual visuals, branded graphics, and animated supporting content.",
+    iconKey: "hybrid_avatar_pip",
+  },
+];
+
 export const UNIVERSAL_TEMPLATES: Record<string, TemplateValue> = {
   English: `Hello. I am speaking on behalf of our team with an important formal update regarding your account. Our records show that the outstanding balance remains unresolved despite earlier communication. Please treat this notification seriously and contact our office immediately to discuss a suitable repayment arrangement. A timely response may help avoid further account escalation. Thank you.`,
   Hindi: {
@@ -189,8 +479,49 @@ export const AVATAR_TEMPLATES: Record<string, string> = Object.fromEntries(
 
 export const REMOTION_SUPPORTED_LANGUAGES = Object.keys(REMOTION_TEMPLATES).filter((l) => l !== "Punjabi");
 
-export function getDefaultRemotionTranscript(language: string, mode: "personalized" | "universal" = "personalized", gender: "male" | "female" | null = "female"): string {
+export function getDefaultRemotionTranscript(
+  language: string,
+  mode: "personalized" | "universal" = "personalized",
+  gender: "male" | "female" | null = "female",
+  templateKey: RemotionTemplateKey = "account_notice",
+): string {
   const resolvedGender = resolveNarratorGender(gender);
+  if (mode === "personalized" && templateKey === "payment_guidance") {
+    const val = PAYMENT_GUIDANCE_TEMPLATES[language] ?? PAYMENT_GUIDANCE_TEMPLATES.English;
+    return getGenderedText(val, resolvedGender);
+  }
+  if (mode === "personalized" && templateKey === "payment_link_guidance") {
+    const val = PAYMENT_LINK_GUIDANCE_TEMPLATES[language] ?? PAYMENT_LINK_GUIDANCE_TEMPLATES.English;
+    return getGenderedText(val, resolvedGender);
+  }
+  if (mode === "personalized" && templateKey === "overdue_template") {
+    const val = OVERDUE_TEMPLATES[language] ?? OVERDUE_TEMPLATES.English;
+    return getGenderedText(val, resolvedGender);
+  }
+  if (mode === "personalized" && templateKey === "tvs_credit_emi") {
+    const val = TVS_CREDIT_EMI_TEMPLATES[language] ?? TVS_CREDIT_EMI_TEMPLATES.English;
+    return getGenderedText(val, resolvedGender);
+  }
+  if (mode === "personalized" && templateKey === "loan_offer_interactive") {
+    const val = LOAN_OFFER_INTERACTIVE_TEMPLATES[language] ?? LOAN_OFFER_INTERACTIVE_TEMPLATES.English;
+    return getGenderedText(val, resolvedGender);
+  }
+  if (mode === "personalized" && templateKey === "scene_loan_offer") {
+    return SCENE_LOAN_OFFER_TRANSCRIPT;
+  }
+  if (mode === "personalized" && templateKey === "loan_reminder") {
+    return LOAN_REMINDER_TRANSCRIPT;
+  }
+  if (mode === "universal" && templateKey === "scene_loan_offer") {
+    return SCENE_LOAN_OFFER_TRANSCRIPT;
+  }
+  if (mode === "universal" && templateKey === "tvs_credit_emi") {
+    const val = TVS_CREDIT_EMI_UNIVERSAL_TEMPLATES[language] ?? TVS_CREDIT_EMI_UNIVERSAL_TEMPLATES.English;
+    return getGenderedText(val, resolvedGender);
+  }
+  if (mode === "personalized" && templateKey === "collection_reminder") {
+    return COLLECTION_REMINDER_TRANSCRIPT;
+  }
   if (mode === "universal") {
     const val = UNIVERSAL_TEMPLATES[language] ?? UNIVERSAL_TEMPLATES.English;
     return getGenderedText(val, resolvedGender);

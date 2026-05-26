@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Float, MeshDistortMaterial, Sparkles, Sphere } from "@react-three/drei";
 import { Clapperboard, Film, Layers3 } from "lucide-react";
+import type { VideoType } from "@/store/wizardStore";
 import type { Mesh } from "three";
 
 function browserSupportsWebGL(): boolean {
@@ -51,7 +52,7 @@ function ProcessingFallback({
   videoType,
 }: {
   status: "submitting" | "styling" | "idle" | "completed" | "failed";
-  videoType: "avatar" | "remotion";
+  videoType: VideoType;
 }) {
   const Icon = videoType === "remotion" ? Film : Clapperboard;
   const statusLabel =
@@ -85,7 +86,7 @@ interface ProcessingScreenProps {
   status: "submitting" | "styling" | "idle" | "completed" | "failed";
   estimatedTime?: string;
   isLongVideo?: boolean;
-  videoType?: "avatar" | "remotion";
+  videoType?: VideoType;
 }
 
 export function ProcessingScreen({

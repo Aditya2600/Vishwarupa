@@ -6,6 +6,9 @@ export const DEFAULT_DURATION_SECONDS = 12;
 export const TRANSITION_FRAMES = 12;
 export const WIDTH = 1280;
 export const HEIGHT = 720;
+export const PAYMENT_LINK_GUIDANCE_DURATION = 960;
+export const OVERDUE_TEMPLATE_DURATION = 1050;
+export const LOAN_OFFER_INTERACTIVE_DURATION = 450;
 const MIN_VIDEO_WIDTH = 540;
 const MIN_VIDEO_HEIGHT = 540;
 const MAX_VIDEO_WIDTH = 2160;
@@ -65,7 +68,7 @@ const BRANDING_DEFAULTS = fallbackLead.branding;
 
 const normalizeSubtitleColor = (value) => {
   const cleaned = safeString(value, BRANDING_DEFAULTS.subtitles.color);
-  return ['White', 'Blue', 'Green', 'Red', 'Yellow', 'Teal'].includes(cleaned)
+  return ['White', 'Blue', 'Green', 'Red', 'Yellow', 'Teal', 'Black'].includes(cleaned)
     ? cleaned
     : BRANDING_DEFAULTS.subtitles.color;
 };
@@ -232,6 +235,19 @@ const buildScenePayload = (lead, displayAmounts, urgencyLevel) => {
   const clientName = safeString(lead.client_name, 'Bank');
   const lan = safeString(lead.lan, 'N/A');
   const contactDetails = safeString(lead.contact_details, '1800-555-999');
+
+  if (lead.template_key === 'overdue_template') {
+    return {
+      headline_text: `Dear ${customerName}`,
+      cta_text: `For any help, contact ${contactDetails}.`,
+      opening: {
+        eyebrow: 'Overdue Notice',
+        headline: `Dear ${customerName}`,
+        subheadline: `${clientName} | Card ${lan}`,
+      },
+    };
+  }
+
   const productContent = getProductContent(lead.product_type);
   const outstandingValue = displayAmounts.primary.value;
   const loanValue = displayAmounts.secondary.value;
@@ -325,9 +341,17 @@ export const getTrackMeta = (leadId) => {
   const lead = getLeadById(leadId);
   const track = metadata[leadId] || {};
   
-  const subtitles = Array.isArray(lead?.subtitles) && lead.subtitles.length > 0 
+  const rawSubtitles = Array.isArray(lead?.subtitles) && lead.subtitles.length > 0 
     ? lead.subtitles 
     : (Array.isArray(track.subtitles) ? track.subtitles : []);
+
+  const subtitles = rawSubtitles.map((sub) => {
+    if (!sub || typeof sub !== 'object') return sub;
+    return {
+      ...sub,
+      text: typeof sub.text === 'string' ? sub.text.replace(/\s+\d+\s*$/, '') : '',
+    };
+  });
 
   const duration = typeof track.duration === 'number' && Number.isFinite(track.duration)
     ? track.duration
@@ -340,6 +364,7 @@ export const getTrackMeta = (leadId) => {
 };
 
 export const getDurationInFrames = (leadId) => {
+  const lead = getLeadById(leadId);
   const track = getTrackMeta(leadId);
   const lastSubtitleEnd = track.subtitles.reduce((max, item) => {
     if (item && typeof item.end === 'number' && Number.isFinite(item.end)) {
@@ -347,7 +372,15 @@ export const getDurationInFrames = (leadId) => {
     }
     return max;
   }, 0);
-  const totalSeconds = Math.max(track.duration, lastSubtitleEnd, DEFAULT_DURATION_SECONDS);
+  const templateMinSeconds =
+    lead?.template_key === 'payment_link_guidance'
+      ? PAYMENT_LINK_GUIDANCE_DURATION / FPS
+      : lead?.template_key === 'overdue_template'
+      ? OVERDUE_TEMPLATE_DURATION / FPS
+      : lead?.template_key === 'loan_offer_interactive'
+      ? LOAN_OFFER_INTERACTIVE_DURATION / FPS
+      : DEFAULT_DURATION_SECONDS;
+  const totalSeconds = Math.max(track.duration, lastSubtitleEnd, templateMinSeconds);
   return Math.ceil(totalSeconds * FPS) + Math.round(FPS * 1.5);
 };
 

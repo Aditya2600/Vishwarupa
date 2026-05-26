@@ -69,6 +69,7 @@ class MediaStylingService:
         'green': (52, 211, 153),
         'red': (248, 113, 113),
         'yellow': (255, 238, 112),
+        'black': (0, 0, 0),
     }
     _subtitle_alignments = {
         'top': 8,

@@ -8,6 +8,14 @@ def normalize_hindi_numbers(text: str) -> str:
     - Phone numbers/IDs: Digit by digit.
     - Amounts: Lakh/Thousand conversion.
     """
+    # Pre-process loan/account numbers to be space-separated digits to avoid lakh/thousand cardinal conversions.
+    # Matches words like account/loan/agreement/खाता संख्या/अकाउंट नंबर followed by digits.
+    text = re.sub(
+        r'(?i)\b(account(?:\s+number)?|loan(?:\s+account)?|agreement(?:\s+number)?|खाता(?:\s+संख्या)?|अकाउंट(?:\s+नंबर)?|खाते(?:\s+क्रमांक)?)\b\s*([a-zA-Z]*\d+)',
+        lambda m: f"{m.group(1)} " + " ".join(list(m.group(2))),
+        text
+    )
+
     def replace_phone(match):
         digits = "".join(re.findall(r'\d', match.group(0)))
         if len(digits) >= 8:
