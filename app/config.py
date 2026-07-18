@@ -35,6 +35,14 @@ class Settings(BaseSettings):
     remotion_browser_executable: str | None = None
     remotion_renderer_port: int | None = None
     remotion_force_ipv4: bool = True
+    # Renderer backend: 'service' uses the long-lived Node renderer (production
+    # path); 'cli' keeps the legacy per-job `npx remotion render` (rollback).
+    remotion_render_backend: str = 'cli'
+    remotion_renderer_url: str | None = None
+    remotion_render_concurrency: int = 1
+    remotion_renderer_connect_timeout_seconds: float = 5.0
+    edge_tts_timeout_seconds: int = 600
+    remotion_render_timeout_seconds: int = 600
     poll_interval_seconds: int = 8
     poll_timeout_seconds: int = 2400
     edge_tts_delay_seconds: float = 0.0
@@ -47,8 +55,13 @@ class Settings(BaseSettings):
     aws_secret_access_key: str | None = None
     aws_region: str = 'us-east-1'
     sqs_wait_time_seconds: int = 20
-    sqs_visibility_timeout_seconds: int = 120
+    # Must exceed the longest a worker holds a message before deleting it, i.e. the
+    # full Remotion pipeline: edge_tts_timeout_seconds (600) + remotion_render_timeout_seconds
+    # (600) + S3 upload buffer. Otherwise SQS redelivers mid-job and the duplicate is
+    # dropped by the atomic claim, losing SQS redelivery as the crash-recovery path.
+    sqs_visibility_timeout_seconds: int = 1500
     sqs_max_receive_count: int = 3
+    sqs_dlq_queue_url: str | None = None
     cpaas_api_base_url: str
     cpaas_api_auth_token: str | None = None
 

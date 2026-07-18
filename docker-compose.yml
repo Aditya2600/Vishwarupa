@@ -28,12 +28,50 @@ services:
     environment:
       FRONTEND_URL: ${FRONTEND_URL:?Set FRONTEND_URL in .env}
       CPAAS_API_BASE_URL: ${CPAAS_API_BASE_URL:?Set CPAAS_API_BASE_URL in .env}
-    command: python -m app.workers.avatar_job_worker
+      # Production render path: reuse the long-lived renderer. Set to `cli` to
+      # roll back to per-job `npx remotion render`.
+      REMOTION_RENDER_BACKEND: ${REMOTION_RENDER_BACKEND:-service}
+      REMOTION_RENDERER_URL: ${REMOTION_RENDERER_URL:-http://remotion-renderer:3000}
+    command: python -m app.workers.job_worker
     depends_on:
-      - backend
+      backend:
+        condition: service_started
+      remotion-renderer:
+        condition: service_healthy
     volumes:
       - ./input:/app/input
       - ./output:/app/output
+      # Shared with the renderer: worker writes audio/props/assets, renderer reads.
+      - ./Remotion/public:/app/Remotion/public
+
+  remotion-renderer:
+    build:
+      context: ./Remotion
+      dockerfile: renderer-service/Dockerfile
+    container_name: personalized-video-remotion-renderer
+    restart: unless-stopped
+    shm_size: 2gb
+    # Internal only — no host port published; reachable only on the compose network.
+    expose:
+      - "3000"
+    environment:
+      REMOTION_RENDER_CONCURRENCY: ${REMOTION_RENDER_CONCURRENCY:-1}
+      REMOTION_BROWSER_EXECUTABLE: /usr/bin/chromium
+      REMOTION_LOG_LEVEL: ${REMOTION_LOG_LEVEL:-info}
+    volumes:
+      # Same shared paths as the worker so both see identical files.
+      - ./output:/app/output
+      - ./Remotion/public:/app/Remotion/public
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "require('http').get('http://localhost:3000/readyz',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
 
   frontend:
     build:

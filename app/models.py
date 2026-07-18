@@ -271,6 +271,14 @@ class HybridRemotionAvatarPipResponse(BaseModel):
     duration_seconds: float | None = None
 
 
+class HybridRemotionAvatarPipJobAck(BaseModel):
+    """Async acknowledgement for the hybrid endpoint. The render runs on the worker;
+    the client polls /videos/{video_id}/status?request_mode=hybrid_remotion_avatar_pip."""
+    success: bool = True
+    video_id: str
+    status: str = 'queued'
+
+
 class TemplateVideoRequest(LeadRecord):
     template_id: str | None = None
     payload_path: str | None = None

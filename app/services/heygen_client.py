@@ -7,6 +7,8 @@ from typing import Any
 import httpx
 
 from app.config import settings
+from app.services.errors import PermanentError, TransientError, is_transient_provider_message
+from app.services.retry import retry_sync
 
 
 class HeyGenClient:
@@ -108,7 +110,12 @@ class HeyGenClient:
                 payload: dict[str, Any] | str = response.json()
             except Exception:
                 payload = response.text
-            raise RuntimeError(self.summarize_provider_error(payload)) from exc
+            message = self.summarize_provider_error(payload)
+            # 429 and 5xx are retryable; other 4xx (bad request, insufficient
+            # credit, invalid avatar/template) are permanent — fail fast.
+            status = response.status_code
+            error_cls = TransientError if status == 429 or status >= 500 else PermanentError
+            raise error_cls(message) from exc
 
     def generate_video_direct(self, payload: dict[str, Any]) -> dict[str, Any]:
         with httpx.Client(timeout=120.0) as client:
@@ -123,11 +130,15 @@ class HeyGenClient:
         return response.json()
 
     def get_video_status(self, video_id: str) -> dict[str, Any]:
-        params = {'video_id': video_id}
-        with httpx.Client(timeout=60.0) as client:
-            response = client.get(self._url('/v1/video_status.get'), headers=self.headers, params=params)
-        self._raise_for_status(response)
-        return response.json()
+        # Idempotent read — safe to retry transient blips with backoff.
+        def _call() -> dict[str, Any]:
+            params = {'video_id': video_id}
+            with httpx.Client(timeout=60.0) as client:
+                response = client.get(self._url('/v1/video_status.get'), headers=self.headers, params=params)
+            self._raise_for_status(response)
+            return response.json()
+
+        return retry_sync(_call, label=f'HeyGen status {video_id}')
 
     def list_avatars(self) -> dict[str, Any]:
         with httpx.Client(timeout=60.0) as client:
@@ -171,18 +182,25 @@ class HeyGenClient:
             if state in {'completed', 'done', 'success'}:
                 return status
             if state in {'failed', 'error'}:
-                raise RuntimeError(self.summarize_provider_error(status))
+                message = self.summarize_provider_error(status)
+                error_cls = TransientError if is_transient_provider_message(message) else PermanentError
+                raise error_cls(message)
             time.sleep(interval)
+        # A poll timeout is transient — the render may simply be slow; let it retry.
         raise TimeoutError(f'Video {video_id} did not finish within {timeout} seconds')
 
     def download_file(self, url: str, target_path: Path) -> Path:
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-        with httpx.stream('GET', url, timeout=120.0) as response:
-            self._raise_for_status(response)
-            with target_path.open('wb') as handle:
-                for chunk in response.iter_bytes():
-                    handle.write(chunk)
-        return target_path
+        # Idempotent GET to a fresh path — safe to retry with backoff.
+        def _call() -> Path:
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            with httpx.stream('GET', url, timeout=120.0) as response:
+                self._raise_for_status(response)
+                with target_path.open('wb') as handle:
+                    for chunk in response.iter_bytes():
+                        handle.write(chunk)
+            return target_path
+
+        return retry_sync(_call, label='HeyGen download')
 
     def generate_tts(self, voice_id: str, text: str) -> dict[str, Any]:
         payload = {

@@ -61,6 +61,26 @@ class HybridAvatarGenerationError(RuntimeError):
     """Raised when raw HeyGen avatar generation for hybrid rendering fails."""
 
 
+def collection_status_percent(value: str | None) -> int:
+    """Parse a collection-status string into an integer percent (0-100).
+
+    Shared by the API endpoint (request validation) and the worker (job execution)
+    so both interpret the field identically. Raises ValueError on out-of-range or
+    non-numeric input.
+    """
+    if value is None or not value.strip():
+        return 75
+
+    match = re.search(r'\d+(?:\.\d+)?', value)
+    if not match:
+        raise ValueError('collection_status must contain a number between 0 and 100')
+
+    parsed = round(float(match.group(0)))
+    if not 0 <= parsed <= 100:
+        raise ValueError('collection_status must be between 0 and 100')
+    return parsed
+
+
 def _project_path(path_value: str | Path) -> Path:
     path = Path(path_value).expanduser()
     return path if path.is_absolute() else settings.project_root / path
@@ -391,35 +411,51 @@ def render_hybrid_avatar_pip_video(
     props_path = remotion_path / f"hybrid_props_{safe_video_id}_{uuid.uuid4().hex}.json"
     props_path.write_text(json.dumps(props, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    command = [
-        settings.remotion_npx_binary,
-        "--yes",
-        "remotion",
-        "render",
-        "src/index.jsx",
-        aspect_config["composition"],
-        str(resolved_output_path),
-        f"--props={props_path}",
-        "--overwrite",
-    ]
-    if settings.remotion_browser_executable:
-        command.append(f"--browser-executable={settings.remotion_browser_executable}")
-
+    backend = (settings.remotion_render_backend or "cli").strip().lower()
     try:
-        result = subprocess.run(
-            command,
-            cwd=str(remotion_path),
-            check=False,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            timeout=900,
-        )
-        if result.returncode != 0:
-            render_output = (result.stdout or "").strip()
-            raise HybridRenderError(
-                f"Remotion render failed with exit code {result.returncode}: {render_output[-4000:]}"
+        if backend == "service":
+            # Persistent renderer service: reuse bundle + Chromium across jobs.
+            # The avatar mp4 is read via staticFile("avatar/<id>.mp4") from the
+            # shared public dir, so props alone are enough.
+            from app.services.remotion_renderer_client import RendererClient
+
+            RendererClient().render(
+                entry_point="src/index.jsx",
+                composition_id=aspect_config["composition"],
+                input_props=props,
+                output_location=str(resolved_output_path),
+                job_id=safe_video_id,
+                request_mode="hybrid_remotion_avatar_pip",
             )
+        else:
+            command = [
+                settings.remotion_npx_binary,
+                "--yes",
+                "remotion",
+                "render",
+                "src/index.jsx",
+                aspect_config["composition"],
+                str(resolved_output_path),
+                f"--props={props_path}",
+                "--overwrite",
+            ]
+            if settings.remotion_browser_executable:
+                command.append(f"--browser-executable={settings.remotion_browser_executable}")
+
+            result = subprocess.run(
+                command,
+                cwd=str(remotion_path),
+                check=False,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=900,
+            )
+            if result.returncode != 0:
+                render_output = (result.stdout or "").strip()
+                raise HybridRenderError(
+                    f"Remotion render failed with exit code {result.returncode}: {render_output[-4000:]}"
+                )
     finally:
         try:
             props_path.unlink()

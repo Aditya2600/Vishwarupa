@@ -1,3 +1,11 @@
+# Rendering library — NOT a standalone SQS consumer.
+#
+# JobWorker (job_worker.py) is the single SQS polling process. It delegates
+# remotion_async and hybrid_remotion_avatar_pip jobs here by calling
+# RemotionJobProcessor._process_job directly. Stale-job reaping for these modes lives
+# in JobWorker.reap_stale_processing_jobs (this class no longer has its own SQS
+# polling loop or process entry point).
+
 from __future__ import annotations
 
 import asyncio
@@ -5,20 +13,35 @@ import base64
 import html
 import json
 import logging
-from datetime import datetime
+import shutil
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 from bson import ObjectId
 
 from app.config import settings
-from app.constants import SQS_QUEUE_URL
+from app.constants import SQS_QUEUE_URL, HYBRID_PUBLIC_DIR
 from app.database import videos_collection
-from app.models import VideoRecord, RemotionVideoRequest
+from app.models import VideoRecord, RemotionVideoRequest, HybridRemotionAvatarPipRequest
+from app.services.errors import PermanentError, classify_exception
 from app.services.sqs_service import SQSService
 from app.services.remotion_service import RemotionService
 from app.services.s3_service import S3Service
+from app.services.hybrid_remotion_avatar_pip_service import (
+    _verify_media,
+    collection_status_percent,
+    generate_raw_avatar_for_hybrid,
+    render_hybrid_avatar_pip_video,
+)
 
 logger = logging.getLogger("app")
+
+
+# Retained for test_remotion_reaper.py; the live reaper now lives in JobWorker,
+# which carries its own copy of this helper.
+def _stale_processing_cutoff(now: datetime, timeout_seconds: int, visibility_seconds: int) -> datetime:
+    # ponytail: one grace window past the render timeout; use a scheduler later if this grows.
+    return now - timedelta(seconds=max(timeout_seconds, 1) + max(visibility_seconds, 1))
 
 
 def _mongo_id(value: str) -> ObjectId | str:
@@ -56,10 +79,11 @@ def _asset_data_uri(relative_path: str) -> str:
     return f"data:{mime_type};base64,{encoded}"
 
 
-class RemotionJobWorker:
-    """
-    Polls the SQS queue for Remotion video generation jobs and processes them.
-    Mirrors the AvatarJobWorker pattern.
+class RemotionJobProcessor:
+    """Rendering engine for Remotion and hybrid avatar+PiP jobs.
+
+    Called by JobWorker.process_message — not a standalone SQS consumer.
+    Entry point: _process_job(video_id, receipt_handle).
     """
 
     def __init__(self) -> None:
@@ -366,46 +390,6 @@ class RemotionJobWorker:
             content_type="text/html; charset=utf-8",
         )
 
-    async def run_forever(self) -> None:
-        """Continuously poll SQS for remotion jobs until the process is killed."""
-        logger.info("RemotionJobWorker: Starting SQS polling loop...")
-        while True:
-            try:
-                await self._poll_once()
-            except Exception as exc:
-                logger.error(f"RemotionJobWorker: Unexpected error in poll loop: {exc}")
-            await asyncio.sleep(settings.sqs_poll_interval_seconds if hasattr(settings, 'sqs_poll_interval_seconds') else 5)
-
-    async def _poll_once(self) -> None:
-        """Fetch one batch of messages from SQS and process them."""
-        try:
-            messages = await asyncio.to_thread(
-                self.sqs_service.receive_messages,
-                self.queue_url,
-                max_messages=5
-            )
-            for message in messages:
-                import json
-                body_raw = message.get("Body", "{}")
-                try:
-                    body = json.loads(body_raw)
-                except Exception:
-                    body = {}
-
-                video_id = body.get('_id')
-                receipt_handle = message.get("ReceiptHandle")
-
-                if not video_id:
-                    logger.warning(f"RemotionJobWorker: Received message with no video_id/job_id: {body}, skipping.")
-                    if receipt_handle:
-                        self.sqs_service.delete_message(receipt_handle, self.queue_url)
-                    continue
-
-                await self._process_job(str(video_id), receipt_handle)
-
-        except Exception as exc:
-            logger.error(f"RemotionJobWorker: Error processing message: {exc}")
-
     async def _process_job(self, video_id: str, receipt_handle: str | None) -> None:
         """Fetch job from MongoDB, run Remotion generation, and update the record."""
         # 1. Fetch full job document from MongoDB
@@ -414,43 +398,55 @@ class RemotionJobWorker:
         )
 
         if not job_doc:
-            logger.warning(f"RemotionJobWorker: No job found for video_id={video_id}. It may have been processed already.")
+            logger.warning(f"RemotionJobProcessor: No job found for video_id={video_id}. It may have been processed already.")
             if receipt_handle:
                 self.sqs_service.delete_message(receipt_handle, self.queue_url)
             return
 
-        # 2. Skip only completed jobs. Failed jobs are allowed to retry.
+        # 2. Skip completed jobs outright. Failed/queued jobs are claimable below.
         current_status = job_doc.get("status", "queued")
         if current_status == "completed":
-            logger.info(f"RemotionJobWorker: video_id={video_id} already in status={current_status}. Deleting from SQS.")
-            if receipt_handle:
-                self.sqs_service.delete_message(receipt_handle, self.queue_url)
-            return
-        if current_status == "processing":
-            logger.info(f"RemotionJobWorker: video_id={video_id} is already processing. Deleting duplicate SQS message.")
+            logger.info(f"RemotionJobProcessor: video_id={video_id} already in status={current_status}. Deleting from SQS.")
             if receipt_handle:
                 self.sqs_service.delete_message(receipt_handle, self.queue_url)
             return
 
-        # 3. Mark as processing, clearing any prior failure state so retries can run cleanly.
-        # CRITICAL FIX: Only process jobs that are explicitly Remotion jobs.
-        # If an Avatar job is found in SQS, let the AvatarJobWorker handle it.
+        # CRITICAL: Only process jobs that are explicitly Remotion jobs.
+        # If an Avatar job is found in SQS, let the JobWorker handle it.
         request_mode = job_doc.get("request_mode", "")
         if "remotion" not in str(request_mode).lower():
-            logger.info(f"RemotionJobWorker: skipping video_id={video_id} because request_mode={request_mode} is not Remotion.")
+            logger.info(f"RemotionJobProcessor: skipping video_id={video_id} because request_mode={request_mode} is not Remotion.")
             return
 
+        # 3. Atomically claim the job. A single conditional update is the only safe
+        # gate: a read-then-write check is a TOCTOU race where two workers both read
+        # "queued" and both render the same job. Only a job still in a claimable
+        # state ('queued' or 'failed' retry) matches, so exactly one worker wins.
         now = datetime.utcnow()
-        await self.videos_collection_ref.update_one(
-            {"_id": _mongo_id(video_id)},
+        claim = await self.videos_collection_ref.update_one(
+            {"_id": _mongo_id(video_id), "status": {"$in": ["queued", "failed"]}},
             {"$set": {
                 "status": "processing",
                 "updated_at": now,
+                "started_at": now,
                 "error_message": None,
-            }}
+            }, "$inc": {"attempts": 1}}
         )
+        if claim.modified_count == 0:
+            # Another worker claimed it (or it advanced past a claimable state)
+            # between our read and this update. Drop the duplicate message.
+            logger.info(f"RemotionJobProcessor: video_id={video_id} was claimed by another worker (status={current_status}). Deleting duplicate SQS message.")
+            if receipt_handle:
+                self.sqs_service.delete_message(receipt_handle, self.queue_url)
+            return
 
         try:
+            # Hybrid jobs (avatar + Remotion PiP) share this worker because their
+            # request_mode contains "remotion", but they run a different pipeline.
+            if "hybrid" in str(request_mode).lower():
+                await self._process_hybrid_job(video_id, job_doc, receipt_handle)
+                return
+
             # 4. Generate Remotion video
             raw_payload = job_doc.get("job_data", {}).get("request_payload", {})
             remotion_req = RemotionVideoRequest(**raw_payload)
@@ -458,10 +454,11 @@ class RemotionJobWorker:
             # Pass the video_id down to consolidate all file naming
             result_payload = await self.remotion_service.generate_video(remotion_req, video_id=video_id)
             result_path = result_payload["video_path"]
+            _verify_media(Path(result_path), require_audio=True)
             
-            # 5. Upload to S3
+            # 5. Upload to S3 (strict: a failed upload must not mark the job completed)
             s3_key = f"videos/{video_id}.mp4"
-            final_url = self.s3_service.upload_video(result_path, s3_key)
+            final_url = self.s3_service.upload_video(result_path, s3_key, raise_on_failure=True)
             interactive_url = None
             if remotion_req.template_key in {"loan_reminder", "collection_reminder"} and final_url:
                 interactive_url = self._upload_loan_reminder_html(
@@ -492,7 +489,33 @@ class RemotionJobWorker:
                 self.sqs_service.delete_message(receipt_handle, self.queue_url)
 
         except Exception as exc:
-            logger.error(f"RemotionJobWorker: Failed to process video_id={video_id}: {exc}")
+            # Decide retry vs fail-fast. The atomic claim already $inc'd `attempts`,
+            # so attempts-so-far = the doc's prior value + 1. A transient error under
+            # the retry cap is left reclaimable WITHOUT deleting the SQS message, so
+            # the message redelivers and another claim re-runs it. Permanent errors
+            # (and exhausted retries) fail fast: mark failed and drop the message,
+            # rather than burning the full SQS receive budget on a hopeless render.
+            attempts_so_far = int(job_doc.get("attempts", 0)) + 1
+            transient = not isinstance(exc, PermanentError) and classify_exception(exc)
+            retryable = transient and attempts_so_far < settings.sqs_max_receive_count
+
+            if retryable:
+                logger.warning(
+                    f"RemotionJobProcessor: transient failure for video_id={video_id} "
+                    f"(attempt {attempts_so_far}/{settings.sqs_max_receive_count}); requeueing: {exc}"
+                )
+                await self.videos_collection_ref.update_one(
+                    {"_id": _mongo_id(video_id)},
+                    {"$set": {
+                        "status": "queued",
+                        "error_message": str(exc),
+                        "updated_at": datetime.utcnow(),
+                    }}
+                )
+                # Do NOT delete the message — let SQS redeliver it for another claim.
+                return
+
+            logger.error(f"RemotionJobProcessor: Failed to process video_id={video_id}: {exc}")
             await self.videos_collection_ref.update_one(
                 {"_id": _mongo_id(video_id)},
                 {"$set": {
@@ -504,14 +527,84 @@ class RemotionJobWorker:
             if receipt_handle:
                 self.sqs_service.delete_message(receipt_handle, self.queue_url)
 
+    async def _process_hybrid_job(
+        self, video_id: str, job_doc: dict[str, Any], receipt_handle: str | None
+    ) -> None:
+        """Render an async hybrid (avatar + Remotion PiP) job.
 
-def main():
-    worker = RemotionJobWorker()
-    try:
-        asyncio.run(worker.run_forever())
-    except KeyboardInterrupt:
-        logger.info("Worker stopped by user.")
+        Mirrors the former synchronous endpoint, but runs on the worker. Raises on
+        failure so the caller's retry/fail-fast handler manages status + SQS; on
+        success it updates the record to 'completed' and deletes the message itself.
+        """
+        raw_payload = (job_doc.get("job_data") or {}).get("request_payload") or {}
+        request = HybridRemotionAvatarPipRequest(**raw_payload)
+        collection_status = collection_status_percent(request.collection_status)
 
+        raw_avatar = await asyncio.to_thread(
+            generate_raw_avatar_for_hybrid,
+            customer_name=request.customer_name,
+            account_number=request.account_number,
+            days_overdue=request.days_overdue,
+            amount_due=request.amount_due,
+            avatar_id=request.avatar_id,
+            voice_id=request.voice_id,
+            agent_name=request.agent_name,
+            language=request.language,
+        )
+        render_result = await asyncio.to_thread(
+            render_hybrid_avatar_pip_video,
+            video_id=video_id,
+            avatar_mp4_path=raw_avatar["avatar_local_path"],
+            customer_name=request.customer_name,
+            account_number=request.account_number,
+            days_overdue=request.days_overdue,
+            collection_status=collection_status,
+            amount_due=request.amount_due,
+            agent_name=request.agent_name,
+            agent_role=request.agent_role,
+            aspect_mode=request.aspect_mode,
+            viewport_width=request.viewport_width,
+            viewport_height=request.viewport_height,
+        )
 
-if __name__ == "__main__":
-    main()
+        final_source_path = Path(render_result["output_path"])
+        _verify_media(final_source_path, require_audio=True)
+
+        # Serve locally under /generated (parity with the old endpoint) and upload
+        # to S3 for durability — the /tmp public copy does not survive a restart.
+        public_filename = f"{video_id}.mp4"
+        public_path = HYBRID_PUBLIC_DIR / public_filename
+        HYBRID_PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(shutil.copyfile, final_source_path, public_path)
+
+        s3_url = self.s3_service.upload_video(
+            public_path, f"videos/{video_id}.mp4", raise_on_failure=True
+        )
+        final_video_url = s3_url or f"/generated/{public_filename}"
+
+        response = {
+            "success": True,
+            "raw_avatar_video_id": raw_avatar.get("heygen_video_id"),
+            "raw_avatar_path": raw_avatar.get("avatar_local_path"),
+            "final_video_path": str(public_path),
+            "final_video_url": final_video_url,
+            "width": int(render_result["width"]),
+            "height": int(render_result["height"]),
+            "duration_seconds": render_result.get("duration_seconds"),
+        }
+
+        await self.videos_collection_ref.update_one(
+            {"_id": _mongo_id(video_id)},
+            {"$set": {
+                "status": "completed",
+                "video_url": final_video_url,
+                "updated_at": datetime.utcnow(),
+                "completed_at": datetime.utcnow(),
+                "job_data.raw_avatar": raw_avatar,
+                "job_data.render_result": render_result,
+                "job_data.response": response,
+            }},
+        )
+        if receipt_handle:
+            self.sqs_service.delete_message(receipt_handle, self.queue_url)
+        logger.info("RemotionJobProcessor: hybrid job %s completed.", video_id)

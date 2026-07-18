@@ -304,7 +304,7 @@ const buildScenePayload = (lead, displayAmounts, urgencyLevel) => {
   };
 };
 
-const normalizeLead = (lead) => {
+export const normalizeLead = (lead) => {
   const mergedLead = {...fallbackLead, ...lead};
   const displayAmounts = lead?.display_amounts || buildDisplayAmounts(mergedLead);
   const urgencyLevel = safeString(lead?.urgency_level, determineUrgencyLevel(mergedLead.tos));

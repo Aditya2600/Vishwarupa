@@ -2,6 +2,8 @@ import boto3
 from pathlib import Path
 from app.config import settings
 from app.constants import S3_BUCKET_NAME
+from app.services.errors import PermanentError, TransientError
+from app.services.retry import retry_sync
 import logging
 
 logger = logging.getLogger(__name__)
@@ -16,31 +18,62 @@ class S3Service:
         ) if settings.aws_access_key_id and settings.aws_secret_access_key else None
         self.bucket = S3_BUCKET_NAME
 
-    def upload_video(self, local_path: Path, s3_key: str) -> str | None:
+    def upload_video(self, local_path: Path, s3_key: str, *, raise_on_failure: bool = False) -> str | None:
         """Uploads a video to S3 and returns the public URL. Returns None if S3 is not configured."""
-        return self.upload_file(local_path, s3_key, content_type='video/mp4')
+        return self.upload_file(local_path, s3_key, content_type='video/mp4', raise_on_failure=raise_on_failure)
 
-    def upload_file(self, local_path: str | Path, s3_key: str, content_type: str = 'application/octet-stream') -> str | None:
-        """Uploads any file to S3 and returns the public URL. Returns None if S3 is not configured."""
+    def upload_file(
+        self,
+        local_path: str | Path,
+        s3_key: str,
+        content_type: str = 'application/octet-stream',
+        *,
+        raise_on_failure: bool = False,
+    ) -> str | None:
+        """Uploads any file to S3 and returns the public URL.
+
+        Transient failures (throttling, 5xx, connection blips) are retried with
+        exponential backoff + jitter. Returns None when S3 is unconfigured.
+
+        `raise_on_failure` controls disposition of a genuine failure: lenient callers
+        (default) get None and a logged error; worker callers pass True so a failed
+        upload raises — a PermanentError (missing file / access denied) so the job
+        fails fast, or a TransientError (exhausted retries) so SQS can redeliver —
+        instead of silently marking the job 'completed' with no video URL.
+        """
         if not self.s3 or not self.bucket:
             logger.info("S3 credentials or bucket missing. Skipping upload.")
             return None
-            
+
         path_obj = Path(local_path)
         if not path_obj.exists():
             logger.error(f"File {path_obj} does not exist. Cannot upload to S3.")
+            if raise_on_failure:
+                raise PermanentError(f"Cannot upload to S3: file {path_obj} does not exist.")
             return None
 
-        try:
+        def _do_upload() -> str:
             self.s3.upload_file(
-                str(path_obj), 
-                self.bucket, 
+                str(path_obj),
+                self.bucket,
                 s3_key,
-                ExtraArgs={'ContentType': content_type}
+                ExtraArgs={'ContentType': content_type},
             )
             return f"https://{self.bucket}.s3.{settings.aws_region}.amazonaws.com/{s3_key}"
+
+        try:
+            return retry_sync(_do_upload, label=f"S3 upload {s3_key}")
         except Exception as e:
             logger.error(f"Failed to upload to S3: {e}")
+            if raise_on_failure:
+                # Preserve the transient/permanent verdict so the worker can decide
+                # whether to requeue (transient) or fail fast (permanent).
+                from app.services.errors import classify_exception
+                if isinstance(e, (TransientError, PermanentError)):
+                    raise
+                raise (TransientError if classify_exception(e) else PermanentError)(
+                    f"S3 upload failed for {s3_key}: {e}"
+                ) from e
             return None
 
     def generate_presigned_s3_url(self, s3_key: str, expires_in: int = 604800) -> str | None:

@@ -25,13 +25,13 @@ graph TD
     API -->|Enqueue Jobs| SQS[AWS SQS: Video-generation]
     
     %% Queue & Processing Layer
-    SQS -->|Pull Jobs| ABW[AvatarJobWorker]
+    SQS -->|Pull Jobs| JW[JobWorker]
     SQS -->|Pull Jobs| RBW[RemotionJobWorker]
     
     %% Workers Integration
-    ABW -->|HeyGen API Sync / Wait| HG[HeyGen API Server]
-    HG -->|Download Video| ABW
-    ABW -->|Style Video via FFmpeg| MSE[Media Styling Engine]
+    JW -->|HeyGen API Sync / Wait| HG[HeyGen API Server]
+    HG -->|Download Video| JW
+    JW -->|Style Video via FFmpeg| MSE[Media Styling Engine]
     
     RBW -->|1. Generate Voice Audio| ETTS[Edge TTS API]
     RBW -->|2. Render Canvas| REM[Remotion CLI / npx]
@@ -39,12 +39,13 @@ graph TD
     Chromium -->|Assemble MP4| FFmpeg[FFmpeg Binary]
     FFmpeg -->|Local Artifact| RBW
     
-    %% Hybrid PIP Direct Orchestration (Sync / Threaded)
-    API -->|1. Sync Gen Avatar| HG
-    API -->|2. Local Overlay Render| REM
+    %% Hybrid PiP / VisionDesk (Now Queued)
+    API -->|Enqueue Hybrid Jobs| SQS
+    RBW -->|1. Sync Gen Avatar| HG
+    RBW -->|2. Local Overlay Render| REM
     
     %% Final Storage
-    ABW -->|Upload MP4| S3
+    JW -->|Upload MP4| S3
     RBW -->|Upload MP4| S3
     API -->|3. Copy Final MP4| S3
     
@@ -138,10 +139,10 @@ The system supports two HeyGen integration mechanisms, managed by `app/services/
 [SQS Queue (Async Processing)]
         │
         ▼
-[AvatarJobWorker]
+[JobWorker]
         │
-        ├─► 1. Mark VideoRecord as "processing"
-        ├─► 2. HTTP POST to HeyGen API (submit synthesis job)
+        ├─► 1. Atomic claim: Mark VideoRecord as "processing"
+        ├─► 2. HTTP POST to HeyGen API (submit synthesis job with retry backoff)
         ├─► 3. Poll HeyGen /v1/video_status.get until "completed" (or timeout)
         ├─► 4. Download source MP4 locally
         ├─► 5. Execute MediaStylingService: Burn overlays (subtitles/logos) via FFmpeg
@@ -248,8 +249,8 @@ The Remotion engine supports three core layouts:
     5.  *PaymentPhoneScene (Walkthrough 2):* Repeats the phone screen walkthrough to reinforce the payment steps.
     6.  *PaymentSupportScene:* Deep purple closing card with a call-support pill.
 
-#### C. Vertical Payment Guidance (`payment_link_guidance`):
-*   **Aesthetics:** Vertical composition (`1080x1920` - 9:16 aspect ratio), optimized for viewing on mobile screens and sharing via WhatsApp.
+#### C. 3-Step Payment Guidance (`payment_link_guidance` & `TVSCreditEMITemplate`):
+*   **Aesthetics:** Vertical composition (`1080x1920` - 9:16 aspect ratio), optimized for viewing on mobile screens and sharing via WhatsApp. Also supports interactive loan offer templates.
 *   **Walkthrough Screen Config:** Driven by a weighted step configuration array (`PHONE_STEP_CONFIG`):
 
 ```javascript
@@ -266,13 +267,13 @@ export const PHONE_STEP_CONFIG = [
 
 ---
 
-## 5. Hybrid Avatar PIP Pipeline
+## 5. VisionDesk (Hybrid Avatar PIP) Pipeline
 
-The **Hybrid Avatar PIP (Picture-in-Picture)** engine is a dual-stage video generation system. It combines the highly realistic talking human-like avatars of HeyGen with local React-based layouts rendered programmatically via the Remotion engine. 
+The **VisionDesk (Hybrid Avatar PIP)** engine is a dual-stage video generation system. It combines the highly realistic talking human-like avatars of HeyGen with local React-based layouts rendered programmatically via the Remotion engine. 
 
 Instead of showing a standalone talking avatar or rendering a pure text-to-video slide system, it creates a visual interface where a customized collections avatar reads out a localized legal notice, rendered as a PIP video embedded dynamically in the bottom-right corner of a stylized dashboard.
 
-The end-to-end synthesis and render orchestration flow is handled by `app/services/hybrid_remotion_avatar_pip_service.py` and triggered via `POST /generate/hybrid-remotion-avatar-pip`:
+The end-to-end synthesis and render orchestration flow is handled by `app/services/hybrid_remotion_avatar_pip_service.py` and triggered via `POST /generate/hybrid-remotion-avatar-pip`. **Note:** This endpoint is now fully asynchronous and routes through SQS to the `RemotionJobWorker`.
 
 ### 5.1 Phase 1: Raw HeyGen Avatar Generation (`generate_raw_avatar_for_hybrid`)
 1. **Dynamic Script Construction:** The service constructs a personalized collections outreach script based on the client, customer details, and selected locale. 
@@ -280,7 +281,7 @@ The end-to-end synthesis and render orchestration flow is handled by `app/servic
      `"नमस्ते {customer_name} जी। मैं {agent_name}, कलेक्शंस टीम से बोल रही हूँ। आपके खाते {account_number} पर भुगतान {days_overdue} दिनों से लंबित है। कुल देय राशि {amount_due} है। कृपया आज ही भुगतान करें या सहायता के लिए हमारी टीम से संपर्क करें।"`
    * **English Script Template:** 
      `"Hello {customer_name}. I am {agent_name} from the collections team. Your account {account_number} has been overdue for {days_overdue} days. The amount due is {amount_due}. Please complete the payment today or contact our team for assistance."`
-2. **Synchronous Synthesis Request:** Rather than queuing the job via workers, the route executes `VideoService().generate_direct` in a synchronous wait state (`wait=True`). The raw request is submitted to HeyGen's `/v2/video/generate` with specific visual constraints:
+2. **Asynchronous Synthesis Request:** The worker executes `VideoService().generate_direct` via `generate_raw_avatar_for_hybrid()`. The raw request is submitted to HeyGen's `/v2/video/generate` with specific visual constraints:
    * `include_captions=False` (captions are not burned into the raw video)
    * `background_color="#F4F4F4"` (off-white backdrop to facilitate subsequent chroma/overlay alignment)
    * `video_width=720` and `video_height=1280` (portrait frame layout)
@@ -508,11 +509,27 @@ The platform includes three distinct video generation engines. The following tab
 
 ---
 
-## 10. Recommendations & Architectural Improvements
+## 10. Planned Architectural Improvements & Updates
 
-To improve the platform's reliability and scalability, the following improvements are recommended:
+Extensive documentation for fault tolerance, system design improvements, and open-source (OSS) migration has been newly established. Below is a summary of the latest updates and planned changes:
 
-1.  **Separate the Remotion Worker:** Currently, both the `AvatarJobWorker` and `RemotionJobWorker` run on the main FastAPI backend server. Heavy Remotion video rendering tasks (`npx remotion render`) use significant CPU resources. These workers should be separated from the web server and run on auto-scaling GPU or high-vCPU worker instances (such as AWS ECS or AWS Batch).
-2.  **Refactor Subtitle Copy (Single Source of Truth):** In the Remotion pipeline, the translated text scripts used for voice synthesis live in the database and frontend templates, while the localized UI subtitles are stored inside `TemplateVideo.jsx` (`PAYMENT_COPY`). These subtitle blocks should be unified into a single database template collection to make it easier to manage translations.
-3.  **Implement Asset Cleanup Policies:** Video generation creates large temporary files (VTT subtitles, MP3 voice recordings, PNG overlays, and draft videos) inside the `Remotion/public/audio/` and `/tmp` directories. An automated cleanup cron job should be added to delete temporary assets older than 24 hours to prevent the server from running out of disk space.
-4.  **Add Real-Time Progress Updates:** Currently, the frontend gets progress updates by polling the `/videos/{id}/status` endpoint. Integrating **WebSockets** or Server-Sent Events (SSE) would provide real-time progress updates, improving the user experience during video generation.
+### 10.1 Fault Tolerance & Reliability (`docs/fault-tolerance.md`)
+*   **Atomic Worker Claims:** Workers now use atomic `$set` operations in MongoDB (`find_one_and_update({_id, status: 'queued'} -> 'processing')`) to prevent duplicate processing if multiple workers poll the same job.
+*   **Subprocess Timeouts:** Remotion and Edge-TTS commands are bounded by explicit timeouts with stderr capture to prevent silent hanging jobs.
+*   **SQS Retry & DLQ:** Added exponential backoff for transient HeyGen/S3 errors, along with SQS Dead Letter Queue (DLQ) implementations for poison jobs.
+*   **Reaper Task:** Both workers implement a reaper task to clean up records stuck in `processing` beyond the max processing duration.
+
+### 10.2 System Scalability & AI Upgrades (`docs/system-design-improvements.md`)
+*   **Decoupled Worker Tier:** Moving `JobWorker` and `RemotionJobWorker` out of the API process into scalable worker instances based on SQS queue depth.
+*   **Remotion Optimization:** Replacing `npx remotion render` with `@remotion/renderer` for single-boot webpack compilation and warm Chromium pools.
+*   **AI/ML Integration:** Transitioning to LLM-driven script generation (Claude 3.5 Sonnet/Opus) and compliance guardrails before synthesis. 
+
+### 10.3 Open-Source (OSS) Migration Plan (`docs/oss-migration-plan.md` & `docs/varya-integration.md`)
+The system is migrating away from expensive HeyGen API costs toward self-hosted open-weight models:
+*   **Track A (Avatars):** Replacing HeyGen with **MuseTalk** (fast tier, real-time single-image lip-sync) and **HunyuanVideo-Avatar** (quality tier). Replacing Microsoft Edge-TTS with **Chatterbox** (English) and **XTTS-v2** (Indic/Hindi).
+*   **Track B (Remotion Asset Enriching):** Upgrading Remotion from text+subtitles to a multi-scene enriched video generator. Utilizing **Avataar Varya** (distilled Wan 2.2 model optimized for India and festivals) for text-to-video / image-to-video generative b-roll and scene assets.
+
+### 10.4 Asset Cleanup & Unified Subtitles
+*   **Asset Cleanup:** Implementing automated cron jobs to purge temporary MP3s, VTTs, and draft videos from `/tmp` and `Remotion/public` after 24 hours.
+*   **Refactored Subtitle Strategy:** Migrating from React hardcoded subtitles to dynamic database templates to easily manage localization.
+

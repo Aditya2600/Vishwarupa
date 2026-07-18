@@ -40,7 +40,6 @@ import {
   fetchVideoStatus,
   generateHybridRemotionAvatarPip,
   generateRemotionVideo,
-  type HybridRemotionAvatarPipResponse,
   isVoiceCompatibleWithLanguage,
   saveDraft,
   stylizeVideo,
@@ -167,22 +166,6 @@ function mapAvatarJobToVideoResult(job: {
   };
 }
 
-function mapHybridResponseToVideoResult(result: HybridRemotionAvatarPipResponse, customerName: string): VideoJobResult {
-  const videoId = result.raw_avatar_video_id ?? result.final_video_path.split("/").pop()?.replace(/\.mp4$/i, "") ?? "";
-  return {
-    request_mode: "hybrid_remotion_avatar_pip",
-    _id: videoId,
-    video_id: videoId,
-    status: result.success ? "completed" : "failed",
-    video_url: result.final_video_url,
-    thumbnail_url: null,
-    title: `VisionDesk - ${customerName || "Customer"}`,
-    raw_response: { ...result },
-    saved_to: result.final_video_path,
-    video_path: result.final_video_path,
-  };
-}
-
 const Index = () => {
   const { state, update, nextStep, prevStep, goToStep, reset, canProceed } = useWizardStore();
   const navigate = useNavigate();
@@ -242,6 +225,13 @@ const Index = () => {
     queryKey: ["remotion-job-status", state.generatedVideo?._id ?? state.generatedVideo?.video_id],
     queryFn: () => fetchVideoStatus(state.generatedVideo?._id ?? state.generatedVideo?.video_id ?? "", "remotion"),
     enabled: state.videoType === "remotion" && Boolean(state.generatedVideo?._id || state.generatedVideo?.video_id) && state.generationStatus === "submitting",
+    refetchInterval: 5000,
+  });
+
+  const hybridJobStatusQuery = useQuery({
+    queryKey: ["hybrid-job-status", state.generatedVideo?._id ?? state.generatedVideo?.video_id],
+    queryFn: () => fetchVideoStatus(state.generatedVideo?._id ?? state.generatedVideo?.video_id ?? "", "hybrid_remotion_avatar_pip"),
+    enabled: isHybridFlow && Boolean(state.generatedVideo?._id || state.generatedVideo?.video_id) && state.generationStatus === "submitting",
     refetchInterval: 5000,
   });
 
@@ -328,14 +318,25 @@ const Index = () => {
         subtitleSource: "disabled",
       });
     },
-    onSuccess: (result) => {
+    onSuccess: (ack) => {
+      // Hybrid is async now: store the queued job id and keep "submitting" so the
+      // hybrid status poll (below) drives the transition to completed/failed.
       update({
-        generatedVideo: mapHybridResponseToVideoResult(result, state.customerName.trim()),
-        generationStatus: "completed",
+        generatedVideo: {
+          request_mode: "hybrid_remotion_avatar_pip",
+          _id: ack.video_id,
+          video_id: ack.video_id,
+          status: ack.status,
+          video_url: null,
+          thumbnail_url: null,
+          title: `VisionDesk - ${state.customerName.trim() || "Customer"}`,
+          raw_response: { ...ack },
+          saved_to: null,
+        },
+        generationStatus: "submitting",
         generationError: "",
       });
-      toast.success("VisionDesk generated successfully.");
-      goToStep(5);
+      toast.info("VisionDesk video is generating. This can take a couple of minutes…");
     },
     onError: (error) => {
       update({
@@ -626,6 +627,59 @@ const Index = () => {
     });
     toast.error(errorMessage);
   }, [remotionJobStatusQuery.error, state.generationStatus, state.videoType, update]);
+
+  useEffect(() => {
+    if (!hybridJobStatusQuery.data || state.generationStatus !== "submitting" || !isHybridFlow) {
+      return;
+    }
+
+    const nextStatus = hybridJobStatusQuery.data.status.toLowerCase();
+    if (nextStatus === "completed") {
+      statusPollingWarningShownRef.current = false;
+      update({
+        generatedVideo: hybridJobStatusQuery.data,
+        generationStatus: "completed",
+        generationError: "",
+      });
+      toast.success("VisionDesk video generated successfully.");
+      goToStep(5);
+      return;
+    }
+
+    if (nextStatus === "failed") {
+      statusPollingWarningShownRef.current = false;
+      const errorMessage = hybridJobStatusQuery.data.error || "Unexpected error while generating the hybrid video.";
+      update({
+        generationStatus: "failed",
+        generationError: errorMessage,
+      });
+      toast.error(errorMessage);
+    }
+  }, [hybridJobStatusQuery.data, goToStep, isHybridFlow, state.generationStatus, update]);
+
+  useEffect(() => {
+    if (!hybridJobStatusQuery.error || state.generationStatus !== "submitting" || !isHybridFlow) {
+      return;
+    }
+
+    if (isConnectivityError(hybridJobStatusQuery.error)) {
+      if (!statusPollingWarningShownRef.current) {
+        statusPollingWarningShownRef.current = true;
+        toast.info("Connection lost while checking VisionDesk video status. We'll keep your draft and resume polling when the server is reachable again.");
+      }
+      return;
+    }
+
+    const errorMessage =
+      hybridJobStatusQuery.error instanceof Error
+        ? hybridJobStatusQuery.error.message
+        : "Unexpected error while checking VisionDesk video status.";
+    update({
+      generationStatus: "failed",
+      generationError: errorMessage,
+    });
+    toast.error(errorMessage);
+  }, [hybridJobStatusQuery.error, isHybridFlow, state.generationStatus, update]);
 
   useEffect(() => {
     if (!avatarJobStatusQuery.error || state.generationStatus !== "submitting" || state.videoType !== "avatar") {

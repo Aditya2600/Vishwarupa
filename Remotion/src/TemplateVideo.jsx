@@ -20,6 +20,7 @@ import {
   formatAmountDisplay,
   getActiveSubtitle,
   getLeadById,
+  normalizeLead,
   getSceneTimeline,
   getSubtitleProgress,
   getTrackMeta,
@@ -2350,10 +2351,14 @@ const StaggeredSummaryRow = ({label, value, accentColor, reveal}) => (
 
 // ─── Main Composition ─────────────────────────────────────────────────────────
 
-export const TemplateVideo = ({leadId}) => {
+export const TemplateVideo = ({leadId, lead: leadProp}) => {
   const frame = useCurrentFrame();
   const {fps, durationInFrames, width, height} = useVideoConfig();
-  const lead = getLeadById(leadId);
+  // Persistent renderer-service path passes the full lead via inputProps so the
+  // render does not depend on the build-time-frozen leads.json. CLI path passes
+  // only leadId and falls back to the leads.json lookup. normalizeLead(leadProp)
+  // is identical to what the leads.json lookup produced.
+  const lead = leadProp ? normalizeLead(leadProp) : getLeadById(leadId);
   const uiCopy = getUiCopy(lead.language);
   const subtitleBranding = lead.branding?.subtitles || {
     enabled: true,

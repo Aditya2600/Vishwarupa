@@ -51,8 +51,50 @@ Hybrid Avatar PIP is the merged dual-stage video generation flow that integrates
 Deploying the heavy Text-To-Video `Remotion` pipeline and HeyGen integrations requires a robust asynchronous pipeline to scale securely avoiding `504 Gateway Timeouts`:
 - **AWS SQS:** The API leverages an AWS SQS queue to handle asynchronous tasks. Both Avatar and Remotion messages are submitted here.
 - **Dual Polling Workers:** The server spins up `AvatarJobWorker` and `RemotionJobWorker` natively. The UI relies on the HTTP POST endpoint blocking securely until the worker uploads the finished artifact, triggering the real-time "progress bar" flawlessly.
-- **Scalability:** Workers strictly process massive Chromium rendering tasks (`npx remotion render`) sequentially (one-by-one). This specifically protects the EC2 vCPU cores from failing or entering race conditions globally.
+- **Scalability:** Workers strictly process massive Chromium rendering tasks sequentially (one-by-one). This specifically protects the EC2 vCPU cores from failing or entering race conditions globally.
 - **AWS S3:** Once artifacts are produced locally by the background queue, they are uploaded swiftly to AWS S3 (`vishvarupa` bucket) and shared via permanent URLs.
+
+### Remotion renderer service (current)
+
+Remotion rendering runs through a **long-lived internal renderer service**
+(`Remotion/renderer-service/`, a Node process), not per-job `npx remotion render`.
+It bundles the Remotion project **once at startup** (both `src/index.jsx` and
+`src/Root.tsx` entry points) and opens **one Chromium** via `openBrowser`, then
+reuses both across every job with `selectComposition` + `renderMedia` from
+`@remotion/renderer`. This removes the Node + Chromium + webpack cold-start that
+`npx remotion render` paid on every render.
+
+- **Internal only:** exposed on the private Docker network (`remotion-renderer:3000`),
+  never through Nginx or the public API. Endpoints: `GET /healthz`, `GET /readyz`,
+  `POST /render`.
+- **Bounded concurrency:** `REMOTION_RENDER_CONCURRENCY` (default 1) caps
+  concurrent renders per browser via an in-service semaphore; Chromium is
+  recreated once on crash/disconnect and drained on SIGTERM.
+- **Shared volume:** the worker and renderer share `Remotion/public` (per-job
+  audio/props/assets) and `output/` (finished MP4s). The bundle's `public` dir is
+  symlinked to the live shared dir so freshly written assets render without
+  re-bundling; the `main`/`TemplateVideo` path receives its lead via `inputProps`
+  so it does not depend on the build-time-frozen `leads.json`.
+- **Python integration:** `app/services/remotion_renderer_client.py` posts to the
+  service. ffprobe validation, S3 upload, MongoDB status and SQS semantics are
+  unchanged. A renderer crash/5xx/timeout is a transient error (requeue); a bad
+  composition/props is permanent (fail fast) — a failed render never marks a job
+  completed.
+- **Rollback:** set `REMOTION_RENDER_BACKEND=cli` to fall back to the legacy
+  per-job `npx remotion render` path with no code change.
+
+### Future scaling
+
+The current service is a single renderer replica with one browser. To scale:
+
+- **Multiple renderer replicas** behind an internal round-robin/load balancer,
+  each stateless (they only read the shared `Remotion/public` and write to shared
+  `output/`), so the worker fan-out grows without touching worker code.
+- **Per-replica browser pools:** raise `REMOTION_RENDER_CONCURRENCY` and/or run N
+  browser instances per replica, sized to available vCPU/RAM, with the semaphore
+  guarding memory.
+- **Warm-pool autoscaling** keyed off `queueWaitMs` / `activeRenders` from the
+  service's structured logs.
 
 ## Repo Layout
 

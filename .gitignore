@@ -19,6 +19,8 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+.pytest_cache/
+.uv-cache/
 
 # Virtual environments
 .env
@@ -31,6 +33,7 @@ env/
 # IDE
 .vscode/
 .idea/
+*.tsbuildinfo
 
 # OS
 .DS_Store
@@ -55,6 +58,12 @@ Remotion/public/metadata.json
 Remotion/public/audio/*
 !Remotion/public/audio/.gitkeep
 Remotion/public/assets/*.vtt
+Remotion/public/avatar/*.mp4
+!Remotion/public/avatar/hybrid-auto-desktop.mp4
+!Remotion/public/avatar/hybrid-auto-mobile.mp4
+!Remotion/public/avatar/hybrid-landscape.mp4
+!Remotion/public/avatar/hybrid-portrait.mp4
+!Remotion/public/avatar/sample-avatar.mp4
 Remotion/out/
 Remotion/output.mp4
 

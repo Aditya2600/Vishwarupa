@@ -1,0 +1,18 @@
+{
+  "name": "remotion-renderer-service",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Long-lived internal Remotion renderer. Bundles once, reuses one Chromium across jobs.",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test 'test/**/*.test.mjs'"
+  },
+  "dependencies": {
+    "@remotion/bundler": "4.0.273",
+    "@remotion/renderer": "4.0.273",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "4.0.273"
+  }
+}

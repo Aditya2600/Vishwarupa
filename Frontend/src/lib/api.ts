@@ -1204,7 +1204,7 @@ export async function generateDirectVideo(payload: DirectVideoPayload, wait = tr
   });
 }
 
-export async function fetchVideoStatus(videoId: string, requestMode: "direct" | "template" | "remotion" = "direct"): Promise<VideoJobResult> {
+export async function fetchVideoStatus(videoId: string, requestMode: "direct" | "template" | "remotion" | "hybrid_remotion_avatar_pip" = "direct"): Promise<VideoJobResult> {
   return requestJson<VideoJobResult>(`/videos/${videoId}/status?request_mode=${requestMode}`);
 }
 
@@ -1351,10 +1351,18 @@ export async function generateRemotionVideo(payload: RemotionVideoPayload): Prom
   });
 }
 
+// The hybrid endpoint is now async: it returns a queued ack immediately and the
+// render runs on the worker. Poll fetchVideoStatus(videoId, "hybrid_remotion_avatar_pip").
+export interface HybridRemotionAvatarPipJobAck {
+  success: boolean;
+  video_id: string;
+  status: string;
+}
+
 export async function generateHybridRemotionAvatarPip(
   payload: HybridRemotionAvatarPipPayload,
-): Promise<HybridRemotionAvatarPipResponse> {
-  return requestJson<HybridRemotionAvatarPipResponse>("/generate/hybrid-remotion-avatar-pip", {
+): Promise<HybridRemotionAvatarPipJobAck> {
+  return requestJson<HybridRemotionAvatarPipJobAck>("/generate/hybrid-remotion-avatar-pip", {
     method: "POST",
     body: JSON.stringify(payload),
   });

@@ -6,6 +6,7 @@ from typing import Any
 import boto3
 
 from app.config import settings
+from app.constants import SQS_QUEUE_URL
 import logging
 
 logger = logging.getLogger("app")
@@ -34,7 +35,31 @@ class SQSService:
             client_kwargs['aws_access_key_id'] = settings.aws_access_key_id
             client_kwargs['aws_secret_access_key'] = settings.aws_secret_access_key
         self.client = boto3.client('sqs', **client_kwargs)
+        self._configure_dlq()
         self._initialized = True
+
+    def _configure_dlq(self) -> None:
+        if not settings.sqs_dlq_queue_url:
+            return
+        try:
+            attrs = self.client.get_queue_attributes(
+                QueueUrl=settings.sqs_dlq_queue_url,
+                AttributeNames=['QueueArn'],
+            )
+            dlq_arn = attrs.get('Attributes', {}).get('QueueArn')
+            if not dlq_arn:
+                raise RuntimeError('DLQ QueueArn missing')
+            self.client.set_queue_attributes(
+                QueueUrl=SQS_QUEUE_URL,
+                Attributes={
+                    'RedrivePolicy': json.dumps({
+                        'deadLetterTargetArn': dlq_arn,
+                        'maxReceiveCount': str(max(1, settings.sqs_max_receive_count)),
+                    }),
+                },
+            )
+        except Exception:
+            logger.exception('Failed to configure SQS DLQ redrive policy.')
 
     def send_job(self, payload: dict[str, Any], queue_url: str) -> dict[str, Any]:
         return self.client.send_message(

@@ -23,6 +23,13 @@ from app.utils.text_utils import normalize_hindi_numbers
 
 logger = logging.getLogger(__name__)
 
+
+def _tail(text: str | bytes | None, limit: int = 4000) -> str:
+    if isinstance(text, bytes):
+        text = text.decode("utf-8", errors="ignore")
+    return (text or "").strip()[-limit:]
+
+
 VOICE_MAP = {
     "English-Male": "en-US-GuyNeural",
     "English-Female": "en-US-AriaNeural",
@@ -102,6 +109,20 @@ EMI_TEMPLATE_ASSET_ALIASES = {
     "payment_success_image": "payment_success.png",
     "shopvisit.png": "shop_visit.png",
 }
+
+
+def service_entry_composition(template_key: str | None) -> tuple[str, str]:
+    """Map a template_key to its (entry_point, composition_id) for the renderer
+    service. Mirrors the CLI's `npx remotion render <entry> <composition>` routing."""
+    if template_key == "loan_reminder":
+        return "src/Root.tsx", "LoanReminderVideo"
+    if template_key == "collection_reminder":
+        return "src/Root.tsx", "CollectionReminderVideo"
+    if template_key == "tvs_credit_emi":
+        return "src/index.jsx", "TVSCreditEMITemplate"
+    if template_key == "scene_loan_offer":
+        return "src/index.jsx", "SceneLoanOfferVideo"
+    return "src/index.jsx", "main"
 
 
 def _ensure_remotion_runtime_files(remotion_path: Path) -> None:
@@ -391,14 +412,31 @@ class RemotionService:
             import subprocess
             import tempfile
             with tempfile.NamedTemporaryFile() as out_f, tempfile.NamedTemporaryFile() as err_f:
-                result = subprocess.run(command, shell=True, stdout=out_f, stderr=err_f)
+                try:
+                    result = subprocess.run(
+                        command,
+                        shell=True,
+                        stdout=out_f,
+                        stderr=err_f,
+                        stdin=subprocess.DEVNULL,
+                        timeout=settings.edge_tts_timeout_seconds,
+                    )
+                except subprocess.TimeoutExpired as exc:
+                    out_f.seek(0)
+                    err_f.seek(0)
+                    stdout_text = out_f.read().decode('utf-8', errors='ignore')
+                    stderr_text = err_f.read().decode('utf-8', errors='ignore')
+                    raise Exception(
+                        f"TTS timed out after {settings.edge_tts_timeout_seconds}s. "
+                        f"stdout={_tail(stdout_text)!r} stderr={_tail(stderr_text)!r}"
+                    ) from exc
                 out_f.seek(0)
                 err_f.seek(0)
                 stdout_text = out_f.read().decode('utf-8', errors='ignore')
                 stderr_text = err_f.read().decode('utf-8', errors='ignore')
                 if result.returncode != 0:
                     logger.error(f"TTS Process Error: {stderr_text}")
-                    raise Exception(f"TTS Error: {stderr_text}")
+                    raise Exception(f"TTS Error: stdout={_tail(stdout_text)!r} stderr={_tail(stderr_text)!r}")
                 return result
 
         try:
@@ -938,9 +976,32 @@ class RemotionService:
         logger.info("Render video started command")
         
         def run_render():
+            backend = (settings.remotion_render_backend or "cli").strip().lower()
+            if backend == "service":
+                # Persistent renderer service: reuse bundle + Chromium across jobs.
+                from app.services.remotion_renderer_client import RendererClient
+
+                entry_point, composition_id = service_entry_composition(request.template_key)
+                # Root-props/scene templates already carry full props; the `main`
+                # (TemplateVideo) path is leads.json-driven under the CLI, so pass
+                # the lead explicitly to keep the persistent bundle stateless.
+                if is_root_props_template or is_scene_loan_offer:
+                    service_props = render_payload
+                else:
+                    service_props = {"leadId": video_id, "lead": render_payload}
+                RendererClient().render(
+                    entry_point=entry_point,
+                    composition_id=composition_id,
+                    input_props=service_props,
+                    output_location=str(output_path),
+                    job_id=video_id,
+                    request_mode=request.template_key or "remotion",
+                )
+                return None
+
             import subprocess
             import uuid
-            
+
             npx = "npx.cmd" if os.name == 'nt' else "npx"
             if request.template_key == "loan_reminder":
                 c = f'{npx} remotion render src/Root.tsx LoanReminderVideo "{output_path}" --props="{str(props_path).replace(os.sep, "/")}" --overwrite'
@@ -968,11 +1029,19 @@ class RemotionService:
                         stdout=out_f, 
                         stderr=subprocess.STDOUT,
                         stdin=subprocess.DEVNULL,
-                        timeout=600 # 10 minute absolute limit to prevent queue deadlock
+                        timeout=settings.remotion_render_timeout_seconds,
                     )
-                except subprocess.TimeoutExpired:
-                    logger.error("Remotion completely timed out after 10 minutes!")
-                    raise ValueError("Remotion process permanently froze and timed out.")            
+                except subprocess.TimeoutExpired as exc:
+                    out_f.flush()
+                    stdout_text = out_file.read_text(encoding="utf-8", errors="ignore") if out_file.exists() else ""
+                    logger.error(
+                        "Remotion timed out after "
+                        f"{settings.remotion_render_timeout_seconds}s. Output: {_tail(stdout_text)!r}"
+                    )
+                    raise ValueError(
+                        "Remotion process permanently froze and timed out after "
+                        f"{settings.remotion_render_timeout_seconds}s. output={_tail(stdout_text)!r}"
+                    ) from exc
             # Read after process safely completes
             if out_file.exists():
                 stdout_text = out_file.read_text(encoding="utf-8", errors="ignore")

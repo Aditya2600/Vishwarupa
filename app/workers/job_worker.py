@@ -1,9 +1,23 @@
+# Worker architecture (two-layer):
+#
+#   JobWorker  (this file)         — the ONE SQS consumer process
+#     ├─ avatar_async jobs         → handled inline via VideoService/HeyGen
+#     └─ remotion / hybrid jobs   → delegated to RemotionJobProcessor._process_job
+#
+#   RemotionJobProcessor              — rendering library, not a consumer
+#     ├─ _process_job              → atomic claim + Remotion render + S3 + Mongo
+#     └─ _process_hybrid_job      → avatar + Remotion PiP pipeline
+#
+# Run exactly one consumer process per host:
+#   python -m app.workers.job_worker
+# (docker-compose `worker` service does this; no other entry point should be started)
+
 from __future__ import annotations
 
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 from bson import ObjectId
@@ -14,12 +28,18 @@ from app.config import settings
 from app.constants import SQS_QUEUE_URL
 from app.database import videos_collection
 from app.models import DirectVideoRequest, VideoRecord
+from app.services.errors import PermanentError
 from app.services.s3_service import S3Service
 from app.services.sqs_service import SQSService
 from app.services.video_service import VideoService
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
+
+
+def _stale_processing_cutoff(now: datetime, timeout_seconds: int, visibility_seconds: int) -> datetime:
+    # ponytail: one grace window past HeyGen polling; scheduler later if this grows.
+    return now - timedelta(seconds=max(timeout_seconds, 1) + max(visibility_seconds, 1))
 
 
 def _to_mongo_safe(value: object) -> object:
@@ -76,7 +96,10 @@ def _parse_video_id(message: dict[str, Any]) -> str | None:
     return None
 
 
-class AvatarJobWorker:
+class JobWorker:
+    """Universal SQS consumer. Polls the job queue and handles avatar jobs inline,
+    delegating Remotion-backed jobs (remotion_async and hybrid) to RemotionJobProcessor."""
+
     def __init__(
         self,
         *,
@@ -102,6 +125,7 @@ class AvatarJobWorker:
     async def run_forever(self) -> None:
         while True:
             try:
+                await self.reap_stale_processing_jobs()
                 response = await asyncio.to_thread(
                     self.sqs_service.client.receive_message,
                     QueueUrl=self.queue_url,
@@ -121,6 +145,76 @@ class AvatarJobWorker:
                 continue
 
             await asyncio.gather(*(self._process_message_safe(message) for message in messages))
+
+    async def reap_stale_processing_jobs(self) -> int:
+        """Mark jobs stuck in 'processing' past their budget as failed, so a crashed
+        render fails instead of hanging forever. Avatar and Remotion-backed jobs have
+        different timeouts, so each is reaped with its own cutoff in a separate query.
+
+        Remotion/hybrid reaping was folded in from RemotionJobProcessor, which no
+        longer runs its own polling loop — JobWorker is the only consumer process.
+        """
+        now = datetime.utcnow()
+        reaped = 0
+
+        # Avatar jobs (request_mode == "avatar_async"): budget is the HeyGen poll timeout.
+        avatar_cutoff = _stale_processing_cutoff(
+            now,
+            settings.poll_timeout_seconds,
+            settings.sqs_visibility_timeout_seconds,
+        )
+        avatar_message = (
+            f"Avatar job stale in processing for more than "
+            f"{int((now - avatar_cutoff).total_seconds())}s; marking failed."
+        )
+        avatar_result = await self.videos_collection.update_many(
+            {
+                "status": "processing",
+                "request_mode": "avatar_async",
+                "updated_at": {"$lt": avatar_cutoff},
+            },
+            {"$set": {
+                "status": "failed",
+                "error": avatar_message,
+                "error_message": avatar_message,
+                "updated_at": now,
+                "completed_at": now,
+                "job_data.status": "failed",
+                "job_data.error": avatar_message,
+            }},
+        )
+        reaped += int(getattr(avatar_result, "modified_count", 0))
+
+        # Remotion + hybrid jobs (request_mode contains "remotion", incl.
+        # "hybrid_remotion_avatar_pip"): budget is the longer Remotion render timeout.
+        remotion_cutoff = _stale_processing_cutoff(
+            now,
+            settings.remotion_render_timeout_seconds,
+            settings.sqs_visibility_timeout_seconds,
+        )
+        remotion_message = (
+            f"Remotion job stale in processing for more than "
+            f"{int((now - remotion_cutoff).total_seconds())}s; marking failed."
+        )
+        remotion_result = await self.videos_collection.update_many(
+            {
+                "status": "processing",
+                "request_mode": {"$regex": "remotion", "$options": "i"},
+                "updated_at": {"$lt": remotion_cutoff},
+            },
+            {"$set": {
+                "status": "failed",
+                "error": remotion_message,
+                "error_message": remotion_message,
+                "updated_at": now,
+                "completed_at": now,
+            }},
+        )
+        reaped += int(getattr(remotion_result, "modified_count", 0))
+
+        if reaped:
+            logger.warning("JobWorker: marked %s stale processing job(s) failed.", reaped)
+        return reaped
 
     async def _process_message_safe(self, message: dict[str, Any]) -> None:
         try:
@@ -144,11 +238,13 @@ class AvatarJobWorker:
                 await asyncio.to_thread(self.sqs_service.delete_message, receipt_handle, self.queue_url)
             return
 
-        # NEW: Ignore messages intended for the Remotion worker by handling them instantly
-        if str(video.get("request_mode", "")).startswith("remotion"):
-            logger.info("AvatarWorker intercepting and routing Remotion job %s", video_id)
-            from app.workers.remotion_job_worker import RemotionJobWorker
-            await RemotionJobWorker()._process_job(video_id, receipt_handle)
+        # Delegate any Remotion-backed job (plain remotion_async *and* hybrid, whose
+        # request_mode is "hybrid_remotion_avatar_pip") to the Remotion worker. A
+        # substring check is required: hybrid modes start with "hybrid", not "remotion".
+        if "remotion" in str(video.get("request_mode", "")).lower():
+            logger.info("JobWorker intercepting and routing Remotion job %s", video_id)
+            from app.workers.remotion_job_worker import RemotionJobProcessor
+            await RemotionJobProcessor()._process_job(video_id, receipt_handle)
             return
 
         current_status = str(video.get('status') or 'queued').lower()
@@ -203,9 +299,11 @@ class AvatarJobWorker:
 
             if result.saved_to:
                 s3_url = await asyncio.to_thread(
-                    self.s3_service.upload_video,
-                    result.saved_to,
-                    f'videos/direct_{result.video_id}.mp4',
+                    lambda: self.s3_service.upload_video(
+                        result.saved_to,
+                        f'videos/direct_{result.video_id}.mp4',
+                        raise_on_failure=True,
+                    )
                 )
                 if s3_url:
                     result.video_url = s3_url
@@ -234,7 +332,10 @@ class AvatarJobWorker:
             error_message = str(exc) or 'Unknown avatar generation error.'
             logger.exception('Video %s failed on receive count %s.', video_id, receive_count)
 
-            if receive_count >= self.max_receive_count:
+            # Fail fast on permanent errors (insufficient credits, invalid avatar,
+            # bad request): retrying only wastes credits and SQS receives.
+            permanent = isinstance(exc, PermanentError)
+            if permanent or receive_count >= self.max_receive_count:
                 await self._update_video(
                     {'_id': _mongo_id(video_id)},
                     {'$set': {
@@ -299,11 +400,11 @@ class AvatarJobWorker:
 
 
 def main() -> None:
-    worker = AvatarJobWorker()
+    worker = JobWorker()
     try:
         asyncio.run(worker.run_forever())
     except KeyboardInterrupt:
-        logger.info('Avatar job worker stopped by user.')
+        logger.info('Job worker stopped by user.')
 
 
 if __name__ == '__main__':
